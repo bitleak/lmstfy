@@ -1,0 +1,596 @@
+package client
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"io/ioutil"
+	"net"
+	"net/http"
+	"net/url"
+	"path"
+	"strconv"
+	"strings"
+	"time"
+)
+
+type Job struct {
+	Namespace string `json:"namespace"`
+	Queue     string `json:"queue"`
+	Data      []byte `json:"data"`
+	ID        string `json:"job_id"`
+	TTL       int64  `json:"ttl"`
+	ElapsedMS int64  `json:"elapsed_ms"`
+}
+
+type LmstfyClient struct {
+	Namespace string
+	Token     string
+	Host      string
+	Port      int
+
+	retry   int // retry when Publish failed (only some situations are worth of retrying)
+	backOff int // millisecond
+	httpCli *http.Client
+}
+
+const MaxReadTimeout = 600 // second
+
+func NewLmstfyClient(host string, port int, namespace, token string) *LmstfyClient {
+	cli := &http.Client{
+		Transport: &http.Transport{
+			DialContext: (&net.Dialer{
+				Timeout: 5 * time.Second,
+			}).DialContext,
+		},
+		Timeout: MaxReadTimeout * time.Second,
+	}
+	return &LmstfyClient{
+		Namespace: namespace,
+		Token:     token,
+		Host:      host,
+		Port:      port,
+
+		httpCli: cli,
+	}
+}
+
+func (c *LmstfyClient) ConfigRetry(retryCount int, backOffMillisecond int) {
+	c.retry = retryCount
+	c.backOff = backOffMillisecond
+}
+
+func (c *LmstfyClient) getReq(method, relativePath string, query url.Values, body []byte) (req *http.Request, err error) {
+	targetUrl := url.URL{
+		Scheme:   "http",
+		Host:     fmt.Sprintf("%s:%d", c.Host, c.Port),
+		Path:     path.Join("/api", c.Namespace, relativePath),
+		RawQuery: query.Encode(),
+	}
+	if body == nil {
+		req, err = http.NewRequest(method, targetUrl.String(), nil)
+		if err != nil {
+			return
+		}
+		req.Header.Add("X-Token", c.Token)
+		return
+	}
+	req, err = http.NewRequest(method, targetUrl.String(), bytes.NewReader(body))
+	if err != nil {
+		return
+	}
+	req.Header.Add("X-Token", c.Token)
+	return
+}
+
+// Publish a new job to the queue.
+//   - ttlSecond is the time-to-live of the job. If it's zero, job won't expire; if it's positive, the value is the TTL.
+//   - tries is the maximum times the job can be fetched.
+//   - delaySecond is the duration before the job is released for consuming. When it's zero, no delay is applied.
+func (c *LmstfyClient) Publish(queue string, data []byte, ttlSecond uint32, tries uint16, delaySecond uint32) (jobID string, e error) {
+	query := url.Values{}
+	query.Add("ttl", strconv.FormatUint(uint64(ttlSecond), 10))
+	query.Add("tries", strconv.FormatUint(uint64(tries), 10))
+	query.Add("delay", strconv.FormatUint(uint64(delaySecond), 10))
+	req, err := c.getReq(http.MethodPut, queue, query, data)
+	if err != nil {
+		return "", &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+	retryCount := 0
+RETRY:
+	resp, err := c.httpCli.Do(req)
+	if err != nil {
+		if retryCount < c.retry {
+			time.Sleep(time.Duration(c.backOff) * time.Millisecond)
+			retryCount++
+			goto RETRY
+		}
+		return "", &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		if resp.StatusCode >= 500 && retryCount < c.retry {
+			time.Sleep(time.Duration(c.backOff) * time.Millisecond)
+			retryCount++
+			goto RETRY
+		}
+		return "", &APIError{
+			Type:      ResponseErr,
+			Reason:    parseResponseError(resp),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		if retryCount < c.retry {
+			time.Sleep(time.Duration(c.backOff) * time.Millisecond)
+			retryCount++
+			goto RETRY
+		}
+		return "", &APIError{
+			Type:      ResponseErr,
+			Reason:    err.Error(),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	var respData struct {
+		JobID string `json:"job_id"`
+	}
+	err = json.Unmarshal(respBytes, &respData)
+	if err != nil {
+		return "", &APIError{
+			Type:      ResponseErr,
+			Reason:    err.Error(),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	return respData.JobID, nil
+}
+
+// Consume a job. Consuming will decrease the job's tries by 1 first.
+//   - ttrSecond is the time-to-run of the job. If the job is not finished before the TTR expires,
+//     the job will be released for consuming again if the `(tries - 1) > 0`.
+//   - timeoutSecond is the long-polling wait time. If it's zero, this method will return immediately
+//     with or without a job; if it's positive, this method would polling for new job until timeout.
+func (c *LmstfyClient) Consume(queue string, ttrSecond, timeoutSecond uint32) (job *Job, e error) {
+	if ttrSecond <= 0 {
+		return nil, &APIError{
+			Type:   RequestErr,
+			Reason: "TTR should be > 0",
+		}
+	}
+	if timeoutSecond < 0 || timeoutSecond >= MaxReadTimeout {
+		return nil, &APIError{
+			Type:   RequestErr,
+			Reason: fmt.Sprintf("timeout should be >= 0 && < %d", MaxReadTimeout),
+		}
+	}
+	query := url.Values{}
+	query.Add("ttr", strconv.FormatUint(uint64(ttrSecond), 10))
+	query.Add("timeout", strconv.FormatUint(uint64(timeoutSecond), 10))
+	req, err := c.getReq(http.MethodGet, queue, query, nil)
+	if err != nil {
+		return nil, &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+	resp, err := c.httpCli.Do(req)
+	if err != nil {
+		return nil, &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+	defer resp.Body.Close()
+	switch resp.StatusCode {
+	case http.StatusNotFound:
+		discardResponseBody(resp.Body)
+		return nil, nil
+	case http.StatusOK:
+		// continue
+	default:
+		return nil, &APIError{
+			Type:      ResponseErr,
+			Reason:    parseResponseError(resp),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, &APIError{
+			Type:      ResponseErr,
+			Reason:    err.Error(),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	job = &Job{}
+	err = json.Unmarshal(respBytes, job)
+	if err != nil {
+		return nil, &APIError{
+			Type:      ResponseErr,
+			Reason:    err.Error(),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	return job, nil
+}
+
+// Consume from multiple queues with priority.
+// The order of the queues in the params implies the priority. eg.
+//   ConsumeFromQueues(120, 5, "queue-a", "queue-b", "queue-c")
+// if all the queues have jobs to be fetched, the job in `queue-a` will be return.
+func (c *LmstfyClient) ConsumeFromQueues(ttrSecond, timeoutSecond uint32, queues ...string) (job *Job, e error) {
+	if ttrSecond <= 0 {
+		return nil, &APIError{
+			Type:   RequestErr,
+			Reason: "TTR should be > 0",
+		}
+	}
+	if timeoutSecond <= 0 || timeoutSecond >= MaxReadTimeout {
+		return nil, &APIError{
+			Type:   RequestErr,
+			Reason: fmt.Sprintf("timeout must be > 0 && < %d when fetch from multiple queues", MaxReadTimeout),
+		}
+	}
+	query := url.Values{}
+	query.Add("ttr", strconv.FormatUint(uint64(ttrSecond), 10))
+	query.Add("timeout", strconv.FormatUint(uint64(timeoutSecond), 10))
+	req, err := c.getReq(http.MethodGet, strings.Join(queues, ","), query, nil)
+	if err != nil {
+		return nil, &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+	resp, err := c.httpCli.Do(req)
+	if err != nil {
+		return nil, &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+	defer resp.Body.Close()
+	switch resp.StatusCode {
+	case http.StatusNotFound:
+		discardResponseBody(resp.Body)
+		return nil, nil
+	case http.StatusOK:
+		// continue
+	default:
+		return nil, &APIError{
+			Type:      ResponseErr,
+			Reason:    parseResponseError(resp),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, &APIError{
+			Type:      ResponseErr,
+			Reason:    err.Error(),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	job = &Job{}
+	err = json.Unmarshal(respBytes, job)
+	if err != nil {
+		return nil, &APIError{
+			Type:      ResponseErr,
+			Reason:    err.Error(),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	return job, nil
+}
+
+// Mark a job as finished, so it won't be retried by others.
+func (c *LmstfyClient) Ack(queue, jobID string) *APIError {
+	req, err := c.getReq(http.MethodDelete, path.Join(queue, "job", jobID), nil, nil)
+	if err != nil {
+		return &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+	resp, err := c.httpCli.Do(req)
+	if err != nil {
+		return &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return &APIError{
+			Type:      ResponseErr,
+			Reason:    parseResponseError(resp),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	return nil
+}
+
+// Get queue size. how many jobs are ready for consuming
+func (c *LmstfyClient) QueueSize(queue string) (int, *APIError) {
+	req, err := c.getReq(http.MethodGet, path.Join(queue, "size"), nil, nil)
+	if err != nil {
+		return 0, &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+	resp, err := c.httpCli.Do(req)
+	if err != nil {
+		return 0, &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return 0, &APIError{
+			Type:      ResponseErr,
+			Reason:    parseResponseError(resp),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return 0, &APIError{
+			Type:      ResponseErr,
+			Reason:    err.Error(),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	var respData struct {
+		Namespace string `json:"namespace"`
+		Queue     string `json:"queue"`
+		Size      int    `json:"size"`
+	}
+	err = json.Unmarshal(respBytes, &respData)
+	if err != nil {
+		return 0, &APIError{
+			Type:      ResponseErr,
+			Reason:    err.Error(),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	return respData.Size, nil
+}
+
+// Peek the job in the head of the queue
+func (c *LmstfyClient) PeekQueue(queue string) (job *Job, e *APIError) {
+	req, err := c.getReq(http.MethodGet, path.Join(queue, "peek"), nil, nil)
+	if err != nil {
+		return nil, &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+	resp, err := c.httpCli.Do(req)
+	if err != nil {
+		return nil, &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+	defer resp.Body.Close()
+	switch resp.StatusCode {
+	case http.StatusNotFound:
+		discardResponseBody(resp.Body)
+		return nil, nil
+	case http.StatusOK:
+		// continue
+	default:
+		return nil, &APIError{
+			Type:      ResponseErr,
+			Reason:    parseResponseError(resp),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, &APIError{
+			Type:      ResponseErr,
+			Reason:    err.Error(),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	job = &Job{}
+	err = json.Unmarshal(respBytes, job)
+	if err != nil {
+		return nil, &APIError{
+			Type:      ResponseErr,
+			Reason:    err.Error(),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	return job, nil
+}
+
+// Peek a specific job data
+func (c *LmstfyClient) PeekJob(queue, jobID string) (job *Job, e *APIError) {
+	req, err := c.getReq(http.MethodGet, path.Join(queue, "job", jobID), nil, nil)
+	if err != nil {
+		return nil, &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+	resp, err := c.httpCli.Do(req)
+	if err != nil {
+		return nil, &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+	defer resp.Body.Close()
+	switch resp.StatusCode {
+	case http.StatusNotFound:
+		discardResponseBody(resp.Body)
+		return nil, nil
+	case http.StatusOK:
+		// continue
+	default:
+		return nil, &APIError{
+			Type:      ResponseErr,
+			Reason:    parseResponseError(resp),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, &APIError{
+			Type:      ResponseErr,
+			Reason:    err.Error(),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	job = &Job{}
+	err = json.Unmarshal(respBytes, job)
+	if err != nil {
+		return nil, &APIError{
+			Type:      ResponseErr,
+			Reason:    err.Error(),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	return job, nil
+}
+
+// Peek the deadletter of the queue
+func (c *LmstfyClient) PeekDeadLetter(queue string) (deadLetterSize int, deadLetterHead string, e *APIError) {
+	req, err := c.getReq(http.MethodGet, path.Join(queue, "deadletter"), nil, nil)
+	if err != nil {
+		return 0, "", &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+	resp, err := c.httpCli.Do(req)
+	if err != nil {
+		return 0, "", &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return 0, "", &APIError{
+			Type:      ResponseErr,
+			Reason:    parseResponseError(resp),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return 0, "", &APIError{
+			Type:      ResponseErr,
+			Reason:    err.Error(),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	var respData struct {
+		Namespace      string `json:"namespace"`
+		Queue          string `json:"queue"`
+		DeadLetterSize int    `json:"deadletter_size"`
+		DeadLetterHead string `json:"deadletter_head"`
+	}
+	err = json.Unmarshal(respBytes, &respData)
+	if err != nil {
+		return 0, "", &APIError{
+			Type:      ResponseErr,
+			Reason:    err.Error(),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	return respData.DeadLetterSize, respData.DeadLetterHead, nil
+}
+
+func (c *LmstfyClient) RespawnDeadLetter(queue string, limit, ttlSecond int64) (count int, e *APIError) {
+	if limit <= 0 {
+		return 0, &APIError{
+			Type:   RequestErr,
+			Reason: "limit should be > 0",
+		}
+	}
+	if ttlSecond < 0 {
+		return 0, &APIError{
+			Type:   RequestErr,
+			Reason: "TTL should be >= 0",
+		}
+	}
+	query := url.Values{}
+	query.Add("limit", strconv.FormatInt(limit, 10))
+	query.Add("ttl", strconv.FormatInt(ttlSecond, 10))
+	req, err := c.getReq(http.MethodPut, path.Join(queue, "deadletter"), query, nil)
+	if err != nil {
+		return 0, &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+	resp, err := c.httpCli.Do(req)
+	if err != nil {
+		return 0, &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return 0, &APIError{
+			Type:      ResponseErr,
+			Reason:    parseResponseError(resp),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return 0, &APIError{
+			Type:      ResponseErr,
+			Reason:    err.Error(),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	var respData struct {
+		Count int `json:"count"`
+	}
+	err = json.Unmarshal(respBytes, &respData)
+	if err != nil {
+		return 0, &APIError{
+			Type:      ResponseErr,
+			Reason:    err.Error(),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	return respData.Count, nil
+}
+
+func discardResponseBody(resp io.ReadCloser) {
+	// discard response body, to make this connection reusable in the http connection pool
+	ioutil.ReadAll(resp)
+}
+
+func parseResponseError(resp *http.Response) string {
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Sprintf("Invalid response: %s", err)
+	}
+	var errData struct {
+		Error string `json:"error"`
+	}
+	err = json.Unmarshal(respBytes, &errData)
+	if err != nil {
+		return fmt.Sprintf("Invalid JSON: %s", err)
+	}
+	return fmt.Sprintf("[%d]%s", resp.StatusCode, errData.Error)
+}

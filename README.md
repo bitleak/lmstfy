@@ -1,4 +1,4 @@
-# Let Me Schedule Tasks For You (lmstfy)
+# Let Me Schedule Tasks For You (lmstfy) [![Build Status](https://travis-ci.org/meitu/lmstfy.svg?branch=master)](https://travis-ci.org/meitu/lmstfy)
 
 lmstfy is a simple task queue (or job queue) service, providing the following features:
 

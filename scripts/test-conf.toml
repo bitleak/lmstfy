@@ -1,0 +1,23 @@
+Host = "0.0.0.0"
+Port = 9999
+AdminHost = "127.0.0.1" # optional, default to localhost
+AdminPort = 9997
+#LogDir = "/var/log/lmstfy"
+LogLevel = "info"
+
+# default params
+#TTLSecond = 24 * 60 * 60 // 1 day
+#DelaySecond = 0
+#TriesNum = 1
+#TTRSecond = 2 * 60 // 2 minutes
+#TimeoutSecond = 0  // means non-blocking
+
+[AdminRedis]  # redis used to store admin data, eg. tokens
+Addr = "localhost:6379"
+
+[Pool]
+[Pool.default]
+Addr = "localhost:6379"
+MigrateTo = "migrate" # When migration is enabled, all PUBLISH will go to `migrate` pool. and `default` will be drained
+[Pool.migrate]
+Addr = "localhost:6389"

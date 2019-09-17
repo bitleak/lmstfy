@@ -1,8 +1,56 @@
 #!/bin/bash
 set -e
+if test -z "$TARGET_OS"; then
+    uname_S=`uname -s`
+    case "$uname_S" in
+        Darwin)
+            TARGET_OS=darwin
+            ;;
+        OpenBSD)
+            TARGET_OS=openbsd
+            ;;
+        DragonFly)
+            TARGET_OS=dragonfly
+            ;;
+        FreeBSD)
+            TARGET_OS=freebsd
+            ;;
+        NetBSD)
+            TARGET_OS=netbsd
+            ;;
+        SunOS)
+            TARGET_OS=solaris
+            ;;
+        *)
+            TARGET_OS=linux
+            ;;
+    esac
+fi
 
-TARGET_OS=linux
-TARGET_ARCH=amd64
+if test -z "$TARGET_ARCH"; then
+    uname_M=`uname -m`
+    case "$uname_M" in
+        x86_64)
+            TARGET_ARCH=amd64
+            ;;
+        arm*)
+            TARGET_ARCH=arm
+            ;;
+        ppc64*)
+            TARGET_ARCH=ppc64
+            ;;
+        aarch64)
+            TARGET_ARCH=arm
+            ;;
+        i386)
+            TARGET_ARCH=386
+            ;;
+        *)
+            TARGET_ARCH=amd64
+            ;;
+    esac
+fi
+
 TARGET_NAME=lmstfy-server
 GO_PROJECT=github.com/meitu/lmstfy
 BUILD_DIR=./_build

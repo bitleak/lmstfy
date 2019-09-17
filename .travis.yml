@@ -15,25 +15,20 @@ cache:
     - /home/travis/.cache/go-build
 
 stages:
+  - lint   
   - build
   - test
 
 jobs:
   include:
+    - stage: lint
+      name: lint the go files
+      script:
+        - make lint 
     - stage: build
       name: Build binary
       script:
-        - ./build.sh
-
+        - make
     - stage: test
-      name: Check gofmt
       script:
-        - ./scripts/check-gofmt.sh
-
-    - stage: test
-      name: Integration Tests
-      script:
-        - docker run -dt --name redis_1 -p 6379:6379 redis:4
-        - docker run -dt --name redis_2 -p 6389:6379 redis:4
-        - export LMSTFY_TEST_CONFIG=`pwd`/scripts/test-conf.toml
-        - ./scripts/run-test.sh
+        - make test

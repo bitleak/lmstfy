@@ -8,3 +8,7 @@
 .idea/
 lmstfy-server
 _build/
+.DS_Store
+lint.log
+*.swp
+*.swo

@@ -14,6 +14,23 @@ lmstfy itself doesn't handle data storage, it delegates the storage to redis cur
 storage backend is under implementing). So data integrity and durability is in the hand of redis,
 we use AOF and replication on our production env to ensure that.
 
+## Build and Run
+
+To build the server binary:
+```
+$ make # target file would be inside _build dir
+```
+
+To run the server:
+```
+redis-server &
+./_build/lmstfy-server -c config/demo-conf.toml
+```
+
+To start in developing mode:
+```
+./_build/lmstfy-server -c config/demo-conf.toml -bt debug -sv
+```
 
 ## HTTP API
 
@@ -379,23 +396,6 @@ DELETE /:namespace/:queue/deadletter
 
     nil body
 
-
-## Build and Run
-To build the server binary:
-```
-go build -o lmstfy-server github.com/meitu/lmstfy/server
-```
-
-To run the server:
-```
-redis-server &
-./lmstfy-server -c config/demo-conf.toml
-```
-
-To start in developing mode:
-```
-./lmstfy-server -c config/demo-conf.toml -bt debug -sv
-```
 
 ## Internal
 

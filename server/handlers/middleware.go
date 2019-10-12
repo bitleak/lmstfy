@@ -9,7 +9,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/meitu/lmstfy/auth"
 	"github.com/meitu/lmstfy/engine"
-	"github.com/sirupsen/logrus"
 )
 
 func getToken(c *gin.Context) (token string) {
@@ -44,7 +43,6 @@ func SetupQueueEngine(c *gin.Context) {
 }
 
 func ValidateToken(c *gin.Context) {
-	logger := GetHTTPLogger(c)
 	tk := c.GetString("token")
 	if tk == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "token not found"})
@@ -54,17 +52,11 @@ func ValidateToken(c *gin.Context) {
 	tm := auth.GetTokenManager()
 	ok, err := tm.Exist(c.GetString("pool"), c.Param("namespace"), tk)
 	if err != nil {
-		logger.WithField("err", err).Error("Failed to check token")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		c.Abort()
 		return
 	}
 	if !ok {
-		logger.WithFields(logrus.Fields{
-			"pool":      c.GetString("pool"),
-			"namespace": c.Param("namespace"),
-			"token":     tk,
-		}).Info("Invalid token")
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 		c.Abort()
 		return

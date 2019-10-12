@@ -24,7 +24,6 @@ func Publish(c *gin.Context) {
 	delaySecondStr := c.DefaultQuery("delay", DefaultDelay)
 	delaySecond, err := strconv.ParseUint(delaySecondStr, 10, 32)
 	if delaySecond < 0 || err != nil {
-		logger.WithField("delay", delaySecondStr).Warn("Invalid delay")
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid delay"})
 		return
 	}
@@ -32,14 +31,12 @@ func Publish(c *gin.Context) {
 	ttlSecondStr := c.DefaultQuery("ttl", DefaultTTL)
 	ttlSecond, err := strconv.ParseUint(ttlSecondStr, 10, 32)
 	if ttlSecond < 0 || err != nil {
-		logger.WithField("ttl", ttlSecondStr).Warn("Invalid ttl")
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ttl"})
 		return
 	}
 
 	// NOTE: ttlSecond == 0 means forever, so it's always longer than any delay
 	if ttlSecond > 0 && ttlSecond < delaySecond {
-		logger.WithFields(logrus.Fields{"ttl": ttlSecondStr, "delay": delaySecondStr}).Warn("TTL is shorter than delay")
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ttl is shorter than delay"})
 		return
 	}
@@ -47,7 +44,6 @@ func Publish(c *gin.Context) {
 	triesStr := c.DefaultQuery("tries", DefaultTries)
 	tries, err := strconv.ParseUint(triesStr, 10, 16)
 	if err != nil {
-		logger.WithField("tries", ttlSecondStr).Warn("Invalid tries")
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid tries"})
 		return
 	}
@@ -58,7 +54,6 @@ func Publish(c *gin.Context) {
 
 	body, err := c.GetRawData()
 	if err != nil {
-		logger.WithField("err", err).Warn("Failed to read request body")
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read body"})
 		return
 	}
@@ -114,7 +109,6 @@ func Consume(c *gin.Context) {
 	ttrSecondStr := c.DefaultQuery("ttr", DefaultTTR) // Default to 1 minute
 	ttrSecond, err := strconv.ParseUint(ttrSecondStr, 10, 32)
 	if ttrSecond < 0 || err != nil {
-		logger.WithField("ttr", ttrSecondStr).Warn("Invalid ttr")
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ttr"})
 		return
 	}
@@ -122,7 +116,6 @@ func Consume(c *gin.Context) {
 	timeoutSecondStr := c.DefaultQuery("timeout", DefaultTimeout) // Default non-blocking
 	timeoutSecond, err := strconv.ParseUint(timeoutSecondStr, 10, 32)
 	if timeoutSecond < 0 || err != nil {
-		logger.WithField("timeout", timeoutSecondStr).Warn("Invalid timeout")
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid timeout"})
 		return
 	}
@@ -130,7 +123,6 @@ func Consume(c *gin.Context) {
 	var job engine.Job
 	switch len(queueList) {
 	case 0:
-		logger.WithField("queues", queues).Warn("Invalid queue names")
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid queue name(s)"})
 		return
 	case 1:
@@ -142,7 +134,6 @@ func Consume(c *gin.Context) {
 		}
 	default:
 		if timeoutSecond == 0 {
-			logger.Warn("Zero timeout when consuming multiple queues")
 			c.JSON(http.StatusBadRequest, gin.H{"error": "timeout must be provided to consume multiple queues"})
 			return
 		}
@@ -326,7 +317,6 @@ func RespawnDeadLetter(c *gin.Context) {
 	limitStr := c.DefaultQuery("limit", "1")
 	limit, err := strconv.ParseInt(limitStr, 10, 64)
 	if limit <= 0 || err != nil {
-		logger.WithField("limit", limitStr).Info("Invalid limit")
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid limit"})
 		return
 	}
@@ -334,7 +324,6 @@ func RespawnDeadLetter(c *gin.Context) {
 	ttlSecondStr := c.DefaultQuery("ttl", DefaultTTL)
 	ttlSecond, err := strconv.ParseInt(ttlSecondStr, 10, 64)
 	if ttlSecond < 0 || err != nil {
-		logger.WithField("ttl", ttlSecondStr).Info("Invalid ttl")
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ttl"})
 		return
 	}
@@ -374,7 +363,6 @@ func DeleteDeadLetter(c *gin.Context) {
 
 	limit, err := strconv.ParseInt(limitStr, 10, 64)
 	if limit <= 0 || err != nil {
-		logger.WithField("limit", limitStr).Info("Invalid limit")
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid limit"})
 		return
 	}

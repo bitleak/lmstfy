@@ -51,6 +51,10 @@ func Publish(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid tries"})
 		return
 	}
+	if tries == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "tries shouldn't be zero, or the task would be consumed"})
+		return
+	}
 
 	body, err := c.GetRawData()
 	if err != nil {

@@ -42,7 +42,7 @@ if args.delete and args.token == None:
     print("param 'token' is missing, please use -t to assign the token")
     exit(1)
 
-if args.pool == None:
+if args.pool == None or args.pool == "default":
     args.pool = ""
 
 if args.list:

@@ -40,6 +40,22 @@ func GetEngineByKind(kind, pool string) Engine {
 	return k[pool]
 }
 
+func GetPoolsByKind(kind string) []string {
+	v, ok := engines[kind]
+	if !ok {
+		return []string{}
+	}
+	pools := make([]string, 0)
+	for pool, _ := range v {
+		pools = append(pools, pool)
+	}
+	return pools
+}
+
+func GetPools() []string {
+	return GetPoolsByKind("redis")
+}
+
 func GetEngine(pool string) Engine {
 	if pool == "" {
 		pool = config.DefaultPoolName

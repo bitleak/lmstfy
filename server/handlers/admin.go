@@ -17,6 +17,11 @@ func PrometheusMetrics(c *gin.Context) {
 	promhttp.Handler().ServeHTTP(c.Writer, c.Request)
 }
 
+// GET /pools/
+func ListPools(c *gin.Context) {
+	c.IndentedJSON(http.StatusOK, engine.GetPools())
+}
+
 // GET /token/:namespace
 func ListTokens(c *gin.Context) {
 	tm := auth.GetTokenManager()

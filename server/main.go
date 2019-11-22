@@ -103,6 +103,7 @@ func adminServer(conf *config.Config, accessLogger *logrus.Logger, errorLogger *
 	engine.GET("/info", handlers.EngineMetaInfo)
 	engine.GET("/version", handlers.Version)
 	engine.GET("/metrics", handlers.PrometheusMetrics)
+	engine.GET("/pools", handlers.ListPools)
 	engine.GET("/token/:namespace", handlers.ListTokens)
 	engine.POST("/token/:namespace", handlers.NewToken)
 	engine.DELETE("/token/:namespace/:token", handlers.DeleteToken)

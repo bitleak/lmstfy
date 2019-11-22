@@ -14,6 +14,11 @@ lmstfy itself doesn't handle data storage, it delegates the storage to redis cur
 storage backend is under implementing). So data integrity and durability is in the hand of redis,
 we use AOF and replication on our production env to ensure that.
 
+## SDK for lmstfy
+
+* [php lmstfy client](https://github.com/meitu/php-lmstfy-client)
+* [golang lmstfy client](https://github.com/meitu/lmstfy/tree/master/client)
+
 ## Build and Run
 
 To build the server binary:

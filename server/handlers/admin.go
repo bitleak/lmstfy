@@ -27,7 +27,11 @@ func ListTokens(c *gin.Context) {
 	tm := auth.GetTokenManager()
 	tokens, err := tm.List(c.Query("pool"), c.Param("namespace"))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		if err == auth.ErrPoolNotExist {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		}
 		return
 	}
 	c.IndentedJSON(http.StatusOK, gin.H{"tokens": tokens})
@@ -48,7 +52,11 @@ func NewToken(c *gin.Context) {
 	tm := auth.GetTokenManager()
 	token, err := tm.New(c.Query("pool"), c.Param("namespace"), desc)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		if err == auth.ErrPoolNotExist {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		}
 		return
 	}
 	c.IndentedJSON(http.StatusCreated, gin.H{"token": token})
@@ -58,7 +66,11 @@ func NewToken(c *gin.Context) {
 func DeleteToken(c *gin.Context) {
 	tm := auth.GetTokenManager()
 	if err := tm.Delete(c.Query("pool"), c.Param("namespace"), c.Param("token")); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		if err == auth.ErrPoolNotExist {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		}
 		return
 	}
 	c.Status(http.StatusNoContent)

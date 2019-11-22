@@ -32,6 +32,8 @@ To start in developing mode:
 ./_build/lmstfy-server -c config/demo-conf.toml -bt debug -sv
 ```
 
+**You can use the `./scripts/token-cli` to manage the namesace and the token**
+
 ## HTTP API
 
 From a thousand miles above, the main work flow looks like:
@@ -182,7 +184,7 @@ NOTE: to consume multiple queues, `timeout` (seconds) must be specified.
     ```
 
 -   400
-    
+  
     ```
     {
         "error": string
@@ -190,7 +192,7 @@ NOTE: to consume multiple queues, `timeout` (seconds) must be specified.
     ```
 
 -   404
-    
+  
     ```
     {
         "msg": "no job available"
@@ -278,7 +280,7 @@ NOTE: Peek can't return the job data if its ttl expired.
     ```
 
 -   404
-    
+  
     ```
     {
         "error": "job not found"

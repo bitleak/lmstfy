@@ -56,6 +56,13 @@ func GetPools() []string {
 	return GetPoolsByKind("redis")
 }
 
+func ExistsPool(pool string) bool {
+	if pool == "" {
+		pool = "default"
+	}
+	return GetEngine(pool) != nil
+}
+
 func GetEngine(pool string) Engine {
 	if pool == "" {
 		pool = config.DefaultPoolName

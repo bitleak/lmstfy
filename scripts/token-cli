@@ -1,0 +1,62 @@
+#!/usr/bin/python
+
+import argparse
+import requests
+
+# arguments
+examples = """examples:
+    ./token-cli 127.0.0.1:7778 --pools                                    # list pools
+    ./token-cli 127.0.0.1:7778 -c -p pool -n namespace -D description     # create new namespace 
+    ./token-cli 127.0.0.1:7778 -d -p pool -n namespace                    # delete the namespace
+    ./token-cli 127.0.0.1:7778 -l -p pool -n namespace                    # list tokens in namespace
+"""
+parser = parser = argparse.ArgumentParser(
+    description="Manage the namepace and tokens",
+    formatter_class=argparse.RawDescriptionHelpFormatter,
+    epilog=examples)
+
+parser.add_argument("server", type=str, help="the server address(host:port)")
+parser.add_argument("-D", "--description", type=str, help="the description")
+parser.add_argument("-p", "--pool", type=str, help="the name of pool")
+parser.add_argument("-n", "--namespace", type=str, help="the name of namespace")
+parser.add_argument("-t", "--token", type=str, help="the token to delete")
+parser.add_argument("-c", "--create", action="store_true", help="create the namespace")
+parser.add_argument("-d", "--delete", action="store_true", help="delete the namespace")
+parser.add_argument("-l", "--list", action="store_true", help="list tokens")
+parser.add_argument("-P", "--pools", action="store_true", help="list pools")
+args = parser.parse_args()
+
+addr = "http://"+args.server
+if args.pools:
+    r = requests.get(addr+"/pools")
+    print(r.text)
+    exit(0)
+
+if args.namespace == None:
+    print("param 'namespace' is missing, please use -n to assign the namespace")
+    exit(1)
+if args.create and args.description == None:
+    print("param 'description' is missing, please use -D to assign the description")
+    exit(1)
+if args.delete and args.token == None:
+    print("param 'token' is missing, please use -t to assign the token")
+    exit(1)
+
+if args.pool == None:
+    args.pool = ""
+
+if args.list:
+    r = requests.get(addr+"/token/"+args.namespace+"?pool="+args.pool)
+    print(r.text)
+elif args.create:
+    r = requests.post(addr+"/token/"+args.namespace+"?pool="+args.pool, data = {'description':args.description})
+    print(r.text)
+elif args.delete:
+    r = requests.delete(addr+"/token/"+args.namespace+"/"+args.token+"?pool="+args.pool)
+    if r.status_code == 204: 
+        print("ok")
+    else:
+        print(r.text)
+else:
+    print("aha, I'm do nothing.")
+

@@ -185,6 +185,7 @@ NOTE: to consume multiple queues, `timeout` (seconds) must be specified.
         "data": string    # NOTE: the data is base64 encoded, you need to decode
         "ttl": int64
         "elapsed_ms": int64  # elapsed milliseconds since published
+        "remain_tries": int64  # remain retry time
     }
     ```
 
@@ -248,6 +249,7 @@ NOTE: Peek can't return the job data if its ttl expired.
         "data": string    # NOTE: the data is base64 encoded, you need to decode
         "ttl": int64
         "elapsed_ms": int64
+        "remain_tries": int64    # remain retry time
     }
     ```
 
@@ -281,6 +283,7 @@ NOTE: Peek can't return the job data if its ttl expired.
         "data": string    # NOTE: the data is base64 encoded, you need to decode
         "ttl": int64
         "elapsed_ms": int64
+        "remain_tries": int64    # remain retry time
     }
     ```
 

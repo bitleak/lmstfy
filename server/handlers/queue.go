@@ -156,13 +156,14 @@ func Consume(c *gin.Context) {
 		"ttr":       ttrSecond,
 	}).Info("Job consumed")
 	c.JSON(http.StatusOK, gin.H{
-		"msg":        "new job",
-		"namespace":  namespace,
-		"queue":      job.Queue(),
-		"job_id":     job.ID(),
-		"data":       job.Body(), // NOTE: the body will be encoded in base64
-		"ttl":        job.TTL(),
-		"elapsed_ms": job.ElapsedMS(),
+		"msg":          "new job",
+		"namespace":    namespace,
+		"queue":        job.Queue(),
+		"job_id":       job.ID(),
+		"data":         job.Body(), // NOTE: the body will be encoded in base64
+		"ttl":          job.TTL(),
+		"elapsed_ms":   job.ElapsedMS(),
+		"remain_tries": job.Tries(),
 	})
 }
 
@@ -209,12 +210,13 @@ func PeekQueue(c *gin.Context) {
 		return
 	} else {
 		c.JSON(http.StatusOK, gin.H{
-			"namespace":  namespace,
-			"queue":      queue,
-			"job_id":     job.ID(),
-			"data":       job.Body(),
-			"ttl":        job.TTL(),
-			"elapsed_ms": job.ElapsedMS(),
+			"namespace":    namespace,
+			"queue":        queue,
+			"job_id":       job.ID(),
+			"data":         job.Body(),
+			"ttl":          job.TTL(),
+			"elapsed_ms":   job.ElapsedMS(),
+			"remain_tries": job.Tries(),
 		})
 		return
 	}
@@ -243,12 +245,13 @@ func PeekJob(c *gin.Context) {
 		return
 	} else {
 		c.JSON(http.StatusOK, gin.H{
-			"namespace":  namespace,
-			"queue":      queue,
-			"job_id":     job.ID(),
-			"data":       job.Body(),
-			"ttl":        job.TTL(),
-			"elapsed_ms": job.ElapsedMS(),
+			"namespace":    namespace,
+			"queue":        queue,
+			"job_id":       job.ID(),
+			"data":         job.Body(),
+			"ttl":          job.TTL(),
+			"elapsed_ms":   job.ElapsedMS(),
+			"remain_tries": job.Tries(),
 		})
 		return
 	}

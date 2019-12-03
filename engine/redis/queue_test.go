@@ -1,6 +1,7 @@
 package redis
 
 import (
+	"strconv"
 	"testing"
 	"time"
 
@@ -31,7 +32,7 @@ func TestQueue_Poll(t *testing.T) {
 		time.Sleep(time.Second)
 		q.Push(job, 2)
 	}()
-	jobID, err := q.Poll(2, 5)
+	jobID, _, err := q.Poll(2, 1)
 	if err != nil || jobID == "" {
 		t.Fatalf("Failed to poll job from queue: %s", err)
 	}
@@ -46,8 +47,8 @@ func TestQueue_Peek(t *testing.T) {
 	q := NewQueue("ns-queue", "q3", R, timer)
 	job := engine.NewJob("ns-queue", "q3", []byte("hello msg 3"), 10, 0, 1)
 	q.Push(job, 2)
-	jobID, err := q.Peek()
-	if err != nil || jobID == "" {
+	jobID, tries, err := q.Peek()
+	if err != nil || jobID == "" || tries != 2 {
 		t.Fatalf("Failed to peek job from queue: %s", err)
 	}
 	if job.ID() != jobID {
@@ -71,6 +72,39 @@ func TestQueue_Destroy(t *testing.T) {
 	size, _ := q.Size()
 	if size != 0 {
 		t.Fatalf("Destroyed queue should be of size 0")
+	}
+}
+
+func TestQueue_Tries(t *testing.T) {
+	timer := NewTimer("timer_set_q", R, time.Second)
+	defer timer.Shutdown()
+	namespace := "ns-queue"
+	queue := "q5"
+	q := NewQueue(namespace, queue, R, timer)
+	var maxTries uint16 = 2
+	job := engine.NewJob(namespace, queue, []byte("hello msg 5"), 30, 0, maxTries)
+	q.Push(job, maxTries)
+	pool := NewPool(R)
+	pool.Add(job)
+	jobID, tries, err := q.Poll(2, 1)
+	if err != nil || jobID == "" {
+		t.Fatalf("Failed to poll job from queue: %s", err)
+	}
+	if tries != (maxTries - 1) {
+		t.Fatalf("Expected to get tries 1 , but got " + strconv.Itoa(int(tries)))
+	}
+	if job.ID() != jobID {
+		t.Fatal("Mismatched job")
+	}
+	jobID, tries, err = q.Poll(5, 1)
+	if err != nil || jobID == "" {
+		t.Fatalf("Failed to poll job from queue: %s", err)
+	}
+	if tries != (maxTries - 2) {
+		t.Fatalf("Expected to get tries 0 , but got " + strconv.Itoa(int(tries)))
+	}
+	if job.ID() != jobID {
+		t.Fatal("Mismatched job")
 	}
 }
 

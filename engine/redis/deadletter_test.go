@@ -82,7 +82,7 @@ func TestDeadLetter_Respawn(t *testing.T) {
 	if err != nil || count != 2 {
 		t.Fatalf("Failed to respawn two jobs: %s", err)
 	}
-	jobID, err := q.Poll(1, 1)
+	jobID, _, err := q.Poll(1, 1)
 	if err != nil || jobID != job1.ID() {
 		t.Fatal("Expected to poll the first job respawned from deadletter")
 	}
@@ -98,7 +98,7 @@ func TestDeadLetter_Respawn(t *testing.T) {
 	if err != nil || count != 1 {
 		t.Fatalf("Failed to respawn one jobs: %s", err)
 	}
-	jobID, err = q.Poll(1, 1)
+	jobID, _, err = q.Poll(1, 1)
 	if err != nil || jobID != job3.ID() {
 		t.Fatal("Expected to poll the second job respawned from deadletter")
 	}

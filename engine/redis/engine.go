@@ -92,7 +92,7 @@ func (e *Engine) Consume(namespace, queue string, ttrSecond, timeoutSecond uint3
 	q := NewQueue(namespace, queue, e.redis, e.timer)
 	for {
 		startTime := time.Now().Unix()
-		jobID, err := q.Poll(timeoutSecond, ttrSecond)
+		jobID, tries, err := q.Poll(timeoutSecond, ttrSecond)
 		if err != nil {
 			return nil, fmt.Errorf("queue: %s", err)
 		}
@@ -121,8 +121,7 @@ func (e *Engine) Consume(namespace, queue string, ttrSecond, timeoutSecond uint3
 		default:
 			return nil, fmt.Errorf("pool: %s", err)
 		}
-		// TODO: fix tries
-		job = engine.NewJobWithID(namespace, queue, body, ttl, 0, jobID)
+		job = engine.NewJobWithID(namespace, queue, body, ttl, tries, jobID)
 		metrics.jobElapsedMS.WithLabelValues(e.redis.Name, namespace, queue).Observe(float64(job.ElapsedMS()))
 		return job, err
 	}
@@ -146,7 +145,7 @@ func (e *Engine) ConsumeMulti(namespace string, queues []string, ttrSecond, time
 	}
 	for {
 		startTime := time.Now().Unix()
-		queueName, jobID, err := PollQueues(e.redis, e.timer, queueNames, timeoutSecond, ttrSecond)
+		queueName, jobID, tries, err := PollQueues(e.redis, e.timer, queueNames, timeoutSecond, ttrSecond)
 		if err != nil {
 			return nil, fmt.Errorf("queue: %s", err)
 		}
@@ -175,8 +174,7 @@ func (e *Engine) ConsumeMulti(namespace string, queues []string, ttrSecond, time
 		default:
 			return nil, fmt.Errorf("pool: %s", err)
 		}
-		// TODO: fix tries
-		job = engine.NewJobWithID(namespace, queueName.Queue, body, ttl, 0, jobID)
+		job = engine.NewJobWithID(namespace, queueName.Queue, body, ttl, tries, jobID)
 		metrics.jobElapsedMS.WithLabelValues(e.redis.Name, namespace, queueName.Queue).Observe(float64(job.ElapsedMS()))
 		return job, nil
 	}
@@ -193,9 +191,10 @@ func (e *Engine) Delete(namespace, queue, jobID string) error {
 
 func (e *Engine) Peek(namespace, queue, optionalJobID string) (job engine.Job, err error) {
 	jobID := optionalJobID
+	var tries uint16
 	if optionalJobID == "" {
 		q := NewQueue(namespace, queue, e.redis, e.timer)
-		jobID, err = q.Peek()
+		jobID, tries, err = q.Peek()
 		switch err {
 		case nil:
 			// continue
@@ -209,8 +208,7 @@ func (e *Engine) Peek(namespace, queue, optionalJobID string) (job engine.Job, e
 	if err != nil {
 		return nil, err
 	}
-	// TODO: fix tries. peeking can't get the tries property currently :(.
-	return engine.NewJobWithID(namespace, queue, body, ttl, 0, jobID), err
+	return engine.NewJobWithID(namespace, queue, body, ttl, tries, jobID), err
 }
 
 func (e *Engine) Size(namespace, queue string) (size int64, err error) {

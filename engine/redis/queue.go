@@ -71,9 +71,9 @@ func (q *Queue) Push(j engine.Job, tries uint16) error {
 
 // Pop a job. If the tries > 0, add job to the "in-flight" timer with timestamp
 // set to `TTR + now()`; Or we might just move the job to "dead-letter".
-func (q *Queue) Poll(timeoutSecond, ttrSecond uint32) (jobID string, err error) {
-	_, jobID, err = PollQueues(q.redis, q.timer, []QueueName{q.name}, timeoutSecond, ttrSecond)
-	return jobID, err
+func (q *Queue) Poll(timeoutSecond, ttrSecond uint32) (jobID string, tries uint16, err error) {
+	_, jobID, tries, err = PollQueues(q.redis, q.timer, []QueueName{q.name}, timeoutSecond, ttrSecond)
+	return jobID, tries, err
 }
 
 // Return number of the current in-queue jobs
@@ -82,18 +82,18 @@ func (q *Queue) Size() (size int64, err error) {
 }
 
 // Peek a right-most element in the list without popping it
-func (q *Queue) Peek() (jobID string, err error) {
+func (q *Queue) Peek() (jobID string, tries uint16, err error) {
 	val, err := q.redis.Conn.LIndex(q.Name(), -1).Result()
 	switch err {
 	case nil:
 		// continue
 	case go_redis.Nil:
-		return "", engine.ErrNotFound
+		return "", 0, engine.ErrNotFound
 	default:
-		return "", err
+		return "", 0, err
 	}
-	_, jobID, err = structUnpack(val)
-	return jobID, err
+	tries, jobID, err = structUnpack(val)
+	return jobID, tries, err
 }
 
 func (q *Queue) Destroy() (count int64, err error) {
@@ -118,7 +118,7 @@ func (q *Queue) Destroy() (count int64, err error) {
 }
 
 // Poll from multiple queues using blocking method; OR pop a job from one queue using non-blocking method
-func PollQueues(redis *RedisInstance, timer *Timer, queueNames []QueueName, timeoutSecond, ttrSecond uint32) (queueName *QueueName, jobID string, err error) {
+func PollQueues(redis *RedisInstance, timer *Timer, queueNames []QueueName, timeoutSecond, ttrSecond uint32) (queueName *QueueName, jobID string, retries uint16, err error) {
 	defer func() {
 		if jobID != "" {
 			metrics.queuePopJobs.WithLabelValues(redis.Name).Inc()
@@ -144,20 +144,20 @@ func PollQueues(redis *RedisInstance, timer *Timer, queueNames []QueueName, time
 		// continue
 	case go_redis.Nil:
 		logger.Debug("Job not found")
-		return nil, "", nil
+		return nil, "", 0, nil
 	default:
 		logger.WithField("err", err).Error("Failed to pop job from queue")
-		return nil, "", err
+		return nil, "", 0, err
 	}
 	queueName = &QueueName{}
 	if err := queueName.Decode(val[0]); err != nil {
 		logger.WithField("err", err).Error("Failed to decode queue name")
-		return nil, "", err
+		return nil, "", 0, err
 	}
 	tries, jobID, err := structUnpack(val[1])
 	if err != nil {
 		logger.WithField("err", err).Error("Failed to unpack lua struct data")
-		return nil, "", err
+		return nil, "", 0, err
 	}
 
 	if tries == 0 {
@@ -172,9 +172,9 @@ func PollQueues(redis *RedisInstance, timer *Timer, queueNames []QueueName, time
 			"ttr":   ttrSecond,
 			"queue": queueName.String(),
 		}).Error("Failed to add job to timer for ttr")
-		return queueName, jobID, err
+		return queueName, jobID, tries - 1, err
 	}
-	return queueName, jobID, nil
+	return queueName, jobID, tries - 1, nil
 }
 
 // Pack (tries, jobID) into lua struct pack of format "HHHc0", in lua this can be done:

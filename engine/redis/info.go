@@ -90,6 +90,8 @@ func RedisInstanceMonitor(redis *RedisInstance) {
 	for {
 		time.Sleep(5 * time.Second)
 		info := GetRedisInfo(redis)
+
+		metrics.redisMaxMem.WithLabelValues(redis.Name).Set(float64(info.MemMax))
 		metrics.redisMemUsed.WithLabelValues(redis.Name).Set(float64(info.MemUsed))
 		metrics.redisConns.WithLabelValues(redis.Name).Set(float64(info.NClients))
 		metrics.redisBlockings.WithLabelValues(redis.Name).Set(float64(info.NBlocking))

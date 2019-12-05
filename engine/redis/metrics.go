@@ -33,6 +33,7 @@ type Metrics struct {
 	deadletterSizes *prometheus.GaugeVec
 
 	// redis instance related metrics
+	redisMaxMem    *prometheus.GaugeVec
 	redisMemUsed   *prometheus.GaugeVec
 	redisConns     *prometheus.GaugeVec
 	redisBlockings *prometheus.GaugeVec
@@ -75,6 +76,7 @@ func setupMetrics() {
 		queueSizes:      gv("queue_sizes", "namespace", "queue"),
 		deadletterSizes: gv("deadletter_sizes", "namespace", "queue"),
 
+		redisMaxMem:    gv("max_mem_bytes"),
 		redisMemUsed:   gv("used_mem_bytes"),
 		redisConns:     gv("connections"),
 		redisBlockings: gv("blocking_connections"),

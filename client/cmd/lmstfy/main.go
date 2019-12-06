@@ -61,9 +61,9 @@ func main() {
 			}
 		},
 	}
-	publishCmd.Flags().Int64P("ttl", "t", 0, "time-to-live in second, no TTL by default")
+	publishCmd.Flags().Uint32P("ttl", "t", 0, "time-to-live in second, no TTL by default")
 	publishCmd.Flags().Uint16P("tries", "r", 1, "number of tries")
-	publishCmd.Flags().Int64P("delay", "d", 0, "delay in second, no delay by default")
+	publishCmd.Flags().Uint32P("delay", "d", 0, "delay in second, no delay by default")
 
 	consumeCmd := &cobra.Command{
 		Use:     "consume [queue]",
@@ -72,7 +72,7 @@ func main() {
 		Aliases: []string{"get", "con"},
 		Args:    cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			ttr, _ := cmd.Flags().GetUint32("ttr")
+			ttr, err := cmd.Flags().GetUint32("ttr")
 			timeout, _ := cmd.Flags().GetUint32("timeout")
 			job, err := lmstfyClient.Consume(args[0], ttr, timeout)
 			if err != nil {
@@ -87,8 +87,8 @@ func main() {
 			}
 		},
 	}
-	consumeCmd.Flags().Int64P("ttr", "t", 120, "time-to-run in second")
-	consumeCmd.Flags().Int64P("timeout", "w", 10, "blocking wait timeout in second")
+	consumeCmd.Flags().Uint32P("ttr", "t", 120, "time-to-run in second")
+	consumeCmd.Flags().Uint32P("timeout", "w", 10, "blocking wait timeout in second")
 
 	ackCmd := &cobra.Command{
 		Use:     "ack [queue] [job ID]",

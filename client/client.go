@@ -114,8 +114,8 @@ RETRY:
 			Reason: err.Error(),
 		}
 	}
-	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusCreated {
+		resp.Body.Close()
 		if resp.StatusCode >= 500 && retryCount < c.retry {
 			time.Sleep(time.Duration(c.backOff) * time.Millisecond)
 			retryCount++
@@ -128,6 +128,7 @@ RETRY:
 		}
 	}
 	respBytes, err := ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
 	if err != nil {
 		if retryCount < c.retry {
 			time.Sleep(time.Duration(c.backOff) * time.Millisecond)

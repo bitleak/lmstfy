@@ -93,6 +93,8 @@ func (c *LmstfyClient) Publish(queue string, data []byte, ttlSecond uint32, trie
 	query.Add("ttl", strconv.FormatUint(uint64(ttlSecond), 10))
 	query.Add("tries", strconv.FormatUint(uint64(tries), 10))
 	query.Add("delay", strconv.FormatUint(uint64(delaySecond), 10))
+	retryCount := 0
+RETRY:
 	req, err := c.getReq(http.MethodPut, queue, query, data)
 	if err != nil {
 		return "", &APIError{
@@ -100,8 +102,7 @@ func (c *LmstfyClient) Publish(queue string, data []byte, ttlSecond uint32, trie
 			Reason: err.Error(),
 		}
 	}
-	retryCount := 0
-RETRY:
+
 	resp, err := c.httpCli.Do(req)
 	if err != nil {
 		if retryCount < c.retry {

@@ -196,17 +196,19 @@ func PeekQueue(c *gin.Context) {
 	queue := c.Param("queue")
 
 	if job, err := e.Peek(namespace, queue, ""); err != nil {
-		if err == engine.ErrNotFound {
-			c.JSON(http.StatusNotFound, gin.H{"error": "job not found"})
-			return
+		switch err {
+		case engine.ErrNotFound:
+			fallthrough
+		case engine.ErrEmptyQueue:
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		}
 		logger.WithFields(logrus.Fields{
 			"err":       err,
 			"namespace": namespace,
 			"queue":     queue,
-			"job_id":    job.ID(),
 		}).Error("Failed to peek")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	} else {
 		c.JSON(http.StatusOK, gin.H{

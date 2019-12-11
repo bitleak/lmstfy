@@ -200,12 +200,16 @@ func (e *Engine) Peek(namespace, queue, optionalJobID string) (job engine.Job, e
 		case nil:
 			// continue
 		case engine.ErrNotFound:
-			return nil, err
+			return nil, engine.ErrEmptyQueue
 		default:
 			return nil, fmt.Errorf("failed to peek queue: %s", err)
 		}
 	}
 	body, ttl, err := e.pool.Get(namespace, queue, jobID)
+	if err == engine.ErrNotFound {
+		// return jobID with nil body if the job is expired
+		return engine.NewJobWithID(namespace, queue, nil, 0, 0, jobID), nil
+	}
 	if err != nil {
 		return nil, err
 	}

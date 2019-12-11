@@ -234,7 +234,7 @@ Delete makes sure that this job will never be consumed again disregarding the jo
 GET /api/:namespace/:queue/peek
 ```
 
-NOTE: Peek can't return the job data if its ttl expired.
+NOTE: Peek will return the job with ttl 0 and null data if its ttl expired.
 
 #### Response
 
@@ -255,7 +255,7 @@ NOTE: Peek can't return the job data if its ttl expired.
 
     ```
     {
-        "error": "job not found"
+        "error": "the queue is empty"
     }
     ```
 

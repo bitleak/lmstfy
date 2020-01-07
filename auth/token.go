@@ -8,12 +8,12 @@ import (
 	"github.com/go-redis/redis"
 	"github.com/meitu/lmstfy/config"
 	"github.com/meitu/lmstfy/engine"
-	"github.com/meitu/lmstfy/uuid"
 )
 
 const TokenPrefix = "tk"
 
 var ErrPoolNotExist error = errors.New("the pool was not exists")
+var ErrTokenExist error = errors.New("the token has already existed")
 
 type TokenManager struct {
 	cli   *redis.Client
@@ -60,14 +60,16 @@ func (tm *TokenManager) isDefaultPool(pool string) bool {
 	return pool == "" || pool == config.DefaultPoolName
 }
 
-func (tm *TokenManager) New(pool, namespace, description string) (token string, err error) {
+func (tm *TokenManager) New(pool, namespace, token, description string) (string, error) {
 	if exists := engine.ExistsPool(pool); !exists {
 		return "", ErrPoolNotExist
 	}
-	token = uuid.GenUniqueID()
-	err = tm.cli.HSetNX(tokenKey(pool, namespace), token, description).Err()
+	ok, err := tm.cli.HSetNX(tokenKey(pool, namespace), token, description).Result()
 	if err != nil {
 		return "", err
+	}
+	if !ok {
+		return "", ErrTokenExist
 	}
 	tm.rwmu.Lock()
 	tm.cache[cacheKey(pool, namespace, token)] = true

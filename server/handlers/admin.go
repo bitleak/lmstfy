@@ -4,10 +4,12 @@ import (
 	"math"
 	"net/http"
 	"net/http/pprof"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/meitu/lmstfy/auth"
 	"github.com/meitu/lmstfy/engine"
+	"github.com/meitu/lmstfy/uuid"
 	"github.com/meitu/lmstfy/version"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -41,18 +43,37 @@ func ListTokens(c *gin.Context) {
 func NewToken(c *gin.Context) {
 	c.Request.ParseForm()
 	desc := c.Request.Form.Get("description") // get description from either URL query or POST form
+	userToken := c.Request.Form.Get("token")  // get token from either URL query or POST form
 	if desc == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid description"})
 		return
 	}
-	if len(c.Param("namespace")) > math.MaxUint8 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "namespace name too long"})
+	if userToken != "" && len(userToken) < 20 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "the user token was too short"})
 		return
 	}
+	if len(c.Param("namespace")) > math.MaxUint8 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "the namespace name was too long"})
+		return
+	}
+	pool := c.Query("pool")
+	var rawToken string
+	if userToken == "" {
+		rawToken = uuid.GenUniqueID()
+	} else {
+		fields := strings.Split(userToken, ":")
+		if len(fields) == 2 {
+			pool = fields[0]
+			rawToken = fields[1]
+		} else {
+			rawToken = userToken
+		}
+	}
+
 	tm := auth.GetTokenManager()
-	token, err := tm.New(c.Query("pool"), c.Param("namespace"), desc)
+	token, err := tm.New(pool, c.Param("namespace"), rawToken, desc)
 	if err != nil {
-		if err == auth.ErrPoolNotExist {
+		if err == auth.ErrPoolNotExist || err == auth.ErrTokenExist {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		} else {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})

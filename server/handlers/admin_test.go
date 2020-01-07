@@ -8,6 +8,7 @@ import (
 
 	"github.com/meitu/lmstfy/auth"
 	"github.com/meitu/lmstfy/server/handlers"
+	"github.com/meitu/lmstfy/uuid"
 )
 
 func TestNewToken(t *testing.T) {
@@ -44,7 +45,7 @@ func TestListTokens(t *testing.T) {
 
 func TestDeleteToken(t *testing.T) {
 	tk := auth.GetTokenManager()
-	token, _ := tk.New("", "ns-token", "to be deleted")
+	token, _ := tk.New("", "ns-token", uuid.GenUniqueID(), "to be deleted")
 
 	targetUrl := fmt.Sprintf("http://localhost/token/ns-token/%s", token)
 	req, err := http.NewRequest("DELETE", targetUrl, nil)

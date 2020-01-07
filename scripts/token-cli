@@ -19,7 +19,7 @@ parser.add_argument("server", type=str, help="the server address(host:port)")
 parser.add_argument("-D", "--description", type=str, help="the description")
 parser.add_argument("-p", "--pool", type=str, help="the name of pool")
 parser.add_argument("-n", "--namespace", type=str, help="the name of namespace")
-parser.add_argument("-t", "--token", type=str, help="the token to delete")
+parser.add_argument("-t", "--token", type=str, help="the token to be created or deleted")
 parser.add_argument("-c", "--create", action="store_true", help="create the namespace")
 parser.add_argument("-d", "--delete", action="store_true", help="delete the namespace")
 parser.add_argument("-l", "--list", action="store_true", help="list tokens")
@@ -49,7 +49,7 @@ if args.list:
     r = requests.get(addr+"/token/"+args.namespace+"?pool="+args.pool)
     print(r.text)
 elif args.create:
-    r = requests.post(addr+"/token/"+args.namespace+"?pool="+args.pool, data = {'description':args.description})
+    r = requests.post(addr+"/token/"+args.namespace+"?pool="+args.pool, data = {'description':args.description, 'token':args.token})
     print(r.text)
 elif args.delete:
     r = requests.delete(addr+"/token/"+args.namespace+"/"+args.token+"?pool="+args.pool)

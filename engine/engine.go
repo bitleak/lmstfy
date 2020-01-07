@@ -46,7 +46,7 @@ func GetPoolsByKind(kind string) []string {
 		return []string{}
 	}
 	pools := make([]string, 0)
-	for pool, _ := range v {
+	for pool := range v {
 		pools = append(pools, pool)
 	}
 	return pools
@@ -58,7 +58,7 @@ func GetPools() []string {
 
 func ExistsPool(pool string) bool {
 	if pool == "" {
-		pool = "default"
+		pool = config.DefaultPoolName
 	}
 	return GetEngine(pool) != nil
 }

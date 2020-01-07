@@ -49,7 +49,7 @@ if args.list:
     r = requests.get(addr+"/token/"+args.namespace+"?pool="+args.pool)
     print(r.text)
 elif args.create:
-    r = requests.post(addr+"/token/"+args.namespace+"?pool="+args.pool, data = {'description':args.description})
+    r = requests.post(addr+"/token/"+args.namespace+"?pool="+args.pool, data = {'description':args.description, 'token':args.token})
     print(r.text)
 elif args.delete:
     r = requests.delete(addr+"/token/"+args.namespace+"/"+args.token+"?pool="+args.pool)

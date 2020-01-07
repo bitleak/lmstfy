@@ -56,6 +56,10 @@ func NewTokenManager(cli *redis.Client) *TokenManager {
 	}
 }
 
+func (tm *TokenManager) isDefaultPool(pool string) bool {
+	return pool == "" || pool == config.DefaultPoolName
+}
+
 func (tm *TokenManager) New(pool, namespace, description string) (token string, err error) {
 	if exists := engine.ExistsPool(pool); !exists {
 		return "", ErrPoolNotExist
@@ -68,7 +72,7 @@ func (tm *TokenManager) New(pool, namespace, description string) (token string, 
 	tm.rwmu.Lock()
 	tm.cache[cacheKey(pool, namespace, token)] = true
 	tm.rwmu.Unlock()
-	if pool == "" {
+	if tm.isDefaultPool(pool) {
 		return token, nil
 	}
 	return pool + ":" + token, nil

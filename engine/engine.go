@@ -58,7 +58,7 @@ func GetPools() []string {
 
 func ExistsPool(pool string) bool {
 	if pool == "" {
-		pool = "default"
+		pool = config.DefaultPoolName
 	}
 	return GetEngine(pool) != nil
 }

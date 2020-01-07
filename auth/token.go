@@ -61,7 +61,7 @@ func (tm *TokenManager) New(pool, namespace, description string) (token string, 
 		return "", ErrPoolNotExist
 	}
 	token = uuid.GenUniqueID()
-	err = tm.cli.HSet(tokenKey(pool, namespace), token, description).Err()
+	err = tm.cli.HSetNX(tokenKey(pool, namespace), token, description).Err()
 	if err != nil {
 		return "", err
 	}

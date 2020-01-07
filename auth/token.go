@@ -13,6 +13,8 @@ import (
 const TokenPrefix = "tk"
 
 var ErrPoolNotExist error = errors.New("the pool was not exists")
+
+// ErrTokenExist means the user-defined has already existed
 var ErrTokenExist error = errors.New("the token has already existed")
 
 type TokenManager struct {
@@ -60,6 +62,7 @@ func (tm *TokenManager) isDefaultPool(pool string) bool {
 	return pool == "" || pool == config.DefaultPoolName
 }
 
+// New would create the token in pool
 func (tm *TokenManager) New(pool, namespace, token, description string) (string, error) {
 	if exists := engine.ExistsPool(pool); !exists {
 		return "", ErrPoolNotExist

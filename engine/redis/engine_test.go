@@ -120,3 +120,75 @@ func TestEngine_Peek(t *testing.T) {
 		t.Fatal("Mismatched job")
 	}
 }
+
+func TestEngine_BatchConsume(t *testing.T) {
+	e := NewEngine(R.Name, R.Conn)
+	defer e.Shutdown()
+	body := []byte("hello msg 7")
+	jobID, err := e.Publish("ns-engine", "q7", body, 10, 3, 1)
+	t.Log(jobID)
+	if err != nil {
+		t.Fatalf("Failed to publish: %s", err)
+	}
+	jobs, err := e.BatchConsume("ns-engine", "q7", 2, 5, 2)
+	if err != nil {
+		t.Fatalf("Failed to Batch consume: %s", err)
+	}
+	if len(jobs) != 0 {
+		t.Fatalf("Wrong job consumed")
+	}
+
+	jobs, err = e.BatchConsume("ns-engine", "q7", 2, 3, 2)
+	if err != nil {
+		t.Fatalf("Failed to Batch consume: %s", err)
+	}
+	if len(jobs) != 1 || !bytes.Equal(body, jobs[0].Body()) || jobID != jobs[0].ID() {
+		t.Fatalf("Mistmatched job data")
+	}
+
+	// Consume some jobs
+	jobIDMap := map[string]bool{}
+	for i := 0; i < 4; i++ {
+		jobID, err := e.Publish("ns-engine", "q7", body, 10, 0, 1)
+		t.Log(jobID)
+		if err != nil {
+			t.Fatalf("Failed to publish: %s", err)
+		}
+		jobIDMap[jobID] = true
+	}
+
+	// First time batch consume three jobs
+	jobs, err = e.BatchConsume("ns-engine", "q7", 3, 3, 3)
+	if err != nil {
+		t.Fatalf("Failed to consume: %s", err)
+	}
+	if len(jobs) != 3 {
+		t.Fatalf("Mistmatched jobs count")
+	}
+	for _, job := range jobs {
+		if !bytes.Equal(body, job.Body()) || !jobIDMap[job.ID()] {
+			t.Fatalf("Mistmatched job data")
+		}
+	}
+
+	// Second time batch consume can only get a single job
+	jobs, err = e.BatchConsume("ns-engine", "q7", 3, 3, 3)
+	if err != nil {
+		t.Fatalf("Failed to consume: %s", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("Mistmatched jobs count")
+	}
+	if !bytes.Equal(body, jobs[0].Body()) || !jobIDMap[jobs[0].ID()] {
+		t.Fatalf("Mistmatched job data")
+	}
+
+	// Third time batch consume will be blocked by 3s
+	jobs, err = e.BatchConsume("ns-engine", "q7", 3, 3, 3)
+	if err != nil {
+		t.Fatalf("Failed to consume: %s", err)
+	}
+	if len(jobs) != 0 {
+		t.Fatalf("Mistmatched jobs count")
+	}
+}

@@ -37,3 +37,23 @@ if err != nil {
     panic(err)
 }
 ```
+
+```$golang
+// Consume 5 jobs from the q1, if there's not job availble, wait until 12s passed (polling).
+// If there are some jobs but not enough 5, return jobs as much as possible.
+// And if this consumer fail to ACK any job in 10s, the job can be retried by other consumers.
+jobs, err := c.BatchConsume("q1", 5, 10, 12)
+if err != nil {
+    panic(err)
+}
+
+// Do something with the `job`
+for _, job := range jobs {
+    fmt.Println(string(job.Data))
+    err := c.Ack("q1", job.ID)
+    if err != nil {
+        panic(err)
+    }
+}
+
+```

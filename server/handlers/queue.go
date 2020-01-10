@@ -11,6 +11,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const maxBatchConsumeSize = 100
+
 // PUT /:namespace/:queue
 // @query:
 //  - delay: uint32
@@ -91,6 +93,7 @@ func Publish(c *gin.Context) {
 // @query:
 //  - ttr:     uint32
 //  - timeout: uint32
+//  - count:   uint32
 // NOTE: according to RFC3986, the URL path part can contain comma(",") ,
 // so I decide to use "," as the separator of queue names
 func Consume(c *gin.Context) {
@@ -120,12 +123,51 @@ func Consume(c *gin.Context) {
 		return
 	}
 
+	// Only return a single job one request by default
+	count, err := strconv.ParseUint(c.DefaultQuery("count", "1"), 10, 32)
+	if count <= 0 || count > maxBatchConsumeSize || err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid count"})
+		return
+	}
+
 	var job engine.Job
 	switch len(queueList) {
 	case 0:
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid queue name(s)"})
 		return
 	case 1:
+		if count > 1 {
+			jobs, err := e.BatchConsume(namespace, queueList[0], uint32(count), uint32(ttrSecond), uint32(timeoutSecond))
+			if err != nil {
+				logger.WithField("err", err).Error("Failed to batch consume")
+			}
+			if len(jobs) == 0 {
+				c.JSON(http.StatusNotFound, gin.H{"msg": "no job available"})
+				return
+			}
+			data := make([]map[string]interface{}, 0)
+			for _, job := range jobs {
+				logger.WithFields(logrus.Fields{
+					"namespace": namespace,
+					"queue":     job.Queue(),
+					"job_id":    job.ID(),
+					"ttl":       job.TTL(),
+					"ttr":       ttrSecond,
+				}).Info("Job consumed")
+				data = append(data, gin.H{
+					"msg":          "new job",
+					"namespace":    namespace,
+					"queue":        job.Queue(),
+					"job_id":       job.ID(),
+					"data":         job.Body(), // NOTE: the body will be encoded in base64
+					"ttl":          job.TTL(),
+					"elapsed_ms":   job.ElapsedMS(),
+					"remain_tries": job.Tries(),
+				})
+			}
+			c.JSON(http.StatusOK, data)
+			return
+		}
 		job, err = e.Consume(namespace, queueList[0], uint32(ttrSecond), uint32(timeoutSecond))
 		if err != nil {
 			logger.WithField("err", err).Error("Failed to consume")

@@ -35,7 +35,10 @@ type LmstfyClient struct {
 	httpCli *http.Client
 }
 
-const MaxReadTimeout = 600 // second
+const (
+	maxReadTimeout      = 600 // second
+	maxBatchConsumeSize = 100
+)
 
 func NewLmstfyClient(host string, port int, namespace, token string) *LmstfyClient {
 	cli := &http.Client{
@@ -44,7 +47,7 @@ func NewLmstfyClient(host string, port int, namespace, token string) *LmstfyClie
 				Timeout: 5 * time.Second,
 			}).DialContext,
 		},
-		Timeout: MaxReadTimeout * time.Second,
+		Timeout: maxReadTimeout * time.Second,
 	}
 	return &LmstfyClient{
 		Namespace: namespace,
@@ -168,10 +171,10 @@ func (c *LmstfyClient) Consume(queue string, ttrSecond, timeoutSecond uint32) (j
 			Reason: "TTR should be > 0",
 		}
 	}
-	if timeoutSecond < 0 || timeoutSecond >= MaxReadTimeout {
+	if timeoutSecond < 0 || timeoutSecond >= maxReadTimeout {
 		return nil, &APIError{
 			Type:   RequestErr,
-			Reason: fmt.Sprintf("timeout should be >= 0 && < %d", MaxReadTimeout),
+			Reason: fmt.Sprintf("timeout should be >= 0 && < %d", maxReadTimeout),
 		}
 	}
 	query := url.Values{}
@@ -225,6 +228,95 @@ func (c *LmstfyClient) Consume(queue string, ttrSecond, timeoutSecond uint32) (j
 	return job, nil
 }
 
+// BatchConsume consume some jobs. Consuming will decrease these jobs tries by 1 first.
+//   - ttrSecond is the time-to-run of these jobs. If these jobs are not finished before the TTR expires,
+//     these job will be released for consuming again if the `(tries - 1) > 0`.
+//   - count is the job count of this consume. If it's zero or over 100, this method will return an error.
+//     If it's positive, this method would return some jobs, and it's count is between 0 and count.
+func (c *LmstfyClient) BatchConsume(queue string, count, ttrSecond, timeoutSecond uint32) (jobs []*Job, e error) {
+	if ttrSecond <= 0 {
+		return nil, &APIError{
+			Type:   RequestErr,
+			Reason: "TTR should be > 0",
+		}
+	}
+	if count <= 0 || count > maxBatchConsumeSize {
+		return nil, &APIError{
+			Type:   RequestErr,
+			Reason: "COUNT should be > 0",
+		}
+	}
+	if timeoutSecond < 0 || timeoutSecond >= maxReadTimeout {
+		return nil, &APIError{
+			Type:   RequestErr,
+			Reason: fmt.Sprintf("timeout should be >= 0 && < %d", maxReadTimeout),
+		}
+	}
+
+	query := url.Values{}
+	query.Add("ttr", strconv.FormatUint(uint64(ttrSecond), 10))
+	query.Add("count", strconv.FormatUint(uint64(count), 10))
+	query.Add("timeout", strconv.FormatUint(uint64(timeoutSecond), 10))
+	req, err := c.getReq(http.MethodGet, queue, query, nil)
+	if err != nil {
+		return nil, &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+	resp, err := c.httpCli.Do(req)
+	if err != nil {
+		return nil, &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+	defer resp.Body.Close()
+	switch resp.StatusCode {
+	case http.StatusNotFound:
+		discardResponseBody(resp.Body)
+		return nil, nil
+	case http.StatusOK:
+		// continue
+	default:
+		return nil, &APIError{
+			Type:      ResponseErr,
+			Reason:    parseResponseError(resp),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, &APIError{
+			Type:      ResponseErr,
+			Reason:    err.Error(),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	if count == 1 {
+		job := &Job{}
+		err = json.Unmarshal(respBytes, job)
+		if err != nil {
+			return nil, &APIError{
+				Type:      ResponseErr,
+				Reason:    err.Error(),
+				RequestID: resp.Header.Get("X-Request-ID"),
+			}
+		}
+		return []*Job{job}, nil
+	}
+	jobs = []*Job{}
+	err = json.Unmarshal(respBytes, &jobs)
+	if err != nil {
+		return nil, &APIError{
+			Type:      ResponseErr,
+			Reason:    err.Error(),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	return jobs, nil
+}
+
 // Consume from multiple queues with priority.
 // The order of the queues in the params implies the priority. eg.
 //   ConsumeFromQueues(120, 5, "queue-a", "queue-b", "queue-c")
@@ -236,10 +328,10 @@ func (c *LmstfyClient) ConsumeFromQueues(ttrSecond, timeoutSecond uint32, queues
 			Reason: "TTR should be > 0",
 		}
 	}
-	if timeoutSecond <= 0 || timeoutSecond >= MaxReadTimeout {
+	if timeoutSecond <= 0 || timeoutSecond >= maxReadTimeout {
 		return nil, &APIError{
 			Type:   RequestErr,
-			Reason: fmt.Sprintf("timeout must be > 0 && < %d when fetch from multiple queues", MaxReadTimeout),
+			Reason: fmt.Sprintf("timeout must be > 0 && < %d when fetch from multiple queues", maxReadTimeout),
 		}
 	}
 	query := url.Values{}

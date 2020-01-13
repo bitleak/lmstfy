@@ -318,6 +318,78 @@ func TestDestroyQueue(t *testing.T) {
 	}
 }
 
+func TestBatchConsume(t *testing.T) {
+	jobMap := map[string][]byte{}
+	for i := 0; i < 4; i++ {
+		body, jobID := publishTestJob("ns", "q14", 0)
+		jobMap[jobID] = body
+	}
+
+	query := url.Values{}
+	query.Add("ttr", "10")
+	query.Add("count", "3")
+	query.Add("timeout", "3")
+	targetURL := fmt.Sprintf("http://localhost/api/ns/q14?%s", query.Encode())
+	req, err := http.NewRequest("GET", targetURL, nil)
+	if err != nil {
+		t.Fatalf("Failed to create request")
+	}
+	c, e, resp := ginTest(req)
+	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
+	e.GET("/api/:namespace/:queue", handlers.Consume)
+	e.HandleContext(c)
+	if resp.Code != http.StatusOK {
+		t.Fatal("Failed to consume")
+	}
+	var data []struct {
+		Msg       string
+		Namespace string
+		Queue     string
+		JobID     string `json:"job_id"`
+		Data      []byte
+	}
+	err = json.Unmarshal(resp.Body.Bytes(), &data)
+	if err != nil {
+		t.Fatalf("Failed to decode response: %s", err)
+	}
+	if len(data) != 3 {
+		t.Fatalf("Mismatched job count")
+	}
+	for _, job := range data {
+		if body, ok := jobMap[job.JobID]; !ok || !bytes.Equal(job.Data, body) {
+			t.Fatalf("Mismatched job data")
+		}
+	}
+
+	c, e, resp = ginTest(req)
+	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
+	e.GET("/api/:namespace/:queue", handlers.Consume)
+	e.HandleContext(c)
+	if resp.Code != http.StatusOK {
+		t.Fatal("Failed to consume")
+	}
+	err = json.Unmarshal(resp.Body.Bytes(), &data)
+	if err != nil {
+		t.Fatalf("Failed to decode response: %s", err)
+	}
+	if len(data) != 1 {
+		t.Fatalf("Mismatched job count")
+	}
+	for _, job := range data {
+		if body, ok := jobMap[job.JobID]; !ok || !bytes.Equal(job.Data, body) {
+			t.Fatalf("Mismatched job data")
+		}
+	}
+
+	c, e, resp = ginTest(req)
+	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
+	e.GET("/api/:namespace/:queue", handlers.Consume)
+	e.HandleContext(c)
+	if resp.Code != http.StatusNotFound {
+		t.Fatal("Failed to consume")
+	}
+}
+
 func publishTestJob(ns, q string, delay uint32) (body []byte, jobID string) {
 	e := engine.GetEngineByKind("redis", "")
 	body = make([]byte, 10)

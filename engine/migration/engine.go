@@ -22,6 +22,15 @@ func (e *Engine) Publish(namespace, queue string, body []byte, ttlSecond, delayS
 	return e.newEngine.Publish(namespace, queue, body, ttlSecond, delaySecond, tries)
 }
 
+// BatchConsume consume some jobs of a queue
+func (e *Engine) BatchConsume(namespace, queue string, count, ttrSecond, timeoutSecond uint32) (jobs []engine.Job, err error) {
+	jobs, err = e.oldEngine.BatchConsume(namespace, queue, count, ttrSecond, 0)
+	if len(jobs) != 0 {
+		return // During migration, we always prefer the old engine's data as we need to drain it
+	}
+	return e.newEngine.BatchConsume(namespace, queue, count, ttrSecond, timeoutSecond)
+}
+
 func (e *Engine) Consume(namespace, queue string, ttrSecond, timeoutSecond uint32) (job engine.Job, err error) {
 	job, err = e.oldEngine.Consume(namespace, queue, ttrSecond, 0)
 	if job != nil {

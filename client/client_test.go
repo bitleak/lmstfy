@@ -29,6 +29,53 @@ func TestLmstfyClient_Consume(t *testing.T) {
 	}
 }
 
+func TestLmstfyClient_BatchConsume(t *testing.T) {
+	cli := NewLmstfyClient(Host, Port, Namespace, Token)
+	jobMap := map[string]bool{}
+	for i := 0; i < 4; i++ {
+		jobID, _ := cli.Publish("test-batchconsume", []byte("hello"), 0, 1, 0)
+		jobMap[jobID] = true
+	}
+
+	jobs, err := cli.BatchConsume("test-batchconsume", 3, 3, 3)
+	if err != nil {
+		t.Fatalf("Failed to fetch job: %s", err)
+	}
+	if len(jobs) != 3 {
+		t.Fatal("Mismatched job count")
+	}
+	for _, job := range jobs {
+		if !jobMap[job.ID] || string(job.Data) != "hello" {
+			t.Fatal("Mismatched data")
+		}
+	}
+
+	jobs, err = cli.BatchConsume("test-batchconsume", 3, 3, 3)
+	if err != nil {
+		t.Fatalf("Failed to fetch job: %s", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatal("Mismatched job count")
+	}
+	for _, job := range jobs {
+		if !jobMap[job.ID] || string(job.Data) != "hello" {
+			t.Fatal("Mismatched data")
+		}
+	}
+
+	now := time.Now()
+	jobs, err = cli.BatchConsume("test-batchconsume", 3, 3, 3)
+	if err != nil {
+		t.Fatalf("Failed to fetch job: %s", err)
+	}
+	if len(jobs) != 0 {
+		t.Fatal("Mismatched job count")
+	}
+	if time.Now().Sub(now) < 3*time.Second {
+		t.Fatal("Mismatched timeout second")
+	}
+}
+
 func TestLmstfyClient_Ack(t *testing.T) {
 	cli := NewLmstfyClient(Host, Port, Namespace, Token)
 	cli.Publish("test-ack", []byte("hello"), 0, 1, 0)

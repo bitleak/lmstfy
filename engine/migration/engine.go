@@ -115,6 +115,16 @@ func (e *Engine) RespawnDeadLetter(namespace, queue string, limit, ttlSecond int
 	return count1 + count2, err
 }
 
+// SizeOfDeadLetter return the queue size of dead letter
+func (e *Engine) SizeOfDeadLetter(namespace, queue string) (size int64, err error) {
+	size1, err := e.oldEngine.SizeOfDeadLetter(namespace, queue)
+	if err != nil {
+		return 0, err
+	}
+	size2, err := e.newEngine.SizeOfDeadLetter(namespace, queue)
+	return size1 + size2, err
+}
+
 func (e *Engine) Shutdown() {
 	e.oldEngine.Shutdown()
 	e.newEngine.Shutdown()

@@ -3,6 +3,7 @@ package migration
 import (
 	"bytes"
 	"testing"
+	"time"
 )
 
 func TestEngine_Publish(t *testing.T) {
@@ -198,5 +199,28 @@ func TestEngine_BatchConsume(t *testing.T) {
 	}
 	if len(jobs) != 0 {
 		t.Fatalf("Mistmatched jobs count")
+	}
+}
+
+func TestEngine_DeadLetter_Size(t *testing.T) {
+	body := []byte("hello msg 9")
+	jobID, err := OldRedisEngine.Publish("ns-engine", "q9", body, 10, 0, 1)
+	job, err := OldRedisEngine.Consume("ns-engine", "q9", 0, 0)
+	if err != nil {
+		t.Fatal("Failed to drain the old engine's data")
+	}
+	if job.ID() != jobID {
+		t.Fatal("Mismatched job")
+	}
+	jobID, err = NewRedisEngine.Publish("ns-engine", "q9", body, 10, 0, 1)
+	job, err = NewRedisEngine.Consume("ns-engine", "q9", 0, 0)
+	if job.ID() != jobID {
+		t.Fatal("Mismatched job")
+	}
+	time.Sleep(2 * time.Second)
+	e := NewEngine(OldRedisEngine, NewRedisEngine)
+	size, _ := e.SizeOfDeadLetter("ns-engine", "q9")
+	if size != 2 {
+		t.Fatalf("Expected the deadletter queue size is: %d, but got %d\n", 2, size)
 	}
 }

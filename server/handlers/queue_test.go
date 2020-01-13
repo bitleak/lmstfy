@@ -390,6 +390,39 @@ func TestBatchConsume(t *testing.T) {
 	}
 }
 
+func TestSizeOfDeadLetter(t *testing.T) {
+	_, jobID := publishTestJob("ns", "q15", 0)
+	_, jobID2 := consumeTestJob("ns", "q15", 0, 1)
+	if jobID != jobID2 {
+		t.Fatal("Failed to setup dead job")
+	}
+	time.Sleep(time.Second)
+	targetURL := "http://localhost/api/ns/q15/deadletter/size"
+	req, err := http.NewRequest("GET", targetURL, nil)
+	if err != nil {
+		t.Fatalf("Failed to create request")
+	}
+	c, e, resp := ginTest(req)
+	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
+	e.GET("/api/:namespace/:queue/deadletter/size", handlers.GetDeadLetterSize)
+	e.HandleContext(c)
+	if resp.Code != http.StatusOK {
+		t.Fatal("Failed to get size")
+	}
+	var data struct {
+		Namespace string
+		Queue     string
+		Size      int
+	}
+	err = json.Unmarshal(resp.Body.Bytes(), &data)
+	if err != nil {
+		t.Fatalf("Failed to decode response: %s", err)
+	}
+	if data.Size != 1 {
+		t.Fatalf("Mismatched deadletter queue size")
+	}
+}
+
 func publishTestJob(ns, q string, delay uint32) (body []byte, jobID string) {
 	e := engine.GetEngineByKind("redis", "")
 	body = make([]byte, 10)

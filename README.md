@@ -172,6 +172,7 @@ NOTE: to consume multiple queues, `timeout` (seconds) must be specified.
 
 - timeout: the longest to time to wait before a job is available (default: 0)
 - ttr:     time-to-run of the job in seconds, if the job is not delete in this period, it will be re-queued  (default: 2 minutes)
+- count: how many jobs expect to be consumed (default: 1)
 
 #### Response
 
@@ -188,6 +189,21 @@ NOTE: to consume multiple queues, `timeout` (seconds) must be specified.
         "elapsed_ms": int64  # elapsed milliseconds since published
         "remain_tries": int64  # remain retry time
     }
+    
+    or 
+    [ // batch consume
+        {
+        "msg": "new job",
+        "namespace": string,
+        "queue": string,
+        "job_id": string,
+        "data": string    # NOTE: the data is base64 encoded, you need to decode
+        "ttl": int64
+        "elapsed_ms": int64  # elapsed milliseconds since published
+        "remain_tries": int64  # remain retry time
+       }
+       ...
+    ]
     ```
 
 -   400
@@ -407,6 +423,25 @@ DELETE /:namespace/:queue/deadletter
 
     nil body
 
+### Query the deadletter queue size (how many jobs are reached the max retry times)
+
+```
+GET /api/:namespace/:queue/deadletter/size
+```
+
+#### Response
+
+-   200
+
+    ```
+    {
+        "namespace": string,
+        "queue": string,
+        "size": int,
+    }
+    ```
+
+---
 
 ## Internal
 

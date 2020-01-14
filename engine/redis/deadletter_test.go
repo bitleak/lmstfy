@@ -110,3 +110,23 @@ func TestDeadLetter_Respawn(t *testing.T) {
 		t.Fatal("Deadletter job's TTL is not correct")
 	}
 }
+
+func TestDeadLetter_Size(t *testing.T) {
+	p := NewPool(R)
+	dl := NewDeadLetter("ns-dead", "q3", R)
+	cnt := 3
+	for i := 0; i < cnt; i++ {
+		job := engine.NewJob("ns-dead", "q3", []byte("1"), 60, 0, 1)
+		p.Add(job)
+		dl.Add(job.ID())
+	}
+	size, _ := dl.Size()
+	if size != int64(cnt) {
+		t.Fatalf("Expected the deadletter queue size is: %d, but got %d\n", cnt, size)
+	}
+	dl.Delete(3)
+	size, _ = dl.Size()
+	if size != 0 {
+		t.Fatalf("Expected the deadletter queue size is: %d, but got %d\n", 0, size)
+	}
+}

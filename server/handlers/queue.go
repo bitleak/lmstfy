@@ -325,6 +325,31 @@ func Size(c *gin.Context) {
 	})
 }
 
+// GetDeadLetterSize return the size of dead letter
+// GET /:namespace/:queue/deadletter/size
+func GetDeadLetterSize(c *gin.Context) {
+	logger := GetHTTPLogger(c)
+	e := c.MustGet("engine").(engine.Engine)
+	namespace := c.Param("namespace")
+	queue := c.Param("queue")
+
+	size, err := e.SizeOfDeadLetter(namespace, queue)
+	if err != nil {
+		logger.WithFields(logrus.Fields{
+			"err":       err,
+			"namespace": namespace,
+			"queue":     queue,
+		}).Error("Failed to get queue size of dead letter")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"namespace": namespace,
+		"queue":     queue,
+		"size":      size,
+	})
+}
+
 // GET /:namespace/:queue/deadletter
 // Get the first job in the deadletter
 func PeekDeadLetter(c *gin.Context) {

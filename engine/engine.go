@@ -20,6 +20,7 @@ type Engine interface {
 	PeekDeadLetter(namespace, queue string) (size int64, jobID string, err error)
 	DeleteDeadLetter(namespace, queue string, limit int64) (count int64, err error)
 	RespawnDeadLetter(namespace, queue string, limit, ttlSecond int64) (count int64, err error)
+	SizeOfDeadLetter(namespace, queue string) (size int64, err error)
 
 	Shutdown()
 

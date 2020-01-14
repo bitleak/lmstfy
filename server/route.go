@@ -42,6 +42,7 @@ func SetupRoutes(e *gin.Engine, logger *logrus.Logger, devMode bool) {
 	pubGroup := e.Group("/api")
 	pubGroup.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
 	pubGroup.GET("/:namespace/:queue/size", handlers.Size)
+	pubGroup.GET("/:namespace/:queue/deadletter/size", handlers.GetDeadLetterSize)
 
 	e.NoRoute(func(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "api not found"})

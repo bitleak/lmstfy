@@ -8,6 +8,7 @@ import (
 	"github.com/go-redis/redis"
 	"github.com/meitu/lmstfy/config"
 	"github.com/meitu/lmstfy/engine"
+	"github.com/meitu/lmstfy/helper"
 )
 
 const TokenPrefix = "tk"
@@ -133,10 +134,8 @@ func (tm *TokenManager) List(pool, namespace string) (tokens map[string]string, 
 var _tokenManager *TokenManager
 
 func Setup(conf *config.Config) {
-	cli := redis.NewClient(&redis.Options{
-		Addr:     conf.AdminRedis.Addr,
-		Password: conf.AdminRedis.Password,
-	})
+	redisConf := conf.AdminRedis
+	cli := helper.NewRedisClient(&redisConf, nil)
 	if cli.Ping().Err() != nil {
 		panic("Can not connect to admin redis")
 	}

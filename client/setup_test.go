@@ -8,8 +8,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/go-redis/redis"
 	"github.com/meitu/lmstfy/config"
+	"github.com/meitu/lmstfy/helper"
 )
 
 var (
@@ -44,9 +44,7 @@ func setup() {
 
 	// Flush redis DB
 	for _, poolConf := range CONF.Pool {
-		conn := redis.NewClient(&redis.Options{
-			Addr: poolConf.Addr,
-		})
+		conn := helper.NewRedisClient(&poolConf, nil)
 		err := conn.Ping().Err()
 		if err != nil {
 			panic(fmt.Sprintf("Failed to ping: %s", err))

@@ -1,0 +1,24 @@
+version: '2'
+
+services:
+  redis-sentinel:
+    image: bitnami/redis-sentinel:5.0
+    environment:
+      - REDIS_MASTER_HOST=127.0.0.1
+    ports:
+      - "26379:26379"
+
+  redis:
+    image: redis:4
+    ports:
+      - "6379:6379"
+
+  redis_1:
+    image: redis:4
+    ports:
+      - "6380:6379"
+
+  redis_2:
+    image: redis:4
+    ports:
+      - "6381:6379"

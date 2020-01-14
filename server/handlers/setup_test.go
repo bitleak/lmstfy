@@ -8,10 +8,10 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/go-redis/redis"
 	"github.com/meitu/lmstfy/auth"
 	"github.com/meitu/lmstfy/config"
 	redis_engine "github.com/meitu/lmstfy/engine/redis"
+	"github.com/meitu/lmstfy/helper"
 	"github.com/meitu/lmstfy/server/handlers"
 	"github.com/sirupsen/logrus"
 )
@@ -49,9 +49,7 @@ func setup() {
 	handlers.SetupParamDefaults(CONF)
 	handlers.Setup(logger)
 	for _, poolConf := range CONF.Pool {
-		conn := redis.NewClient(&redis.Options{
-			Addr: poolConf.Addr,
-		})
+		conn := helper.NewRedisClient(&poolConf, nil)
 		err := conn.Ping().Err()
 		if err != nil {
 			panic(fmt.Sprintf("Failed to ping: %s", err))

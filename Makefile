@@ -17,9 +17,9 @@ $(PROGRAM):
 	@echo ""
 
 test:
-	- docker run -dt --name redis_1 -p 6379:6379 redis:4
-	- docker run -dt --name redis_2 -p 6389:6379 redis:4
+	- cd scripts/redis && docker-compose up -d && cd ../..
 	@LMSTFY_TEST_CONFIG=`pwd`/scripts/test-conf.toml sh scripts/run-test.sh 
+	- cd scripts/redis && docker-compose down && cd ../..
 
 lint:
 	@rm -rf lint.log

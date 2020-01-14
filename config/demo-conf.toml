@@ -23,3 +23,8 @@ Addr = "localhost:6379"
 #MigrateTo = "migrate" # When migration is enabled, all PUBLISH will go to `migrate` pool. and `default` will be drained
 #[Pool.migrate]
 #Addr = "localhost:6389"
+
+#[Pool.mysentinel]
+# Addr = "localhost:16379,localhost:6380,localhost:6381"
+# MasterName = "mymaster"
+# Password = foobared

@@ -134,6 +134,9 @@ func MustLoad(path string) *Config {
 			panic("CONF: invalid config in pool(" + name + "), err: " + err.Error())
 		}
 	}
+	if conf.AdminRedis.mode, err = detectRedisMode(&conf.AdminRedis); err != nil {
+		panic("CONF: failed to get reedis mode in admin pool, err: " + err.Error())
+	}
 	if err := conf.AdminRedis.validate(); err != nil {
 		panic("CONF: invalid config in admin redis, err: " + err.Error())
 	}

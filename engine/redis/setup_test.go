@@ -5,8 +5,8 @@ import (
 	"os"
 	"testing"
 
-	go_redis "github.com/go-redis/redis"
 	"github.com/meitu/lmstfy/config"
+	"github.com/meitu/lmstfy/helper"
 	"github.com/sirupsen/logrus"
 )
 
@@ -31,9 +31,8 @@ PLEASE setup env LMSTFY_TEST_CONFIG to the config file first
 }
 
 func setup() {
-	conn := go_redis.NewClient(&go_redis.Options{
-		Addr: CONF.Pool["default"].Addr,
-	})
+	poolConf := CONF.Pool["default"]
+	conn := helper.NewRedisClient(&poolConf, nil)
 	err := conn.Ping().Err()
 	if err != nil {
 		panic(fmt.Sprintf("Failed to ping: %s", err))

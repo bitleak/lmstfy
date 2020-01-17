@@ -12,6 +12,7 @@ import (
 	"github.com/meitu/lmstfy/uuid"
 	"github.com/meitu/lmstfy/version"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/sirupsen/logrus"
 )
 
 // GET /metrics
@@ -32,6 +33,12 @@ func ListTokens(c *gin.Context) {
 		if err == auth.ErrPoolNotExist {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		} else {
+			logger := GetHTTPLogger(c)
+			logger.WithFields(logrus.Fields{
+				"pool":      c.Query("pool"),
+				"namespace": c.Param("namespace"),
+				"err":       err,
+			}).Error("Failed to list the token")
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		}
 		return
@@ -44,6 +51,7 @@ func NewToken(c *gin.Context) {
 	c.Request.ParseForm()
 	desc := c.Request.Form.Get("description") // get description from either URL query or POST form
 	userToken := c.Request.Form.Get("token")  // get token from either URL query or POST form
+	namespace := c.Param("namespace")
 	if desc == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid description"})
 		return
@@ -52,7 +60,7 @@ func NewToken(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "the user token was too short"})
 		return
 	}
-	if len(c.Param("namespace")) > math.MaxUint8 {
+	if len(namespace) > math.MaxUint8 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "the namespace name was too long"})
 		return
 	}
@@ -71,11 +79,17 @@ func NewToken(c *gin.Context) {
 	}
 
 	tm := auth.GetTokenManager()
-	token, err := tm.New(pool, c.Param("namespace"), rawToken, desc)
+	token, err := tm.New(pool, namespace, rawToken, desc)
 	if err != nil {
 		if err == auth.ErrPoolNotExist || err == auth.ErrTokenExist {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		} else {
+			logger := GetHTTPLogger(c)
+			logger.WithFields(logrus.Fields{
+				"pool":      pool,
+				"namespace": namespace,
+				"err":       err,
+			}).Error("Failed to create the new token")
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		}
 		return
@@ -90,6 +104,13 @@ func DeleteToken(c *gin.Context) {
 		if err == auth.ErrPoolNotExist {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		} else {
+			logger := GetHTTPLogger(c)
+			logger.WithFields(logrus.Fields{
+				"pool":      c.Query("pool"),
+				"namespace": c.Param("namespace"),
+				"token":     c.Param("token"),
+				"err":       err,
+			}).Error("Failed to delete the token")
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		}
 		return

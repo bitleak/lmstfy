@@ -85,7 +85,7 @@ func Publish(c *gin.Context) {
 		"delay":     delaySecond,
 		"ttl":       ttlSecond,
 		"tries":     tries,
-	}).Info("Job published")
+	}).Debug("Job published")
 	c.JSON(http.StatusCreated, gin.H{"msg": "published", "job_id": jobID})
 }
 
@@ -153,7 +153,7 @@ func Consume(c *gin.Context) {
 					"job_id":    job.ID(),
 					"ttl":       job.TTL(),
 					"ttr":       ttrSecond,
-				}).Info("Job consumed")
+				}).Debug("Job consumed")
 				data = append(data, gin.H{
 					"msg":          "new job",
 					"namespace":    namespace,
@@ -196,7 +196,7 @@ func Consume(c *gin.Context) {
 		"job_id":    job.ID(),
 		"ttl":       job.TTL(),
 		"ttr":       ttrSecond,
-	}).Info("Job consumed")
+	}).Debug("Job consumed")
 	c.JSON(http.StatusOK, gin.H{
 		"msg":          "new job",
 		"namespace":    namespace,

@@ -1,4 +1,4 @@
-package main
+package middleware
 
 import (
 	"time"
@@ -8,12 +8,32 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// enableAccessLog control whether accesslog output
+var enableAccessLog = false
+
+// AccessLogStatus return whether whether accesslog output
+func AccessLogStatus() bool {
+	return enableAccessLog
+}
+
+// EnableAccessLog enable accesslog output
+func EnableAccessLog() {
+	enableAccessLog = true
+}
+
+// DisableAccessLog disable accesslog output
+func DisableAccessLog() {
+	enableAccessLog = false
+}
+
+// RequestIDMiddleware set request uuid into context
 func RequestIDMiddleware(c *gin.Context) {
 	reqID := uuid.GenUniqueID()
 	c.Set("req_id", reqID)
 	c.Header("X-Request-ID", reqID)
 }
 
+// AccessLogMiddleware generate accesslog and output
 func AccessLogMiddleware(logger *logrus.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Start timer
@@ -41,6 +61,10 @@ func AccessLogMiddleware(logger *logrus.Logger) gin.HandlerFunc {
 			"method":  method,
 			"code":    statusCode,
 			"req_id":  c.GetString("req_id"),
+		}
+
+		if !enableAccessLog {
+			return
 		}
 
 		if statusCode >= 500 {

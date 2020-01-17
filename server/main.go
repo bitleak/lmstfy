@@ -17,6 +17,7 @@ import (
 	redis_engine "github.com/meitu/lmstfy/engine/redis"
 	"github.com/meitu/lmstfy/log"
 	"github.com/meitu/lmstfy/server/handlers"
+	"github.com/meitu/lmstfy/server/middleware"
 	"github.com/meitu/lmstfy/version"
 	"github.com/sirupsen/logrus"
 )
@@ -74,7 +75,7 @@ func printVersion() {
 func apiServer(conf *config.Config, accessLogger, errorLogger *logrus.Logger, devMode bool) *http.Server {
 	gin.SetMode(gin.ReleaseMode)
 	engine := gin.New()
-	engine.Use(RequestIDMiddleware, AccessLogMiddleware(accessLogger), gin.RecoveryWithWriter(errorLogger.Out))
+	engine.Use(middleware.RequestIDMiddleware, middleware.AccessLogMiddleware(accessLogger), gin.RecoveryWithWriter(errorLogger.Out))
 	handlers.SetupParamDefaults(conf)
 	SetupRoutes(engine, errorLogger, devMode)
 	addr := fmt.Sprintf("%s:%d", conf.Host, conf.Port)
@@ -98,7 +99,7 @@ func apiServer(conf *config.Config, accessLogger, errorLogger *logrus.Logger, de
 func adminServer(conf *config.Config, accessLogger *logrus.Logger, errorLogger *logrus.Logger) *http.Server {
 	gin.SetMode(gin.ReleaseMode)
 	engine := gin.New()
-	engine.Use(RequestIDMiddleware, AccessLogMiddleware(accessLogger), gin.RecoveryWithWriter(errorLogger.Out))
+	engine.Use(middleware.RequestIDMiddleware, middleware.AccessLogMiddleware(accessLogger), gin.RecoveryWithWriter(errorLogger.Out))
 
 	engine.GET("/info", handlers.EngineMetaInfo)
 	engine.GET("/version", handlers.Version)
@@ -108,6 +109,8 @@ func adminServer(conf *config.Config, accessLogger *logrus.Logger, errorLogger *
 	engine.POST("/token/:namespace", handlers.NewToken)
 	engine.DELETE("/token/:namespace/:token", handlers.DeleteToken)
 	engine.Any("/debug/pprof/*profile", handlers.PProf)
+	engine.GET("/accesslog", handlers.AccessLogStatus)
+	engine.POST("/accesslog", handlers.UpdateAccessLogStatus)
 	errorLogger.Infof("Admin port %d", conf.AdminPort)
 	srv := http.Server{
 		Addr:    fmt.Sprintf("%s:%d", conf.AdminHost, conf.AdminPort),
@@ -153,6 +156,9 @@ func main() {
 	redis_engine.Setup(conf, errorLogger)
 	migration.Setup(conf, errorLogger)
 	auth.Setup(conf)
+	if conf.EnableAccessLog {
+		middleware.EnableAccessLog()
+	}
 	apiSrv := apiServer(conf, accessLogger, errorLogger, Flags.SkipVerification)
 	adminSrv := adminServer(conf, accessLogger, errorLogger)
 

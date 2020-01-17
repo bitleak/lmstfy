@@ -10,7 +10,7 @@ lmstfy is a simple task queue (or job queue) service, providing the following fe
     * dead letter
 - namespace/queue level metrics
 
-lmstfy itself doesn't handle data storage, it delegates the storage to redis currently (a file based
+lmstfy itself doesn't handle data storage, it delegates the storage to the `Redis` or `Redis Sentinel` currently (a file based
 storage backend is under implementing). So data integrity and durability is in the hand of redis,
 we use AOF and replication on our production env to ensure that.
 

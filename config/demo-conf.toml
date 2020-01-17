@@ -4,6 +4,7 @@ AdminHost = "127.0.0.1" # optional, default to localhost
 AdminPort = 7778 
 #LogDir = "/var/log/lmstfy"
 LogLevel = "info"
+EnableAccessLog = true
 
 # default params
 #TTLSecond = 24 * 60 * 60 // 1 day

@@ -21,14 +21,15 @@ const (
 )
 
 type Config struct {
-	Host       string
-	Port       int
-	AdminHost  string
-	AdminPort  int
-	LogLevel   string
-	LogDir     string
-	AdminRedis RedisConf
-	Pool       RedisPool
+	Host            string
+	Port            int
+	AdminHost       string
+	AdminPort       int
+	LogLevel        string
+	LogDir          string
+	EnableAccessLog bool
+	AdminRedis      RedisConf
+	Pool            RedisPool
 
 	// Default publish params
 	TTLSecond   int

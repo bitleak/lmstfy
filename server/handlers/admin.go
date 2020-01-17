@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/meitu/lmstfy/auth"
 	"github.com/meitu/lmstfy/engine"
+	"github.com/meitu/lmstfy/server/middleware"
 	"github.com/meitu/lmstfy/uuid"
 	"github.com/meitu/lmstfy/version"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -146,4 +147,32 @@ func EngineMetaInfo(c *gin.Context) {
 		return
 	}
 	e.DumpInfo(c.Writer)
+}
+
+// AccessLogStatus return accesslog status, open or close
+// GET /accesslog
+func AccessLogStatus(c *gin.Context) {
+	if middleware.AccessLogStatus() {
+		c.JSON(http.StatusOK, gin.H{"status": "open"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "close"})
+	return
+}
+
+// UpdateAccessLogStatus update accesslog status, open or close
+// POST /accesslog
+func UpdateAccessLogStatus(c *gin.Context) {
+	status := c.Query("status")
+	if status == "open" {
+		middleware.EnableAccessLog()
+		c.JSON(http.StatusOK, gin.H{"status": "open"})
+		return
+	} else if status == "close" {
+		middleware.DisableAccessLog()
+		c.JSON(http.StatusOK, gin.H{"status": "close"})
+		return
+	}
+	c.JSON(http.StatusBadRequest, gin.H{"error": "invalid status"})
+	return
 }

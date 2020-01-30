@@ -149,28 +149,28 @@ func EngineMetaInfo(c *gin.Context) {
 	e.DumpInfo(c.Writer)
 }
 
-// AccessLogStatus return accesslog status, open or close
+// GetAccessLogStatus return whether the accesslog was enabled or not
 // GET /accesslog
-func AccessLogStatus(c *gin.Context) {
-	if middleware.AccessLogStatus() {
-		c.JSON(http.StatusOK, gin.H{"status": "open"})
+func GetAccessLogStatus(c *gin.Context) {
+	if middleware.IsAccessLogEnabled() {
+		c.JSON(http.StatusOK, gin.H{"status": "enabled"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"status": "close"})
+	c.JSON(http.StatusOK, gin.H{"status": "disabled"})
 	return
 }
 
-// UpdateAccessLogStatus update accesslog status, open or close
+// UpdateAccessLogStatus update the accesslog status
 // POST /accesslog
 func UpdateAccessLogStatus(c *gin.Context) {
 	status := c.Query("status")
-	if status == "open" {
+	if status == "enable" {
 		middleware.EnableAccessLog()
-		c.JSON(http.StatusOK, gin.H{"status": "open"})
+		c.JSON(http.StatusOK, gin.H{"status": "enabled"})
 		return
-	} else if status == "close" {
+	} else if status == "disable" {
 		middleware.DisableAccessLog()
-		c.JSON(http.StatusOK, gin.H{"status": "close"})
+		c.JSON(http.StatusOK, gin.H{"status": "disabled"})
 		return
 	}
 	c.JSON(http.StatusBadRequest, gin.H{"error": "invalid status"})

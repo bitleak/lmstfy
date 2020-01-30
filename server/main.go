@@ -109,7 +109,7 @@ func adminServer(conf *config.Config, accessLogger *logrus.Logger, errorLogger *
 	engine.POST("/token/:namespace", handlers.NewToken)
 	engine.DELETE("/token/:namespace/:token", handlers.DeleteToken)
 	engine.Any("/debug/pprof/*profile", handlers.PProf)
-	engine.GET("/accesslog", handlers.AccessLogStatus)
+	engine.GET("/accesslog", handlers.GetAccessLogStatus)
 	engine.POST("/accesslog", handlers.UpdateAccessLogStatus)
 	errorLogger.Infof("Admin port %d", conf.AdminPort)
 	srv := http.Server{

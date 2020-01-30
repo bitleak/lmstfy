@@ -8,22 +8,21 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// enableAccessLog control whether accesslog output
-var enableAccessLog = false
+var isAccessLogEnabled = false
 
-// AccessLogStatus return whether whether accesslog output
-func AccessLogStatus() bool {
-	return enableAccessLog
+// IsAccessLogEnabled return whether the accesslog was enabled or not
+func IsAccessLogEnabled() bool {
+	return isAccessLogEnabled
 }
 
-// EnableAccessLog enable accesslog output
+// isAccessLogEnabled enable the accesslog
 func EnableAccessLog() {
-	enableAccessLog = true
+	isAccessLogEnabled = true
 }
 
-// DisableAccessLog disable accesslog output
+// DisableAccessLog disable the accesslog
 func DisableAccessLog() {
-	enableAccessLog = false
+	isAccessLogEnabled = false
 }
 
 // RequestIDMiddleware set request uuid into context
@@ -63,7 +62,7 @@ func AccessLogMiddleware(logger *logrus.Logger) gin.HandlerFunc {
 			"req_id":  c.GetString("req_id"),
 		}
 
-		if !enableAccessLog {
+		if !isAccessLogEnabled {
 			return
 		}
 

@@ -1,6 +1,7 @@
 package redis
 
 import (
+	"fmt"
 	"strconv"
 	"testing"
 	"time"
@@ -9,7 +10,10 @@ import (
 )
 
 func TestQueue_Push(t *testing.T) {
-	timer := NewTimer("timer_set_q", R, time.Second)
+	timer, err := NewTimer("timer_set_q", R, time.Second)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to new timer: %s", err))
+	}
 	defer timer.Shutdown()
 	q := NewQueue("ns-queue", "q1", R, timer)
 	job := engine.NewJob("ns-queue", "q1", []byte("hello msg 1"), 10, 0, 1)
@@ -24,7 +28,10 @@ func TestQueue_Push(t *testing.T) {
 }
 
 func TestQueue_Poll(t *testing.T) {
-	timer := NewTimer("timer_set_q", R, time.Second)
+	timer, err := NewTimer("timer_set_q", R, time.Second)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to new timer: %s", err))
+	}
 	defer timer.Shutdown()
 	q := NewQueue("ns-queue", "q2", R, timer)
 	job := engine.NewJob("ns-queue", "q2", []byte("hello msg 2"), 10, 0, 1)
@@ -42,7 +49,10 @@ func TestQueue_Poll(t *testing.T) {
 }
 
 func TestQueue_Peek(t *testing.T) {
-	timer := NewTimer("timer_set_q", R, time.Second)
+	timer, err := NewTimer("timer_set_q", R, time.Second)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to new timer: %s", err))
+	}
 	defer timer.Shutdown()
 	q := NewQueue("ns-queue", "q3", R, timer)
 	job := engine.NewJob("ns-queue", "q3", []byte("hello msg 3"), 10, 0, 1)
@@ -57,7 +67,10 @@ func TestQueue_Peek(t *testing.T) {
 }
 
 func TestQueue_Destroy(t *testing.T) {
-	timer := NewTimer("timer_set_q", R, time.Second)
+	timer, err := NewTimer("timer_set_q", R, time.Second)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to new timer: %s", err))
+	}
 	defer timer.Shutdown()
 	q := NewQueue("ns-queue", "q4", R, timer)
 	job := engine.NewJob("ns-queue", "q4", []byte("hello msg 4"), 10, 0, 1)
@@ -76,7 +89,10 @@ func TestQueue_Destroy(t *testing.T) {
 }
 
 func TestQueue_Tries(t *testing.T) {
-	timer := NewTimer("timer_set_q", R, time.Second)
+	timer, err := NewTimer("timer_set_q", R, time.Second)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to new timer: %s", err))
+	}
 	defer timer.Shutdown()
 	namespace := "ns-queue"
 	queue := "q5"

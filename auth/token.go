@@ -133,13 +133,15 @@ func (tm *TokenManager) List(pool, namespace string) (tokens map[string]string, 
 
 var _tokenManager *TokenManager
 
-func Setup(conf *config.Config) {
+// Setup config auth redis client and token manager
+func Setup(conf *config.Config) error {
 	redisConf := conf.AdminRedis
 	cli := helper.NewRedisClient(&redisConf, nil)
 	if cli.Ping().Err() != nil {
-		panic("Can not connect to admin redis")
+		return errors.New("can not connect to admin redis")
 	}
 	_tokenManager = NewTokenManager(cli)
+	return nil
 }
 
 func GetTokenManager() *TokenManager {

@@ -1,6 +1,8 @@
 package redis
 
 import (
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/go-redis/redis"
@@ -14,7 +16,8 @@ const MaxRedisConnections = 5000
 
 var logger *logrus.Logger
 
-func Setup(conf *config.Config, l *logrus.Logger) {
+// Setup set the essential config of redis engine
+func Setup(conf *config.Config, l *logrus.Logger) error {
 	logger = l
 	for name, poolConf := range conf.Pool {
 		if poolConf.PoolSize == 0 {
@@ -28,11 +31,16 @@ func Setup(conf *config.Config, l *logrus.Logger) {
 		opt.MinIdleConns = 10
 		cli := helper.NewRedisClient(&poolConf, opt)
 		if cli.Ping().Err() != nil {
-			panic("Can not connect to redis")
+			return fmt.Errorf("redis server %s was not alive", poolConf.Addr)
 		}
-		engine.Register("redis", name, NewEngine(name, cli))
+		e, err := NewEngine(name, cli)
+		if err != nil {
+			return fmt.Errorf("setup engine error: %s", err)
+		}
+		engine.Register("redis", name, e)
 	}
 	if engine.GetEngineByKind("redis", "") == nil {
-		panic("default redis engine not found")
+		return errors.New("default redis engine not found")
 	}
+	return nil
 }

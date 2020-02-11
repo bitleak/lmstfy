@@ -1,6 +1,7 @@
 package redis
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -8,14 +9,14 @@ import (
 )
 
 func TestDeadLetter_Add(t *testing.T) {
-	dl := NewDeadLetter("ns-dead", "q0", R)
+	dl, _ := NewDeadLetter("ns-dead", "q0", R)
 	if err := dl.Add("x"); err != nil {
 
 	}
 }
 
 func TestDeadLetter_Peek(t *testing.T) {
-	dl := NewDeadLetter("ns-dead", "q1", R)
+	dl, _ := NewDeadLetter("ns-dead", "q1", R)
 	dl.Add("x")
 	dl.Add("y")
 	dl.Add("z")
@@ -30,7 +31,7 @@ func TestDeadLetter_Peek(t *testing.T) {
 }
 
 func TestDeadLetter_Delete(t *testing.T) {
-	dl := NewDeadLetter("ns-dead", "q2", R)
+	dl, _ := NewDeadLetter("ns-dead", "q2", R)
 	dl.Add("x")
 	dl.Add("y")
 	dl.Add("z")
@@ -62,7 +63,7 @@ func TestDeadLetter_Respawn(t *testing.T) {
 	p.Add(job1)
 	p.Add(job2)
 	p.Add(job3)
-	dl := NewDeadLetter("ns-dead", "q3", R)
+	dl, _ := NewDeadLetter("ns-dead", "q3", R)
 	dl.Add(job1.ID())
 	dl.Add(job2.ID())
 	dl.Add(job3.ID())
@@ -74,7 +75,10 @@ func TestDeadLetter_Respawn(t *testing.T) {
 		t.Fatalf("Respawned job's TTL should be removed")
 	}
 
-	timer := NewTimer("ns-dead", R, time.Second)
+	timer, err := NewTimer("ns-dead", R, time.Second)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to new timer: %s", err))
+	}
 	defer timer.Shutdown()
 	q := NewQueue("ns-dead", "q3", R, timer)
 
@@ -113,7 +117,7 @@ func TestDeadLetter_Respawn(t *testing.T) {
 
 func TestDeadLetter_Size(t *testing.T) {
 	p := NewPool(R)
-	dl := NewDeadLetter("ns-dead", "q3", R)
+	dl, _ := NewDeadLetter("ns-dead", "q3", R)
 	cnt := 3
 	for i := 0; i < cnt; i++ {
 		job := engine.NewJob("ns-dead", "q3", []byte("1"), 60, 0, 1)

@@ -2,7 +2,6 @@ package redis
 
 import (
 	"encoding/binary"
-	"fmt"
 	"time"
 
 	"github.com/go-redis/redis"
@@ -55,7 +54,8 @@ type Timer struct {
 	lua_pump_sha string
 }
 
-func NewTimer(name string, redis *RedisInstance, interval time.Duration) *Timer {
+// NewTimer return an instance of delay queue
+func NewTimer(name string, redis *RedisInstance, interval time.Duration) (*Timer, error) {
 	timer := &Timer{
 		name:     name,
 		redis:    redis,
@@ -66,12 +66,13 @@ func NewTimer(name string, redis *RedisInstance, interval time.Duration) *Timer 
 	// Preload the lua scripts
 	sha, err := redis.Conn.ScriptLoad(LUA_T_PUMP).Result()
 	if err != nil {
-		panic(fmt.Sprintf("failed to preload lua script: %s", err))
+		logger.WithField("err", err).Error("Failed to preload lua script in timer")
+		return nil, err
 	}
 	timer.lua_pump_sha = sha
 
 	go timer.tick()
-	return timer
+	return timer, nil
 }
 
 func (t *Timer) Name() string {

@@ -1,6 +1,7 @@
 package redis
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -9,16 +10,21 @@ import (
 )
 
 func TestTimer_Add(t *testing.T) {
-	timer := NewTimer("timer_set_1", R, time.Second)
-	job := engine.NewJob("ns-timer", "q1", []byte("hello msg 1"), 10, 0, 1)
-	err := timer.Add(job.Namespace(), job.Queue(), job.ID(), 10, 1)
+	timer, err := NewTimer("timer_set_1", R, time.Second)
 	if err != nil {
+		panic(fmt.Sprintf("Failed to new timer: %s", err))
+	}
+	job := engine.NewJob("ns-timer", "q1", []byte("hello msg 1"), 10, 0, 1)
+	if err = timer.Add(job.Namespace(), job.Queue(), job.ID(), 10, 1); err != nil {
 		t.Errorf("Failed to add job to timer: %s", err)
 	}
 }
 
 func TestTimer_Tick(t *testing.T) {
-	timer := NewTimer("timer_set_2", R, time.Second)
+	timer, err := NewTimer("timer_set_2", R, time.Second)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to new timer: %s", err))
+	}
 	defer timer.Shutdown()
 	job := engine.NewJob("ns-timer", "q2", []byte("hello msg 2"), 5, 0, 1)
 	pool := NewPool(R)
@@ -49,7 +55,10 @@ func BenchmarkTimer(b *testing.B) {
 	logger.SetLevel(logrus.ErrorLevel)
 	defer logger.SetLevel(logrus.DebugLevel)
 
-	t := NewTimer("timer_set_3", R, time.Second)
+	t, err := NewTimer("timer_set_3", R, time.Second)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to new timer: %s", err))
+	}
 	defer t.Shutdown()
 	b.Run("Add", benchmarkTimer_Add(t))
 
@@ -93,7 +102,10 @@ func BenchmarkTimer_Pump(b *testing.B) {
 	b.StopTimer()
 
 	pool := NewPool(R)
-	timer := NewTimer("timer_set_4", R, time.Second)
+	timer, err := NewTimer("timer_set_4", R, time.Second)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to new timer: %s", err))
+	}
 	timer.Shutdown()
 	for i := 0; i < 10000; i++ {
 		job := engine.NewJob("ns-timer", "q4", []byte("hello msg 1"), 100, 0, 1)

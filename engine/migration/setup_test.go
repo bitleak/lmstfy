@@ -27,14 +27,19 @@ PLEASE setup env LMSTFY_TEST_CONFIG to the config file first
 ############################################################
 `)
 	}
-	CONF = config.MustLoad(os.Getenv("LMSTFY_TEST_CONFIG"))
+	var err error
+	if CONF, err = config.MustLoad(os.Getenv("LMSTFY_TEST_CONFIG")); err != nil {
+		panic(fmt.Sprintf("Failed to load config file: %s", err))
+	}
 	logger = logrus.New()
 	level, _ := logrus.ParseLevel(CONF.LogLevel)
 	logger.SetLevel(level)
 }
 
 func setup() {
-	redis.Setup(CONF, logger)
+	if err := redis.Setup(CONF, logger); err != nil {
+		panic(fmt.Sprintf("Failed to setup redis engine: %s", err))
+	}
 	for _, poolConf := range CONF.Pool {
 		conn := helper.NewRedisClient(&poolConf, nil)
 		err := conn.Ping().Err()

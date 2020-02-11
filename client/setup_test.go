@@ -32,7 +32,10 @@ PLEASE setup env LMSTFY_TEST_CONFIG to the config file first
 ############################################################
 `)
 	}
-	CONF = config.MustLoad(os.Getenv("LMSTFY_TEST_CONFIG"))
+	var err error
+	if CONF, err = config.MustLoad(os.Getenv("LMSTFY_TEST_CONFIG")); err != nil {
+		panic(fmt.Sprintf("Failed to load config file: %s", err))
+	}
 }
 
 // NOTE: lmstfy server should be start by gitlab CI script from outside, but should use the same

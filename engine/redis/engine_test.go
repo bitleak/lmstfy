@@ -2,11 +2,15 @@ package redis
 
 import (
 	"bytes"
+	"fmt"
 	"testing"
 )
 
 func TestEngine_Publish(t *testing.T) {
-	e := NewEngine(R.Name, R.Conn)
+	e, err := NewEngine(R.Name, R.Conn)
+	if err != nil {
+		panic(fmt.Sprintf("Setup engine error: %s", err))
+	}
 	defer e.Shutdown()
 	body := []byte("hello msg 1")
 	jobID, err := e.Publish("ns-engine", "q1", body, 10, 2, 1)
@@ -24,7 +28,10 @@ func TestEngine_Publish(t *testing.T) {
 }
 
 func TestEngine_Consume(t *testing.T) {
-	e := NewEngine(R.Name, R.Conn)
+	e, err := NewEngine(R.Name, R.Conn)
+	if err != nil {
+		panic(fmt.Sprintf("Setup engine error: %s", err))
+	}
 	defer e.Shutdown()
 	body := []byte("hello msg 2")
 	jobID, err := e.Publish("ns-engine", "q2", body, 10, 2, 1)
@@ -57,10 +64,13 @@ func TestEngine_Consume(t *testing.T) {
 
 // Consume the first one from multi publish
 func TestEngine_Consume2(t *testing.T) {
-	e := NewEngine(R.Name, R.Conn)
+	e, err := NewEngine(R.Name, R.Conn)
+	if err != nil {
+		panic(fmt.Sprintf("Setup engine error: %s", err))
+	}
 	defer e.Shutdown()
 	body := []byte("hello msg 3")
-	_, err := e.Publish("ns-engine", "q3", []byte("delay msg"), 10, 5, 1)
+	_, err = e.Publish("ns-engine", "q3", []byte("delay msg"), 10, 5, 1)
 	jobID, err := e.Publish("ns-engine", "q3", body, 10, 2, 1)
 	if err != nil {
 		t.Fatalf("Failed to publish: %s", err)
@@ -75,7 +85,10 @@ func TestEngine_Consume2(t *testing.T) {
 }
 
 func TestEngine_ConsumeMulti(t *testing.T) {
-	e := NewEngine(R.Name, R.Conn)
+	e, err := NewEngine(R.Name, R.Conn)
+	if err != nil {
+		panic(fmt.Sprintf("Setup engine error: %s", err))
+	}
 	defer e.Shutdown()
 	body := []byte("hello msg 4")
 	jobID, err := e.Publish("ns-engine", "q4", body, 10, 3, 1)
@@ -105,7 +118,10 @@ func TestEngine_ConsumeMulti(t *testing.T) {
 }
 
 func TestEngine_Peek(t *testing.T) {
-	e := NewEngine(R.Name, R.Conn)
+	e, err := NewEngine(R.Name, R.Conn)
+	if err != nil {
+		panic(fmt.Sprintf("Setup engine error: %s", err))
+	}
 	defer e.Shutdown()
 	body := []byte("hello msg 6")
 	jobID, err := e.Publish("ns-engine", "q6", body, 10, 0, 1)
@@ -122,7 +138,10 @@ func TestEngine_Peek(t *testing.T) {
 }
 
 func TestEngine_BatchConsume(t *testing.T) {
-	e := NewEngine(R.Name, R.Conn)
+	e, err := NewEngine(R.Name, R.Conn)
+	if err != nil {
+		panic(fmt.Sprintf("Setup engine error: %s", err))
+	}
 	defer e.Shutdown()
 	body := []byte("hello msg 7")
 	jobID, err := e.Publish("ns-engine", "q7", body, 10, 3, 1)

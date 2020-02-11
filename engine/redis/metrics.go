@@ -166,7 +166,7 @@ func (m *SizeMonitor) MonitorIfNotExist(namespace, queue string) {
 	dname := fmt.Sprintf("d/%s/%s", namespace, queue)
 	m.rwmu.Lock()
 	m.providers[qname] = NewQueue(namespace, queue, m.redis, nil)
-	m.providers[dname] = NewDeadLetter(namespace, queue, m.redis)
+	m.providers[dname], _ = NewDeadLetter(namespace, queue, m.redis)
 	m.rwmu.Unlock()
 }
 

@@ -3,6 +3,7 @@ package redis
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"time"
 
 	go_redis "github.com/go-redis/redis"
@@ -103,7 +104,9 @@ func (q *Queue) Destroy() (count int64, err error) {
 		val, err := q.redis.Conn.EvalSha(q.lua_destroy_sha, []string{q.Name(), poolPrefix}, batchSize).Result()
 		if err != nil {
 			if isLuaScriptGone(err) {
-				PreloadDeadLetterLuaScript(q.redis)
+				if err := PreloadDeadLetterLuaScript(q.redis); err != nil {
+					logger.WithField("err", err).Error("Failed to load deadletter lua script")
+				}
 				continue
 			}
 			return count, err
@@ -133,7 +136,7 @@ func PollQueues(redis *RedisInstance, timer *Timer, queueNames []QueueName, time
 		val, err = redis.Conn.BRPop(time.Duration(timeoutSecond)*time.Second, keys...).Result()
 	} else { // Non-Blocking fetch
 		if len(queueNames) != 1 {
-			panic("non-blocking pop can NOT support multiple keys")
+			return nil, "", 0, errors.New("non-blocking pop can NOT support multiple keys")
 		}
 		val = make([]string, 2)
 		val[0] = queueNames[0].String() // Just to be coherent with BRPop return values
@@ -161,7 +164,12 @@ func PollQueues(redis *RedisInstance, timer *Timer, queueNames []QueueName, time
 	}
 
 	if tries == 0 {
-		panic("tries == 0, job with tries == 0 should never appears here")
+		logger.WithFields(logrus.Fields{
+			"jobID": jobID,
+			"ttr":   ttrSecond,
+			"queue": queueName.String(),
+		}).Error("Job with tries == 0 appeared")
+		return nil, "", 0, fmt.Errorf("Job %s with tries == 0 appeared", jobID)
 	}
 
 	err = timer.Add(queueName.Namespace, queueName.Queue, jobID, ttrSecond, tries-1) // NOTE: tries is decreased

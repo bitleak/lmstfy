@@ -28,15 +28,20 @@ type Engine struct {
 	monitor *SizeMonitor
 }
 
-func NewEngine(redisName string, conn *go_redis.Client) engine.Engine {
+func NewEngine(redisName string, conn *go_redis.Client) (engine.Engine, error) {
 	redis := &RedisInstance{
 		Name: redisName,
 		Conn: conn,
 	}
-	PreloadDeadLetterLuaScript(redis)
+	if err := PreloadDeadLetterLuaScript(redis); err != nil {
+		return nil, err
+	}
 	go RedisInstanceMonitor(redis)
 	meta := NewMetaManager(redis)
-	timer := NewTimer("timer_set", redis, time.Second)
+	timer, err := NewTimer("timer_set", redis, time.Second)
+	if err != nil {
+		return nil, err
+	}
 	monitor := NewSizeMonitor(redis, timer, meta.Dump())
 	go monitor.Loop()
 	return &Engine{
@@ -45,7 +50,7 @@ func NewEngine(redisName string, conn *go_redis.Client) engine.Engine {
 		timer:   timer,
 		meta:    meta,
 		monitor: monitor,
-	}
+	}, nil
 }
 
 func (e *Engine) Publish(namespace, queue string, body []byte, ttlSecond, delaySecond uint32, tries uint16) (jobID string, err error) {
@@ -257,23 +262,35 @@ func (e *Engine) Destroy(namespace, queue string) (count int64, err error) {
 }
 
 func (e *Engine) PeekDeadLetter(namespace, queue string) (size int64, jobID string, err error) {
-	dl := NewDeadLetter(namespace, queue, e.redis)
+	dl, err := NewDeadLetter(namespace, queue, e.redis)
+	if err != nil {
+		return 0, "", err
+	}
 	return dl.Peek()
 }
 
 func (e *Engine) DeleteDeadLetter(namespace, queue string, limit int64) (count int64, err error) {
-	dl := NewDeadLetter(namespace, queue, e.redis)
+	dl, err := NewDeadLetter(namespace, queue, e.redis)
+	if err != nil {
+		return 0, err
+	}
 	return dl.Delete(limit)
 }
 
 func (e *Engine) RespawnDeadLetter(namespace, queue string, limit, ttlSecond int64) (count int64, err error) {
-	dl := NewDeadLetter(namespace, queue, e.redis)
+	dl, err := NewDeadLetter(namespace, queue, e.redis)
+	if err != nil {
+		return 0, err
+	}
 	return dl.Respawn(limit, ttlSecond)
 }
 
 // SizeOfDeadLetter return the queue size of dead letter
 func (e *Engine) SizeOfDeadLetter(namespace, queue string) (size int64, err error) {
-	dl := NewDeadLetter(namespace, queue, e.redis)
+	dl, err := NewDeadLetter(namespace, queue, e.redis)
+	if err != nil {
+		return 0, err
+	}
 	return dl.Size()
 }
 

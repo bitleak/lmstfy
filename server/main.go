@@ -147,15 +147,27 @@ func main() {
 		printVersion()
 		return
 	}
-	conf := config.MustLoad(Flags.ConfFile)
+	conf, err := config.MustLoad(Flags.ConfFile)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to load config file: %s", err))
+	}
 	shutdown := make(chan struct{})
-	accessLogger, errorLogger := log.SetupLogger(conf.LogDir, conf.LogLevel, Flags.BackTrackLevel)
+	accessLogger, errorLogger, err := log.SetupLogger(conf.LogDir, conf.LogLevel, Flags.BackTrackLevel)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to setup logger: %s", err))
+	}
 	registerSignal(shutdown, func() {
 		log.ReopenLogs(conf.LogDir, accessLogger, errorLogger)
 	})
-	redis_engine.Setup(conf, errorLogger)
-	migration.Setup(conf, errorLogger)
-	auth.Setup(conf)
+	if err := redis_engine.Setup(conf, errorLogger); err != nil {
+		panic(fmt.Sprintf("Failed to setup redis engine: %s", err))
+	}
+	if err := migration.Setup(conf, errorLogger); err != nil {
+		panic(fmt.Sprintf("Failed to setup migration engine: %s", err))
+	}
+	if err := auth.Setup(conf); err != nil {
+		panic(fmt.Sprintf("Failed to setup auth module: %s", err))
+	}
 	if conf.EnableAccessLog {
 		middleware.EnableAccessLog()
 	}

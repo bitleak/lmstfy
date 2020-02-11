@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 
@@ -98,10 +99,11 @@ func (rc *RedisConf) IsSentinel() bool {
 	return rc.mode == sentinelMode
 }
 
-func MustLoad(path string) *Config {
+// MustLoad load config file with specified path, an error returned if any condition not met
+func MustLoad(path string) (*Config, error) {
 	_, err := os.Stat(path)
 	if err != nil {
-		panic(err)
+		return nil, fmt.Errorf("failed to stat config file: %s", err)
 	}
 	conf := new(Config)
 	conf.LogLevel = "info"
@@ -118,36 +120,36 @@ func MustLoad(path string) *Config {
 	}
 
 	if conf.Host == "" {
-		panic("CONF: invalid host")
+		return nil, errors.New("invalid host")
 	}
 	if conf.Port == 0 {
-		panic("CONF: invalid port")
+		return nil, errors.New("invalid port")
 	}
 	if _, ok := conf.Pool[DefaultPoolName]; !ok {
-		panic("CONF: default redis pool not found")
+		return nil, errors.New("default redis pool not found")
 	}
 	for name, poolConf := range conf.Pool {
 		if poolConf.mode, err = detectRedisMode(&poolConf); err != nil {
-			panic("CONF: failed to get reedis mode in pool(" + name + "), err: " + err.Error())
+			return nil, fmt.Errorf("failed to get redis mode in pool(%s): %s", name, err)
 		}
 		conf.Pool[name] = poolConf
 		if err := poolConf.validate(); err != nil {
-			panic("CONF: invalid config in pool(" + name + "), err: " + err.Error())
+			return nil, fmt.Errorf("invalid config in pool(%s): %s", name, err)
 		}
 	}
 	if conf.AdminRedis.mode, err = detectRedisMode(&conf.AdminRedis); err != nil {
-		panic("CONF: failed to get reedis mode in admin pool, err: " + err.Error())
+		return nil, fmt.Errorf("failed to get reedis mode in admin pool: %s", err)
 	}
 	if err := conf.AdminRedis.validate(); err != nil {
-		panic("CONF: invalid config in admin redis, err: " + err.Error())
+		return nil, fmt.Errorf("invalid config in admin redis: %s", err)
 	}
 	if conf.AdminPort == 0 {
-		panic("CONF: invalid admin port")
+		return nil, errors.New("invalid admin port")
 	}
 
 	_, err = logrus.ParseLevel(conf.LogLevel)
 	if err != nil {
-		panic("CONF: invalid log level")
+		return nil, errors.New("invalid log level")
 	}
-	return conf
+	return conf, nil
 }

@@ -1,6 +1,7 @@
 package log
 
 import (
+	"fmt"
 	"os"
 	"path"
 
@@ -33,14 +34,14 @@ func ReopenLogs(logDir string, accessLogger, errorLogger *logrus.Logger) error {
 }
 
 // @backtrackLevel: log the backtrack info when logging level is >= backtrackLevel
-func SetupLogger(logDir, logLevel, backtrackLevel string) (accessLogger *logrus.Logger, errorLogger *logrus.Logger) {
+func SetupLogger(logDir, logLevel, backtrackLevel string) (accessLogger *logrus.Logger, errorLogger *logrus.Logger, err error) {
 	level, err := logrus.ParseLevel(logLevel)
 	if err != nil {
-		panic("Failed to parse log level")
+		return nil, nil, fmt.Errorf("failed to parse log level: %s", err)
 	}
 	btLevel, err := logrus.ParseLevel(backtrackLevel)
 	if err != nil {
-		panic("Failed to parser backtrack level")
+		return nil, nil, fmt.Errorf("failed to parse backtrack level: %s", err)
 	}
 	accessLogger = logrus.New()
 	errorLogger = logrus.New()
@@ -53,11 +54,11 @@ func SetupLogger(logDir, logLevel, backtrackLevel string) (accessLogger *logrus.
 	}
 	accessLog, err := os.OpenFile(path.Join(logDir, "access.log"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		panic("Failed to create access.log")
+		return nil, nil, fmt.Errorf("failed to create access.log: %s", err)
 	}
 	errorLog, err := os.OpenFile(path.Join(logDir, "error.log"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		panic("Failed to create access.log")
+		return nil, nil, fmt.Errorf("failed to create error.log: %s", err)
 	}
 
 	accessLogger.Out = accessLog

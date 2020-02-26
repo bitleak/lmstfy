@@ -1,4 +1,5 @@
-# Let Me Schedule Tasks For You (lmstfy) [![Build Status](https://travis-ci.org/meitu/lmstfy.svg?branch=master)](https://travis-ci.org/meitu/lmstfy) [![Go Report Card](https://goreportcard.com/badge/github.com/meitu/lmstfy)](https://goreportcard.com/report/github.com/meitu/lmstfy) 
+# Let Me Schedule Tasks For You (lmstfy)
+[![Build Status](https://travis-ci.org/meitu/lmstfy.svg?branch=master)](https://travis-ci.org/meitu/lmstfy) [![Go Report Card](https://goreportcard.com/badge/github.com/meitu/lmstfy)](https://goreportcard.com/report/github.com/meitu/lmstfy) [![Coverage Status](https://coveralls.io/repos/github/meitu/lmstfy/badge.svg?branch=add-coverage-reports)](https://coveralls.io/github/meitu/lmstfy?branch=add-coverage-reports) [![GitHub release](https://img.shields.io/github/tag/meitu/lmstfy.svg?label=release)](https://github.com/meitu/lmstfy/releases) [![GitHub release date](https://img.shields.io/github/release-date/meitu/lmstfy.svg)](https://github.com/meitu/lmstfy/releases) [![LICENSE](https://img.shields.io/github/license/meitu/lmstfy.svg)](https://github.com/meitu/lmstfy/blob/master/LICENSE) [![GoDoc](https://img.shields.io/badge/Godoc-reference-blue.svg)](https://godoc.org/github.com/meitu/lmstfy)
 
 lmstfy is a simple task queue (or job queue) service, providing the following features:
 

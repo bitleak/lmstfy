@@ -19,7 +19,12 @@ $(PROGRAM):
 test:
 	- cd scripts/redis && docker-compose up -d && cd ../..
 	@LMSTFY_TEST_CONFIG=`pwd`/scripts/test-conf.toml sh scripts/run-test.sh 
+	@cp coverage.out build/
 	- cd scripts/redis && docker-compose down && cd ../..
+
+coverage:
+	- $(HOME)/gopath/bin/goveralls -coverprofile=build/coverage.out -service=travis-ci -repotoken $(COVERAGE_TOKEN)
+	@rm -rf build/coverage.out
 
 lint:
 	@rm -rf lint.log

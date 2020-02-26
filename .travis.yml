@@ -11,6 +11,7 @@ go:
 
 cache:
   directories:
+    - $TRAVIS_BUILD_DIR/build/
     - /home/travis/gopath/pkg/mod
     - /home/travis/.cache/go-build
 
@@ -18,17 +19,33 @@ stages:
   - lint   
   - build
   - test
+  - coverage
 
 jobs:
   include:
+
     - stage: lint
       name: lint the go files
       script:
         - make lint 
+
     - stage: build
       name: Build binary
       script:
         - make
+
     - stage: test
       script:
         - make test
+
+    - stage: test
+      script:
+        - make test
+
+    - stage: coverage
+      name: coverage/coveralls
+      install:
+        - go get golang.org/x/tools/cmd/cover
+        - go get github.com/mattn/goveralls
+      script:
+        - make coverage

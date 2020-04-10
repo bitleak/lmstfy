@@ -6,9 +6,9 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/meitu/lmstfy/auth"
-	"github.com/meitu/lmstfy/server/handlers"
-	"github.com/meitu/lmstfy/uuid"
+	"github.com/bitleak/lmstfy/auth"
+	"github.com/bitleak/lmstfy/server/handlers"
+	"github.com/bitleak/lmstfy/uuid"
 )
 
 func TestNewToken(t *testing.T) {

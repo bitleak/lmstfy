@@ -10,15 +10,15 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/bitleak/lmstfy/auth"
+	"github.com/bitleak/lmstfy/config"
+	"github.com/bitleak/lmstfy/engine/migration"
+	redis_engine "github.com/bitleak/lmstfy/engine/redis"
+	"github.com/bitleak/lmstfy/log"
+	"github.com/bitleak/lmstfy/server/handlers"
+	"github.com/bitleak/lmstfy/server/middleware"
+	"github.com/bitleak/lmstfy/version"
 	"github.com/gin-gonic/gin"
-	"github.com/meitu/lmstfy/auth"
-	"github.com/meitu/lmstfy/config"
-	"github.com/meitu/lmstfy/engine/migration"
-	redis_engine "github.com/meitu/lmstfy/engine/redis"
-	"github.com/meitu/lmstfy/log"
-	"github.com/meitu/lmstfy/server/handlers"
-	"github.com/meitu/lmstfy/server/middleware"
-	"github.com/meitu/lmstfy/version"
 	"github.com/sirupsen/logrus"
 )
 

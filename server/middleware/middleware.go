@@ -3,8 +3,8 @@ package middleware
 import (
 	"time"
 
+	"github.com/bitleak/lmstfy/uuid"
 	"github.com/gin-gonic/gin"
-	"github.com/meitu/lmstfy/uuid"
 	"github.com/sirupsen/logrus"
 )
 

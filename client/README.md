@@ -5,7 +5,7 @@
 ### Initialize
 
 ```
-import github.com/meitu/lmstfy/client
+import github.com/bitleak/lmstfy/client
 
 c := client.NewLmstfyClient(host, port, namespace, token)
 

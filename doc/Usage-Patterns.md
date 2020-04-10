@@ -6,7 +6,7 @@
 的 worker 在执行完相应的任务后, 删除这个任务. 如果期间 worker 异常死亡了, 而且如果任务
 配置了重试次数, 那其他剩下的 worker 在一段时间后(TTR), 会重新去获取任务.
 
-<img src="https://github.com/meitu/lmstfy/raw/master/doc/fire-forget.png" alt="fire and forget" width="800px">
+<img src="https://github.com/bitleak/lmstfy/raw/master/doc/fire-forget.png" alt="fire and forget" width="800px">
 
 涉及到的 API demo:
 
@@ -38,7 +38,7 @@ curl -X DELETE -H "X-Token: xxx" "localhost:9999/api/test/q/job/{job_id}"
 
 和上面的异步任务类似, 但是 publisher 可以指定任务在过了一段时间之后才能被 worker 发现.
 
-<img src="https://github.com/meitu/lmstfy/raw/master/doc/delay-fire.png" alt="delay and fire" width="800px">
+<img src="https://github.com/bitleak/lmstfy/raw/master/doc/delay-fire.png" alt="delay and fire" width="800px">
 
 ### publisher
 
@@ -53,7 +53,7 @@ curl -X PUT -H "X-Token: xxx" "localhost:9999/api/test/q?tries=3&delay=30" -d "h
 publisher 发布任务后需要等待任务的返回结果. 这个使用的场景和使用 RPC 的场景类似, 不同的是, publisher 不需要知道
 任何 worker 相关的信息, 也不需要检查 worker 的健康状态, worker 是可以水平扩展的.
 
-<img src="https://github.com/meitu/lmstfy/raw/master/doc/fire-wait.png" alt="fire and wait" width="800px">
+<img src="https://github.com/bitleak/lmstfy/raw/master/doc/fire-wait.png" alt="fire and wait" width="800px">
 
 ### publisher
 

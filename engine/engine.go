@@ -3,7 +3,7 @@ package engine
 import (
 	"io"
 
-	"github.com/meitu/lmstfy/config"
+	"github.com/bitleak/lmstfy/config"
 )
 
 type Engine interface {

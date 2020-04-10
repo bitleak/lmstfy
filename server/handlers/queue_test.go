@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/meitu/lmstfy/engine"
-	"github.com/meitu/lmstfy/server/handlers"
+	"github.com/bitleak/lmstfy/engine"
+	"github.com/bitleak/lmstfy/server/handlers"
 )
 
 func TestPublish(t *testing.T) {

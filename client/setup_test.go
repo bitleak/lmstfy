@@ -8,8 +8,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/meitu/lmstfy/config"
-	"github.com/meitu/lmstfy/helper"
+	"github.com/bitleak/lmstfy/config"
+	"github.com/bitleak/lmstfy/helper"
 )
 
 var (

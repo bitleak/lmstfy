@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/meitu/lmstfy/engine"
+	"github.com/bitleak/lmstfy/engine"
 )
 
 func TestDeadLetter_Add(t *testing.T) {

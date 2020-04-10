@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/meitu/lmstfy/engine"
+	"github.com/bitleak/lmstfy/engine"
 )
 
 func TestQueue_Push(t *testing.T) {

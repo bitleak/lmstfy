@@ -1,5 +1,5 @@
 # Let Me Schedule Tasks For You (lmstfy)
-[![Build Status](https://travis-ci.org/meitu/lmstfy.svg?branch=master)](https://travis-ci.org/meitu/lmstfy) [![Go Report Card](https://goreportcard.com/badge/github.com/meitu/lmstfy)](https://goreportcard.com/report/github.com/meitu/lmstfy) [![Coverage Status](https://coveralls.io/repos/github/meitu/lmstfy/badge.svg?branch=add-coverage-reports)](https://coveralls.io/github/meitu/lmstfy?branch=add-coverage-reports) [![GitHub release](https://img.shields.io/github/tag/meitu/lmstfy.svg?label=release)](https://github.com/meitu/lmstfy/releases) [![GitHub release date](https://img.shields.io/github/release-date/meitu/lmstfy.svg)](https://github.com/meitu/lmstfy/releases) [![LICENSE](https://img.shields.io/github/license/meitu/lmstfy.svg)](https://github.com/meitu/lmstfy/blob/master/LICENSE) [![GoDoc](https://img.shields.io/badge/Godoc-reference-blue.svg)](https://godoc.org/github.com/meitu/lmstfy)
+[![Build Status](https://travis-ci.org/bitleak/lmstfy.svg?branch=master)](https://travis-ci.org/bitleak/lmstfy) [![Go Report Card](https://goreportcard.com/badge/github.com/bitleak/lmstfy)](https://goreportcard.com/report/github.com/bitleak/lmstfy) [![Coverage Status](https://coveralls.io/repos/github/bitleak/lmstfy/badge.svg?branch=add-coverage-reports)](https://coveralls.io/github/bitleak/lmstfy?branch=add-coverage-reports) [![GitHub release](https://img.shields.io/github/tag/bitleak/lmstfy.svg?label=release)](https://github.com/bitleak/lmstfy/releases) [![GitHub release date](https://img.shields.io/github/release-date/bitleak/lmstfy.svg)](https://github.com/bitleak/lmstfy/releases) [![LICENSE](https://img.shields.io/github/license/bitleak/lmstfy.svg)](https://github.com/bitleak/lmstfy/blob/master/LICENSE) [![GoDoc](https://img.shields.io/badge/Godoc-reference-blue.svg)](https://godoc.org/github.com/bitleak/lmstfy)
 
 lmstfy is a simple task queue (or job queue) service, providing the following features:
 
@@ -17,9 +17,9 @@ we use AOF and replication on our production env to ensure that.
 
 ## SDK for lmstfy
 
-* [php lmstfy client](https://github.com/meitu/php-lmstfy-client)
-* [golang lmstfy client](https://github.com/meitu/lmstfy/tree/master/client)
-* [java lmstfy client](https://github.com/meitu/java-lmstfy-client)
+* [php lmstfy client](https://github.com/bitleak/php-lmstfy-client)
+* [golang lmstfy client](https://github.com/bitleak/lmstfy/tree/master/client)
+* [java lmstfy client](https://github.com/bitleak/java-lmstfy-client)
 
 ## Build and Run
 
@@ -448,4 +448,4 @@ GET /api/:namespace/:queue/deadletter/size
 
 Detailed internal implementation looks like:
 
-<img src="https://github.com/meitu/lmstfy/raw/master/doc/job-flow.png" alt="job flow" width="800px">
+<img src="https://github.com/bitleak/lmstfy/raw/master/doc/job-flow.png" alt="job flow" width="800px">

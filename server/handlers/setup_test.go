@@ -7,12 +7,12 @@ import (
 	"os"
 	"testing"
 
+	"github.com/bitleak/lmstfy/auth"
+	"github.com/bitleak/lmstfy/config"
+	redis_engine "github.com/bitleak/lmstfy/engine/redis"
+	"github.com/bitleak/lmstfy/helper"
+	"github.com/bitleak/lmstfy/server/handlers"
 	"github.com/gin-gonic/gin"
-	"github.com/meitu/lmstfy/auth"
-	"github.com/meitu/lmstfy/config"
-	redis_engine "github.com/meitu/lmstfy/engine/redis"
-	"github.com/meitu/lmstfy/helper"
-	"github.com/meitu/lmstfy/server/handlers"
 	"github.com/sirupsen/logrus"
 )
 

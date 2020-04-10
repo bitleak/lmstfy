@@ -3,7 +3,7 @@
 ## Install
 
 ```
-go get -u github.com/meitu/lmstfy/client/cmd/lmstfy
+go get -u github.com/bitleak/lmstfy/client/cmd/lmstfy
 ```
 
 ## Usage

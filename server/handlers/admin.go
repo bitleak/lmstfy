@@ -6,12 +6,12 @@ import (
 	"net/http/pprof"
 	"strings"
 
+	"github.com/bitleak/lmstfy/auth"
+	"github.com/bitleak/lmstfy/engine"
+	"github.com/bitleak/lmstfy/server/middleware"
+	"github.com/bitleak/lmstfy/uuid"
+	"github.com/bitleak/lmstfy/version"
 	"github.com/gin-gonic/gin"
-	"github.com/meitu/lmstfy/auth"
-	"github.com/meitu/lmstfy/engine"
-	"github.com/meitu/lmstfy/server/middleware"
-	"github.com/meitu/lmstfy/uuid"
-	"github.com/meitu/lmstfy/version"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 )

@@ -3,7 +3,7 @@ package migration
 import (
 	"io"
 
-	"github.com/meitu/lmstfy/engine"
+	"github.com/bitleak/lmstfy/engine"
 )
 
 type Engine struct {

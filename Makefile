@@ -1,6 +1,6 @@
 PROGRAM=lmstfy-server
 
-PKG_FILES=`go list ./... | sed -e 's=github.com/meitu/lmstfy/=./='`
+PKG_FILES=`go list ./... | sed -e 's=github.com/bitleak/lmstfy/=./='`
 
 CCCOLOR="\033[37;1m"
 MAKECOLOR="\033[32;1m"
@@ -29,7 +29,7 @@ coverage:
 lint:
 	@rm -rf lint.log
 	@printf $(CCCOLOR)"Checking format...\n"$(ENDCOLOR)
-	@go list ./... | sed -e 's=github.com/meitu/lmstfy/=./=' | xargs -n 1 gofmt -d -s 2>&1 | tee lint.log
+	@go list ./... | sed -e 's=github.com/bitleak/lmstfy/=./=' | xargs -n 1 gofmt -d -s 2>&1 | tee lint.log
 	@printf $(CCCOLOR)"Checking vet...\n"$(ENDCOLOR)
-	@go list ./... | sed -e 's=github.com/meitu/lmstfy/=./=' | xargs -n 1 go vet 2>&1 | tee lint.log
+	@go list ./... | sed -e 's=github.com/bitleak/lmstfy/=./=' | xargs -n 1 go vet 2>&1 | tee lint.log
 	@[ ! -s lint.log ]

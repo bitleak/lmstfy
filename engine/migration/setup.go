@@ -3,8 +3,8 @@ package migration
 import (
 	"fmt"
 
-	"github.com/meitu/lmstfy/config"
-	"github.com/meitu/lmstfy/engine"
+	"github.com/bitleak/lmstfy/config"
+	"github.com/bitleak/lmstfy/engine"
 	"github.com/sirupsen/logrus"
 )
 

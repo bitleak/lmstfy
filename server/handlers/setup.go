@@ -3,8 +3,8 @@ package handlers
 import (
 	"strconv"
 
+	"github.com/bitleak/lmstfy/config"
 	"github.com/gin-gonic/gin"
-	"github.com/meitu/lmstfy/config"
 	"github.com/sirupsen/logrus"
 )
 

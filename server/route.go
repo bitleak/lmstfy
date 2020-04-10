@@ -3,8 +3,8 @@ package main
 import (
 	"net/http"
 
+	"github.com/bitleak/lmstfy/server/handlers"
 	"github.com/gin-gonic/gin"
-	"github.com/meitu/lmstfy/server/handlers"
 	"github.com/sirupsen/logrus"
 )
 

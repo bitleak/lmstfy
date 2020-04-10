@@ -6,9 +6,9 @@ import (
 	"io"
 	"time"
 
+	"github.com/bitleak/lmstfy/engine"
+	"github.com/bitleak/lmstfy/uuid"
 	go_redis "github.com/go-redis/redis"
-	"github.com/meitu/lmstfy/engine"
-	"github.com/meitu/lmstfy/uuid"
 )
 
 type RedisInstance struct {

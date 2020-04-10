@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/bitleak/lmstfy/config"
+	"github.com/bitleak/lmstfy/engine"
+	"github.com/bitleak/lmstfy/helper"
 	"github.com/go-redis/redis"
-	"github.com/meitu/lmstfy/config"
-	"github.com/meitu/lmstfy/engine"
-	"github.com/meitu/lmstfy/helper"
 	"github.com/sirupsen/logrus"
 )
 

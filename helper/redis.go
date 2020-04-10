@@ -3,8 +3,8 @@ package helper
 import (
 	"strings"
 
+	"github.com/bitleak/lmstfy/config"
 	"github.com/go-redis/redis"
-	"github.com/meitu/lmstfy/config"
 )
 
 // NewRedisClient wrap the standalone and sentinel client

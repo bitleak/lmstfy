@@ -52,7 +52,7 @@ if test -z "$TARGET_ARCH"; then
 fi
 
 TARGET_NAME=lmstfy-server
-GO_PROJECT=github.com/meitu/lmstfy
+GO_PROJECT=github.com/bitleak/lmstfy
 BUILD_DIR=./_build
 VERSION=`grep "^VERSION" Changelog | head -1 | cut -d " " -f2`
 BUILD_DATE=`date -u +'%Y-%m-%dT%H:%M:%SZ'`

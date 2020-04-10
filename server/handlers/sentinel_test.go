@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/meitu/lmstfy/engine"
-	"github.com/meitu/lmstfy/server/handlers"
+	"github.com/bitleak/lmstfy/engine"
+	"github.com/bitleak/lmstfy/server/handlers"
 )
 
 const testSentinelPool = "sentinel"

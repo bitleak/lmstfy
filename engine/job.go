@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 
-	"github.com/meitu/lmstfy/uuid"
+	"github.com/bitleak/lmstfy/uuid"
 )
 
 type Job interface {

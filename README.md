@@ -15,6 +15,14 @@ lmstfy itself doesn't handle data storage, it delegates the storage to the `Redi
 storage backend is under implementing). So data integrity and durability is in the hand of redis,
 we use AOF and replication on our production env to ensure that.
 
+## Who use lmstfy 
+
+<table>
+<tr>
+<td height = "128" width = "164"><img src="https://imgur.com/9X1kc2j.png" alt="Meitu"></td>
+</tr>
+</table>
+
 ## SDK for lmstfy
 
 * [php lmstfy client](https://github.com/bitleak/php-lmstfy-client)

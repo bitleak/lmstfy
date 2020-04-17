@@ -92,13 +92,29 @@ func (c *LmstfyClient) getReq(method, relativePath string, query url.Values, bod
 //   - tries is the maximum times the job can be fetched.
 //   - delaySecond is the duration before the job is released for consuming. When it's zero, no delay is applied.
 func (c *LmstfyClient) Publish(queue string, data []byte, ttlSecond uint32, tries uint16, delaySecond uint32) (jobID string, e error) {
+	return c.publish(queue, "", data, ttlSecond, tries, delaySecond)
+}
+
+// RePublish delete(ack) the job of the queue and publish the job again.
+//   - ttlSecond is the time-to-live of the job. If it's zero, job won't expire; if it's positive, the value is the TTL.
+//   - tries is the maximum times the job can be fetched.
+//   - delaySecond is the duration before the job is released for consuming. When it's zero, no delay is applied.
+func (c *LmstfyClient) RePublish(job *Job, ttlSecond uint32, tries uint16, delaySecond uint32) (jobID string, e error) {
+	return c.publish(job.Queue, job.ID, job.Data, ttlSecond, tries, delaySecond)
+}
+
+func (c *LmstfyClient) publish(queue, ackJobID string, data []byte, ttlSecond uint32, tries uint16, delaySecond uint32) (jobID string, e error) {
 	query := url.Values{}
 	query.Add("ttl", strconv.FormatUint(uint64(ttlSecond), 10))
 	query.Add("tries", strconv.FormatUint(uint64(tries), 10))
 	query.Add("delay", strconv.FormatUint(uint64(delaySecond), 10))
 	retryCount := 0
+	relativePath := queue
+	if ackJobID != "" {
+		relativePath = path.Join(relativePath, "job", ackJobID)
+	}
 RETRY:
-	req, err := c.getReq(http.MethodPut, queue, query, data)
+	req, err := c.getReq(http.MethodPut, relativePath, query, data)
 	if err != nil {
 		return "", &APIError{
 			Type:   RequestErr,

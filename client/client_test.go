@@ -17,6 +17,39 @@ func TestLmstfyClient_Publish(t *testing.T) {
 	}
 }
 
+func TestLmstfyClient_RePublish(t *testing.T) {
+	cli := NewLmstfyClient(Host, Port, Namespace, Token)
+	cli.ConfigRetry(3, 5000)
+	jobID, err := cli.Publish("test-republish", []byte("hello"), 0, 1, 0)
+	if err != nil {
+		t.Fatalf("Failed to send job: %s", err)
+	}
+	if jobID == "" {
+		t.Fatal("Expected jobID")
+	}
+	job, err := cli.Consume("test-republish", 5, 1)
+	if err != nil {
+		t.Fatalf("Failed to consume job: %s", err)
+	}
+	if jobID != job.ID || string(job.Data) != "hello" {
+		t.Fatal("Mismatched data")
+	}
+	jobID, err = cli.RePublish(job, 10, 1, 0)
+	if err != nil {
+		t.Fatalf("Failed to re send job: %s", err)
+	}
+	if jobID == "" {
+		t.Fatal("Expected a new jobID")
+	}
+	job, err = cli.Consume("test-republish", 5, 1)
+	if err != nil {
+		t.Fatalf("Failed to consume new job: %s", err)
+	}
+	if jobID != job.ID || string(job.Data) != "hello" || job.TTL != 10 {
+		t.Fatal("Mismatched new data")
+	}
+}
+
 func TestLmstfyClient_Consume(t *testing.T) {
 	cli := NewLmstfyClient(Host, Port, Namespace, Token)
 	jobID, _ := cli.Publish("test-consume", []byte("hello"), 0, 1, 0)

@@ -23,6 +23,22 @@ func Publish(c *gin.Context) {
 	e := c.MustGet("engine").(engine.Engine)
 	namespace := c.Param("namespace")
 	queue := c.Param("queue")
+	jobID := c.Param("job_id")
+
+	if jobID != "" {
+		// delete job whatever other publish parameters
+		if err := e.Delete(namespace, queue, jobID); err != nil {
+			logger.WithFields(logrus.Fields{
+				"err":       err,
+				"namespace": namespace,
+				"queue":     queue,
+				"job_id":    jobID,
+			}).Error("Failed to delete")
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+			return
+		}
+	}
+
 	delaySecondStr := c.DefaultQuery("delay", DefaultDelay)
 	delaySecond, err := strconv.ParseUint(delaySecondStr, 10, 32)
 	if delaySecond < 0 || err != nil {
@@ -64,7 +80,7 @@ func Publish(c *gin.Context) {
 		return
 	}
 
-	jobID, err := e.Publish(namespace, queue, body, uint32(ttlSecond), uint32(delaySecond), uint16(tries))
+	jobID, err = e.Publish(namespace, queue, body, uint32(ttlSecond), uint32(delaySecond), uint16(tries))
 	if err != nil {
 		logger.WithFields(logrus.Fields{
 			"err":       err,

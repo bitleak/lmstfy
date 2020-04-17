@@ -423,6 +423,33 @@ func TestSizeOfDeadLetter(t *testing.T) {
 	}
 }
 
+func TestRePublish(t *testing.T) {
+	data, jobID := publishTestJob("ns", "q16", 0)
+	query := url.Values{}
+	query.Add("delay", "0")
+	query.Add("ttl", "10")
+	query.Add("tries", "1")
+
+	targetURL := fmt.Sprintf("http://localhost/api/ns/q16/job/%s?%s", jobID, query.Encode())
+	body := bytes.NewReader(data)
+	req, err := http.NewRequest("PUT", targetURL, body)
+	if err != nil {
+		t.Fatalf("Failed to create request")
+	}
+	c, e, resp := ginTest(req)
+	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
+	e.PUT("/api/:namespace/:queue/job/:job_id", handlers.Publish)
+	e.HandleContext(c)
+	if resp.Code != http.StatusCreated {
+		t.Fatal("Failed to publish")
+	}
+	job, err := engine.GetEngineByKind("redis", "").Consume("ns", "q16", 5, 2)
+	if err != nil || string(job.Body()) != string(data) || job.TTL() != 10 || job.ID() == jobID {
+		t.Fatal("Failed to republish", job, err)
+	}
+
+}
+
 func publishTestJob(ns, q string, delay uint32) (body []byte, jobID string) {
 	e := engine.GetEngineByKind("redis", "")
 	body = make([]byte, 10)

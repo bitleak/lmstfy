@@ -135,12 +135,13 @@ RETRY:
 		}
 	}
 	if resp.StatusCode != http.StatusCreated {
-		resp.Body.Close()
 		if resp.StatusCode >= 500 && retryCount < c.retry {
 			time.Sleep(time.Duration(c.backOff) * time.Millisecond)
 			retryCount++
+			resp.Body.Close()
 			goto RETRY
 		}
+		defer resp.Body.Close()
 		return "", &APIError{
 			Type:      ResponseErr,
 			Reason:    parseResponseError(resp),

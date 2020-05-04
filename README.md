@@ -23,6 +23,8 @@ we use AOF and replication on our production env to ensure that.
 </tr>
 </table>
 
+***Please ticket a pull reqeust to let us known that you're using lmstfy and add your logo to README***
+
 ## SDK for lmstfy
 
 * [php lmstfy client](https://github.com/bitleak/php-lmstfy-client)

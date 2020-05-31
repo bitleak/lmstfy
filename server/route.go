@@ -3,20 +3,22 @@ package main
 import (
 	"net/http"
 
-	"github.com/bitleak/lmstfy/server/handlers"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+
+	"github.com/bitleak/lmstfy/server/handlers"
+	"github.com/bitleak/lmstfy/throttler"
 )
 
-func SetupRoutes(e *gin.Engine, logger *logrus.Logger, devMode bool) {
+func SetupRoutes(e *gin.Engine, throttler *throttler.Throttler, logger *logrus.Logger, devMode bool) {
 	handlers.Setup(logger)
-
 	group := e.Group("/api")
 	group.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
 	if !devMode {
 		group.Use(handlers.ValidateToken)
 	}
-	group.PUT("/:namespace/:queue", handlers.CollectMetrics("publish"), handlers.Publish)
+	group.PUT("/:namespace/:queue", handlers.CollectMetrics("publish"),
+		handlers.Throttle(throttler, "publish"), handlers.Publish)
 	group.PUT("/:namespace/:queue/job/:job_id", handlers.CollectMetrics("publish_delete"), handlers.Publish)
 	group.GET("/:namespace/:queue/peek", handlers.PeekQueue)
 	group.GET("/:namespace/:queue/job/:job_id", handlers.PeekJob)
@@ -32,7 +34,8 @@ func SetupRoutes(e *gin.Engine, logger *logrus.Logger, devMode bool) {
 	}
 	// NOTE: the route should be named /:namespace/:queues, but gin http-router reports conflict
 	// when mixing /:queue and /:queues together, :(
-	group2.GET("/:namespace/:queue", handlers.CollectMetrics("consume"), handlers.Consume)
+	group2.GET("/:namespace/:queue", handlers.CollectMetrics("consume"),
+		handlers.Throttle(throttler, "consume"), handlers.Consume)
 
 	// Dead letter
 	group.GET("/:namespace/:queue/deadletter", handlers.PeekDeadLetter)

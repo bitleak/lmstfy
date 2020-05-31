@@ -12,6 +12,8 @@ import (
 	redis_engine "github.com/bitleak/lmstfy/engine/redis"
 	"github.com/bitleak/lmstfy/helper"
 	"github.com/bitleak/lmstfy/server/handlers"
+	"github.com/bitleak/lmstfy/throttler"
+
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 )
@@ -54,6 +56,9 @@ func setup() {
 
 	if err := auth.Setup(CONF); err != nil {
 		panic(fmt.Sprintf("Failed to setup auth module: %s", err))
+	}
+	if err := throttler.Setup(&CONF.AdminRedis, logger); err != nil {
+		panic(fmt.Sprintf("Failed to setup throttler module: %s", err))
 	}
 	handlers.SetupParamDefaults(CONF)
 	handlers.Setup(logger)

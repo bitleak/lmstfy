@@ -17,6 +17,7 @@ import (
 	"github.com/bitleak/lmstfy/log"
 	"github.com/bitleak/lmstfy/server/handlers"
 	"github.com/bitleak/lmstfy/server/middleware"
+	"github.com/bitleak/lmstfy/throttler"
 	"github.com/bitleak/lmstfy/version"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -75,9 +76,17 @@ func printVersion() {
 func apiServer(conf *config.Config, accessLogger, errorLogger *logrus.Logger, devMode bool) *http.Server {
 	gin.SetMode(gin.ReleaseMode)
 	engine := gin.New()
-	engine.Use(middleware.RequestIDMiddleware, middleware.AccessLogMiddleware(accessLogger), gin.RecoveryWithWriter(errorLogger.Out))
+	engine.Use(
+		middleware.RequestIDMiddleware,
+		middleware.AccessLogMiddleware(accessLogger),
+		gin.RecoveryWithWriter(errorLogger.Out),
+	)
 	handlers.SetupParamDefaults(conf)
-	SetupRoutes(engine, errorLogger, devMode)
+	err := throttler.Setup(&conf.AdminRedis, errorLogger)
+	if err != nil {
+		errorLogger.Errorf("Failed to create throttler, err: %s", err.Error())
+	}
+	SetupRoutes(engine, throttler.GetThrottler(), errorLogger, devMode)
 	addr := fmt.Sprintf("%s:%d", conf.Host, conf.Port)
 	errorLogger.Infof("Server listening at %s", addr)
 	// engine.Run(addr)
@@ -108,6 +117,14 @@ func adminServer(conf *config.Config, accessLogger *logrus.Logger, errorLogger *
 	engine.GET("/token/:namespace", handlers.ListTokens)
 	engine.POST("/token/:namespace", handlers.NewToken)
 	engine.DELETE("/token/:namespace/:token", handlers.DeleteToken)
+
+	// token's limit URI
+	engine.GET("/limits", handlers.ListLimiters)
+	engine.GET("/token/:namespace/:token/limit", handlers.GetLimiter)
+	engine.POST("/token/:namespace/:token/limit", handlers.AddLimiter)
+	engine.PUT("/token/:namespace/:token/limit", handlers.SetLimiter)
+	engine.DELETE("/token/:namespace/:token/limit", handlers.DeleteLimiter)
+
 	engine.Any("/debug/pprof/*profile", handlers.PProf)
 	engine.GET("/accesslog", handlers.GetAccessLogStatus)
 	engine.POST("/accesslog", handlers.UpdateAccessLogStatus)

@@ -4,16 +4,19 @@ import (
 	"math"
 	"net/http"
 	"net/http/pprof"
+	"strconv"
 	"strings"
+
+	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/sirupsen/logrus"
 
 	"github.com/bitleak/lmstfy/auth"
 	"github.com/bitleak/lmstfy/engine"
 	"github.com/bitleak/lmstfy/server/middleware"
+	"github.com/bitleak/lmstfy/throttler"
 	"github.com/bitleak/lmstfy/uuid"
 	"github.com/bitleak/lmstfy/version"
-	"github.com/gin-gonic/gin"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/sirupsen/logrus"
 )
 
 // GET /metrics
@@ -100,23 +103,132 @@ func NewToken(c *gin.Context) {
 
 // DELETE /token/:namespace/:token
 func DeleteToken(c *gin.Context) {
+	logger := GetHTTPLogger(c)
 	tm := auth.GetTokenManager()
-	if err := tm.Delete(c.Query("pool"), c.Param("namespace"), c.Param("token")); err != nil {
+	pool, token := parseToken(c.Param("token"))
+	namespace := c.Param("namespace")
+	if err := tm.Delete(pool, c.Param("namespace"), token); err != nil {
 		if err == auth.ErrPoolNotExist {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		} else {
-			logger := GetHTTPLogger(c)
 			logger.WithFields(logrus.Fields{
-				"pool":      c.Query("pool"),
-				"namespace": c.Param("namespace"),
-				"token":     c.Param("token"),
+				"pool":      pool,
+				"namespace": namespace,
+				"token":     token,
 				"err":       err,
 			}).Error("Failed to delete the token")
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		}
 		return
 	}
+	if err := throttler.GetThrottler().Delete(pool, namespace, token); err != nil {
+		logger.WithFields(logrus.Fields{
+			"pool":      c.Query("pool"),
+			"namespace": c.Param("namespace"),
+			"token":     c.Param("token"),
+			"err":       err,
+		}).Error("Failed to delete the token's limiter")
+	}
 	c.Status(http.StatusNoContent)
+}
+
+// GET /limiters
+func ListLimiters(c *gin.Context) {
+	forceUpdate, _ := strconv.ParseBool(c.Query("force_update"))
+	c.JSON(http.StatusOK, throttler.GetThrottler().GetAll(forceUpdate))
+}
+
+// POST /token/:namespace/:token/limit
+func AddLimiter(c *gin.Context) {
+	logger := GetHTTPLogger(c)
+	var limiter throttler.Limiter
+	if err := c.BindJSON(&limiter); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err})
+		return
+	}
+	if limiter.Read == 0 && limiter.Write == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"limiter": limiter})
+		return
+	}
+	if limiter.Interval == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "interval should be > 0"})
+		return
+	}
+	pool, token := parseToken(c.Param("token"))
+	namespace := c.Param("namespace")
+	err := throttler.GetThrottler().Add(pool, namespace, token, &limiter)
+	if err != nil {
+		logger.WithFields(logrus.Fields{
+			"token":   c.Param("token"),
+			"limiter": limiter,
+			"err":     err,
+		}).Error("Failed to add the token's limiter")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"limiter": limiter})
+}
+
+// DELETE /token/:namespace/:token/limit
+func DeleteLimiter(c *gin.Context) {
+	logger := GetHTTPLogger(c)
+	pool, token := parseToken(c.Param("token"))
+	namespace := c.Param("namespace")
+	err := throttler.GetThrottler().Delete(pool, namespace, token)
+	if err != nil {
+		logger.WithFields(logrus.Fields{
+			"token": c.Param("token"),
+			"err":   err,
+		}).Error("Failed to delete the token's limiter")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"msg": "success"})
+}
+
+// GET /token/:namespace/:token/limit
+func GetLimiter(c *gin.Context) {
+	pool, token := parseToken(c.Param("token"))
+	namespace := c.Param("namespace")
+	limiter := throttler.GetThrottler().Get(pool, namespace, token)
+	if limiter == nil {
+		c.JSON(http.StatusNotFound, nil)
+	} else {
+		c.JSON(http.StatusOK, limiter)
+	}
+}
+
+// PUT /token/:namespace/:token/limit
+func SetLimiter(c *gin.Context) {
+	logger := GetHTTPLogger(c)
+	var limiter throttler.Limiter
+	if err := c.BindJSON(&limiter); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err})
+		return
+	}
+	if limiter.Read == 0 && limiter.Write == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"limiter": limiter})
+		return
+	}
+	if limiter.Interval == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "interval should be > 0"})
+		return
+	}
+
+	pool, token := parseToken(c.Param("token"))
+	namespace := c.Param("namespace")
+	err := throttler.GetThrottler().Set(pool, namespace, token, &limiter)
+	if err != nil {
+		logger.WithFields(logrus.Fields{
+			"token":   c.Param("token"),
+			"limiter": limiter,
+			"err":     err,
+		}).Error("Failed to set the token's limiter")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"limiter": limiter})
 }
 
 // GET /version

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/bitleak/lmstfy/auth"
+	"github.com/bitleak/lmstfy/config"
 	"github.com/bitleak/lmstfy/engine"
 	"github.com/gin-gonic/gin"
 )
@@ -26,7 +27,7 @@ func parseToken(rawToken string) (pool, token string) {
 	if len(splits) == 2 {
 		return splits[0], splits[1]
 	}
-	return "default", rawToken
+	return config.DefaultPoolName, rawToken
 }
 
 func SetupQueueEngine(c *gin.Context) {

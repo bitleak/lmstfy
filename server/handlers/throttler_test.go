@@ -28,7 +28,7 @@ func publishWithThrottler(namespace, queue, token string) error {
 	}
 	c, e, resp := ginTest(req)
 	throttler := throttler2.GetThrottler()
-	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine, handlers.Throttle(throttler, "publish"))
+	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine, handlers.Throttle(throttler, "produce"))
 	e.PUT("/api/:namespace/:queue", handlers.Publish)
 	e.HandleContext(c)
 	if resp.Code != http.StatusCreated {

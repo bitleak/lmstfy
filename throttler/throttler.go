@@ -126,7 +126,7 @@ func (t *Throttler) GetAll(forceUpdate bool) []TokenLimiter {
 }
 
 // IsReachLimit check whether the read or write op was reached limit
-func (t *Throttler) IsReachLimit(pool, namespace, token string, isRead bool) (bool, error) {
+func (t *Throttler) IsReachRateLimit(pool, namespace, token string, isRead bool) (bool, error) {
 	limiter := t.Get(pool, namespace, token)
 	if limiter == nil {
 		return false, nil

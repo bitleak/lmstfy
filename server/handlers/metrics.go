@@ -9,8 +9,9 @@ import (
 )
 
 type PerformanceMetrics struct {
-	Latencies *prometheus.SummaryVec
-	HTTPCodes *prometheus.CounterVec
+	Latencies  *prometheus.SummaryVec
+	HTTPCodes  *prometheus.CounterVec
+	RateLimits *prometheus.CounterVec
 }
 
 var metrics *PerformanceMetrics
@@ -37,10 +38,21 @@ func setup_metrics() {
 		},
 		[]string{"pool", "namespace", "api", "code"},
 	)
+
+	rateLimits := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "infra",
+			Subsystem: "lmstfy_http",
+			Name:      "rate_limit",
+			Help:      "consume/produce rate limit",
+		},
+		[]string{"pool", "namespace", "token", "action"},
+	)
 	prometheus.MustRegister(latencies)
 	prometheus.MustRegister(httpCodes)
 	metrics.Latencies = latencies
 	metrics.HTTPCodes = httpCodes
+	metrics.RateLimits = rateLimits
 }
 
 func CollectMetrics(apiName string) func(*gin.Context) {

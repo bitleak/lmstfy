@@ -107,7 +107,7 @@ func DeleteToken(c *gin.Context) {
 	tm := auth.GetTokenManager()
 	pool, token := parseToken(c.Param("token"))
 	namespace := c.Param("namespace")
-	if err := tm.Delete(pool, c.Param("namespace"), token); err != nil {
+	if err := tm.Delete(pool, namespace, token); err != nil {
 		if err == auth.ErrPoolNotExist {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		} else {
@@ -123,9 +123,9 @@ func DeleteToken(c *gin.Context) {
 	}
 	if err := throttler.GetThrottler().Delete(pool, namespace, token); err != nil {
 		logger.WithFields(logrus.Fields{
-			"pool":      c.Query("pool"),
-			"namespace": c.Param("namespace"),
-			"token":     c.Param("token"),
+			"pool":      pool,
+			"namespace": namespace,
+			"token":     token,
 			"err":       err,
 		}).Error("Failed to delete the token's limiter")
 	}

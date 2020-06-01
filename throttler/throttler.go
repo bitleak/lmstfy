@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/go-redis/redis"
-	"github.com/prometheus/common/log"
 	"github.com/sirupsen/logrus"
 
 	"github.com/bitleak/lmstfy/config"
@@ -232,7 +231,7 @@ func (t *Throttler) updateLimiters() {
 	// CAUTION: assume throttler key set was smaller, always fetch at once
 	results, err := t.redisCli.HGetAll(throttlerRedisKey).Result()
 	if err != nil {
-		log.Errorf("Failed to fetch the throttler tokens, encounter err: %s", err.Error())
+		t.logger.Errorf("Failed to fetch the throttler tokens, encounter err: %s", err.Error())
 		return
 	}
 
@@ -240,7 +239,7 @@ func (t *Throttler) updateLimiters() {
 	newCache := make(map[string]*Limiter, 0)
 	for token, limiterString := range results {
 		if err := json.Unmarshal([]byte(limiterString), &limiter); err != nil {
-			log.Warnf("Failed to marshal token(%s) limiter, encounter err: %s", token, err.Error())
+			t.logger.Warnf("Failed to marshal token(%s) limiter, encounter err: %s", token, err.Error())
 			continue
 		}
 		newCache[token] = &limiter

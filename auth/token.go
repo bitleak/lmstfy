@@ -5,10 +5,11 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/go-redis/redis"
+
 	"github.com/bitleak/lmstfy/config"
 	"github.com/bitleak/lmstfy/engine"
 	"github.com/bitleak/lmstfy/helper"
-	"github.com/go-redis/redis"
 )
 
 const TokenPrefix = "tk"

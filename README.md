@@ -10,6 +10,7 @@ lmstfy(pronounce /'lam.si.fai/) is a simple task queue (or job queue) service, p
     * job auto-retry
     * dead letter
 - namespace/queue level metrics
+- token consume/produce rate limit
 
 lmstfy itself doesn't handle data storage, it delegates the storage to the `Redis` or `Redis Sentinel` currently (a file based
 storage backend is under implementing). So data integrity and durability is in the hand of redis,

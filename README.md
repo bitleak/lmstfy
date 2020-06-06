@@ -29,6 +29,7 @@ we use AOF and replication on our production env to ensure that.
 * [php lmstfy client](https://github.com/bitleak/php-lmstfy-client)
 * [golang lmstfy client](https://github.com/bitleak/lmstfy/tree/master/client)
 * [java lmstfy client](https://github.com/bitleak/java-lmstfy-client)
+* [rust lmstfy client](https://github.com/bitleak/rust-lmstfy-client)
 
 ## Build and Run
 

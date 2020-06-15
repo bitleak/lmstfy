@@ -15,6 +15,7 @@ func NewRedisClient(conf *config.RedisConf, opt *redis.Options) *redis.Client {
 	opt.Addr = conf.Addr
 	opt.Password = conf.Password
 	opt.PoolSize = conf.PoolSize
+	opt.DB = conf.DB
 	if conf.IsSentinel() {
 		return redis.NewFailoverClient(&redis.FailoverOptions{
 			MasterName:    conf.MasterName,
@@ -24,6 +25,7 @@ func NewRedisClient(conf *config.RedisConf, opt *redis.Options) *redis.Client {
 			ReadTimeout:   opt.ReadTimeout,
 			WriteTimeout:  opt.WriteTimeout,
 			MinIdleConns:  opt.MinIdleConns,
+			DB:            opt.DB,
 		})
 	}
 	return redis.NewClient(opt)

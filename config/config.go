@@ -46,6 +46,7 @@ type RedisPool map[string]RedisConf
 type RedisConf struct {
 	Addr      string
 	Password  string
+	DB        int
 	PoolSize  int
 	MigrateTo string // If this is not empty, all the PUBLISH will go to that pool
 
@@ -87,6 +88,9 @@ func detectRedisMode(rc *RedisConf) (int, error) {
 func (rc *RedisConf) validate() error {
 	if rc.Addr == "" {
 		return errors.New("the pool addr must not be empty")
+	}
+	if rc.DB < 0 {
+		return errors.New("the pool db must be greater than 0 or equal to 0")
 	}
 	if rc.IsSentinel() && rc.MasterName == "" {
 		return errors.New("the master name must not be empty in sentinel mode")

@@ -65,6 +65,10 @@ func NewToken(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "the namespace name was too long"})
 		return
 	}
+	if !paramRegex.MatchString(namespace) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "namespace name contains forbidden characters"})
+		return
+	}
 	pool := c.Query("pool")
 	var rawToken string
 	if userToken == "" {

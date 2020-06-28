@@ -1,6 +1,8 @@
 package client
 
 import (
+	"bytes"
+	"encoding/json"
 	"testing"
 	"time"
 )
@@ -47,6 +49,46 @@ func TestLmstfyClient_RePublish(t *testing.T) {
 	}
 	if jobID != job.ID || string(job.Data) != "hello" || job.TTL != 10 {
 		t.Fatal("Mismatched new data")
+	}
+}
+
+func TestLmstfyClient_BatchPublish(t *testing.T) {
+	cli := NewLmstfyClient(Host, Port, Namespace, Token)
+	cli.ConfigRetry(3, 5000)
+	jobsData := []interface{}{
+		"hello msg",
+		123456,
+		struct {
+			Msg string `json:"msg"`
+		}{Msg: "success"},
+		[]string{"foo", "bar"},
+		true,
+	}
+
+	jobIDs, err := cli.BatchPublish("test-batchpublish", jobsData, 10, 1, 0)
+	if err != nil {
+		t.Fatalf("Failed to send job: %s", err)
+	}
+	if len(jobIDs) != len(jobsData) {
+		t.Fatal("Mismatch jobIDs count")
+	}
+	jobIDMap := map[string]int{}
+	for idx, jobID := range jobIDs {
+		jobIDMap[jobID] = idx
+	}
+	for i := 0; i < len(jobsData); i++ {
+		job, err := cli.Consume("test-batchpublish", 5, 1)
+		if err != nil {
+			t.Fatalf("Failed to consume job: %s", err)
+		}
+		idx, ok := jobIDMap[job.ID]
+		if !ok {
+			t.Fatalf("Job not found")
+		}
+		jobData, _ := json.Marshal(jobsData[idx])
+		if !bytes.Equal(job.Data, jobData) {
+			t.Fatalf("Mismatched Job data")
+		}
 	}
 }
 

@@ -130,7 +130,7 @@ NOTE: to consume multiple queues, `timeout` (seconds) must be specified.
 
 - timeout: the longest to time to wait before a job is available (default: 0)
 - ttr:     time-to-run of the job in seconds, if the job is not delete in this period, it will be re-queued  (default: 2 minutes)
-
+- count:   the number of tasks consumed most at one time (default: 1)
 #### Response
 
 -   200

@@ -107,7 +107,73 @@ The content length must be *SMALLER* than 64kB.
 
 ---
 
-### Consume a job
+### Publish bulk jobs
+
+```
+PUT /api/:namespace/:queue/bulk
+```
+
+#### Request Query
+
+- delay: number of seconds to delay  (default: 0)
+- ttl:   time-to-live of this job in seconds, 0 means forever.  (default: 24 hours)
+- tries: number of attempts shall this job be consumed  (default: 1)
+
+NOTE: `tries` can be used to ensure that a job will be retried when worker that consumed
+the job, failed to invoke the DELETE req. eg. setting `tries=2` means if the worker
+failed, it will be retried one more time after the TTR.
+
+#### Request Body
+
+```
+[
+    {
+        "msg": "hellp"
+    },
+    "hello, neo",
+    13579,
+    [
+        "test"
+    ],
+    true,
+    null
+]
+```
+
+The body content is a json object array, every object of this array will be treated as a job's raw data.
+Every job's content length must be *SMALLER* than 64kB.
+Only 64 jobs can be batch published at once.
+
+#### Response JSON Body
+
+-   201
+
+    ```
+    {
+        "msg": "published",
+        "job_ids": ["job_id1","job_id2"]
+    }
+    ```
+
+-   400
+
+    ```
+    {
+        "error": string
+    }
+    ```
+
+-   413
+
+    ```
+    {
+        "error": "body too large"
+    }
+    ```
+
+---
+
+### Consume jobs
 
 ```
 GET /api/:namespace/:queue[,:queue]*
@@ -130,7 +196,7 @@ NOTE: to consume multiple queues, `timeout` (seconds) must be specified.
 
 - timeout: the longest to time to wait before a job is available (default: 0)
 - ttr:     time-to-run of the job in seconds, if the job is not delete in this period, it will be re-queued  (default: 2 minutes)
-- count:   the number of tasks consumed most at one time (default: 1)
+- count:   the number of tasks consumed most at one time (default: 1, only work with consume a single queue)
 #### Response
 
 -   200
@@ -145,6 +211,28 @@ NOTE: to consume multiple queues, `timeout` (seconds) must be specified.
         "ttl": int64
         "elapsed_ms": int64  # elapsed milliseconds since published
     }
+    
+    when count > 0 and consume a single queue
+    [
+        {
+            "msg": "new job1",
+            "namespace":<<<< string,
+            "queue": string,
+            "job_id": string,
+            "data": string    # "NOTE": the data is base64 encoded, you need to decode
+            "ttl": int64
+            "elapsed_ms": int64  # elapsed milliseconds since published
+        },
+        {
+            "msg": "new job1",
+            "namespace": string,
+            "queue": string,
+            "job_id": string,
+            "data": string    # "NOTE": the data is base64 encoded, you need to decode
+            "ttl": int64
+            "elapsed_ms": int64  # elapsed milliseconds since published
+        }
+    ]
     ```
 
 -   400

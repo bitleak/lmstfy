@@ -19,6 +19,8 @@ func SetupRoutes(e *gin.Engine, throttler *throttler.Throttler, logger *logrus.L
 	}
 	group.PUT("/:namespace/:queue", handlers.CollectMetrics("publish"),
 		handlers.Throttle(throttler, "produce"), handlers.Publish)
+	group.PUT("/:namespace/:queue/bulk", handlers.CollectMetrics("publish"),
+		handlers.Throttle(throttler, "produce"), handlers.PublishBulk)
 	group.PUT("/:namespace/:queue/job/:job_id", handlers.CollectMetrics("publish_delete"), handlers.Publish)
 	group.GET("/:namespace/:queue/peek", handlers.PeekQueue)
 	group.GET("/:namespace/:queue/job/:job_id", handlers.PeekJob)

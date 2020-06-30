@@ -176,6 +176,87 @@ RETRY:
 	return respData.JobID, nil
 }
 
+// BatchPublish publish lots of jobs at one time
+//   - ttlSecond is the time-to-live of the job. If it's zero, job won't expire; if it's positive, the value is the TTL.
+//   - tries is the maximum times the job can be fetched.
+//   - delaySecond is the duration before the job is released for consuming. When it's zero, no delay is applied.
+func (c *LmstfyClient) BatchPublish(queue string, jobs []interface{}, ttlSecond uint32, tries uint16, delaySecond uint32) (jobIDs []string, e error) {
+	query := url.Values{}
+	query.Add("ttl", strconv.FormatUint(uint64(ttlSecond), 10))
+	query.Add("tries", strconv.FormatUint(uint64(tries), 10))
+	query.Add("delay", strconv.FormatUint(uint64(delaySecond), 10))
+	retryCount := 0
+	relativePath := path.Join(queue, "bulk")
+	data, err := json.Marshal(jobs)
+	if err != nil {
+		return nil, &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+RETRY:
+	req, err := c.getReq(http.MethodPut, relativePath, query, data)
+	if err != nil {
+		return nil, &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+
+	resp, err := c.httpCli.Do(req)
+	if err != nil {
+		if retryCount < c.retry {
+			time.Sleep(time.Duration(c.backOff) * time.Millisecond)
+			retryCount++
+			goto RETRY
+		}
+		return nil, &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+	if resp.StatusCode != http.StatusCreated {
+		if resp.StatusCode >= 500 && retryCount < c.retry {
+			time.Sleep(time.Duration(c.backOff) * time.Millisecond)
+			retryCount++
+			resp.Body.Close()
+			goto RETRY
+		}
+		defer resp.Body.Close()
+		return nil, &APIError{
+			Type:      ResponseErr,
+			Reason:    parseResponseError(resp),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		if retryCount < c.retry {
+			time.Sleep(time.Duration(c.backOff) * time.Millisecond)
+			retryCount++
+			goto RETRY
+		}
+		return nil, &APIError{
+			Type:      ResponseErr,
+			Reason:    err.Error(),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	var respData struct {
+		JobIDs []string `json:"job_ids"`
+	}
+	err = json.Unmarshal(respBytes, &respData)
+	if err != nil {
+		return nil, &APIError{
+			Type:      ResponseErr,
+			Reason:    err.Error(),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	return respData.JobIDs, nil
+}
+
 // Consume a job. Consuming will decrease the job's tries by 1 first.
 //   - ttrSecond is the time-to-run of the job. If the job is not finished before the TTR expires,
 //     the job will be released for consuming again if the `(tries - 1) > 0`.

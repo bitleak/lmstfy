@@ -450,6 +450,63 @@ func TestRePublish(t *testing.T) {
 
 }
 
+func TestPublishBulk(t *testing.T) {
+	query := url.Values{}
+	query.Add("delay", "0")
+	query.Add("ttl", "10")
+	query.Add("tries", "1")
+	targetUrl := fmt.Sprintf("http://localhost/api/ns/q17/bulk?%s", query.Encode())
+	jobsData := []interface{}{
+		"hello msg",
+		123456,
+		struct {
+			Msg string `json:"msg"`
+		}{Msg: "success"},
+		[]string{"foo", "bar"},
+		true,
+	}
+	bodyData, _ := json.Marshal(jobsData)
+	body := bytes.NewReader(bodyData)
+	req, err := http.NewRequest("PUT", targetUrl, body)
+	if err != nil {
+		t.Fatalf("Failed to create request")
+	}
+	c, e, resp := ginTest(req)
+	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
+	e.PUT("/api/:namespace/:queue/bulk", handlers.PublishBulk)
+	e.HandleContext(c)
+	if resp.Code != http.StatusCreated {
+		fmt.Println(string(resp.Body.Bytes()))
+		t.Fatal("Failed to publish")
+	}
+	var data struct {
+		Msg    string
+		JobIDs []string `json:"job_ids"`
+	}
+	err = json.Unmarshal(resp.Body.Bytes(), &data)
+	if err != nil {
+		t.Fatalf("Failed to decode response: %s", err)
+	}
+	if len(data.JobIDs) != len(jobsData) {
+		t.Fatalf("Mismatched job count")
+	}
+	jobIDMap := map[string]int{}
+	for idx, jobID := range data.JobIDs {
+		jobIDMap[jobID] = idx
+	}
+	for i := 0; i < len(jobsData); i++ {
+		body, jobID := consumeTestJob("ns", "q17", 0, 1)
+		idx, ok := jobIDMap[jobID]
+		if !ok {
+			t.Fatalf("Job not found")
+		}
+		jobData, _ := json.Marshal(jobsData[idx])
+		if !bytes.Equal(body, jobData) {
+			t.Fatalf("Mismatched Job data")
+		}
+	}
+}
+
 func publishTestJob(ns, q string, delay uint32) (body []byte, jobID string) {
 	e := engine.GetEngineByKind("redis", "")
 	body = make([]byte, 10)

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"math"
 	"net/http"
 	"strconv"
@@ -11,7 +12,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const maxBatchConsumeSize = 100
+const (
+	maxBatchConsumeSize = 100
+	maxBulkPublishSize  = 64
+)
 
 // PUT /:namespace/:queue
 // @query:
@@ -66,7 +70,7 @@ func Publish(c *gin.Context) {
 		return
 	}
 	if tries == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "tries shouldn't be zero, or the task would be consumed"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "tries shouldn't be zero"})
 		return
 	}
 
@@ -103,6 +107,103 @@ func Publish(c *gin.Context) {
 		"tries":     tries,
 	}).Debug("Job published")
 	c.JSON(http.StatusCreated, gin.H{"msg": "published", "job_id": jobID})
+}
+
+// PUT /:namespace/:queue/bulk
+// @query:
+//  - delay: uint32
+//  - ttl:   uint32
+//  - tries: uint16
+func PublishBulk(c *gin.Context) {
+	logger := GetHTTPLogger(c)
+	e := c.MustGet("engine").(engine.Engine)
+	namespace := c.Param("namespace")
+	queue := c.Param("queue")
+
+	delaySecondStr := c.DefaultQuery("delay", DefaultDelay)
+	delaySecond, err := strconv.ParseUint(delaySecondStr, 10, 32)
+	if delaySecond < 0 || err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid delay"})
+		return
+	}
+
+	ttlSecondStr := c.DefaultQuery("ttl", DefaultTTL)
+	ttlSecond, err := strconv.ParseUint(ttlSecondStr, 10, 32)
+	if ttlSecond < 0 || err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ttl"})
+		return
+	}
+
+	// NOTE: ttlSecond == 0 means forever, so it's always longer than any delay
+	if ttlSecond > 0 && ttlSecond < delaySecond {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ttl is shorter than delay"})
+		return
+	}
+
+	triesStr := c.DefaultQuery("tries", DefaultTries)
+	tries, err := strconv.ParseUint(triesStr, 10, 16)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid tries"})
+		return
+	}
+	if tries == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "tries shouldn't be zero"})
+		return
+	}
+
+	body, err := c.GetRawData()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read body"})
+		return
+	}
+	jobs := make([]json.RawMessage, 0)
+	if err := json.Unmarshal(body, &jobs); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "request body should be an array of objects"})
+		return
+	}
+	count := len(jobs)
+	if count == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "no jobs"})
+		return
+	}
+	if count > maxBulkPublishSize {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "too many jobs"})
+		return
+	}
+	for _, job := range jobs {
+		if len(job) > math.MaxUint16 { // Larger than 64 KB
+			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "job too large"})
+			return
+		}
+	}
+
+	jobIDs := make([]string, 0)
+	for _, job := range jobs {
+		jobID, err := e.Publish(namespace, queue, job, uint32(ttlSecond), uint32(delaySecond), uint16(tries))
+		if err != nil {
+			logger.WithFields(logrus.Fields{
+				"err":       err,
+				"namespace": namespace,
+				"queue":     queue,
+				"job_id":    jobID,
+				"delay":     delaySecond,
+				"ttl":       ttlSecond,
+				"tries":     tries,
+			}).Error("Failed to publish")
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+			return
+		}
+		logger.WithFields(logrus.Fields{
+			"namespace": namespace,
+			"queue":     queue,
+			"job_id":    jobID,
+			"delay":     delaySecond,
+			"ttl":       ttlSecond,
+			"tries":     tries,
+		}).Debug("Job published")
+		jobIDs = append(jobIDs, jobID)
+	}
+	c.JSON(http.StatusCreated, gin.H{"msg": "published", "job_ids": jobIDs})
 }
 
 // GET /:namespace/:queue[,:queue]*

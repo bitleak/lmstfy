@@ -28,6 +28,7 @@ type Config struct {
 	AdminPort       int
 	LogLevel        string
 	LogDir          string
+	LogFormat       string
 	EnableAccessLog bool
 	AdminRedis      RedisConf
 	Pool            RedisPool

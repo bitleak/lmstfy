@@ -4,6 +4,7 @@ AdminHost = "127.0.0.1" # optional, default to localhost
 AdminPort = 7778 
 #LogDir = "/var/log/lmstfy"
 LogLevel = "info"
+#LogFormat = "text" # Use LogFormat="json" if wants to print the log with json format
 EnableAccessLog = true
 
 # default params

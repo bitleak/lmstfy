@@ -169,7 +169,7 @@ func main() {
 		panic(fmt.Sprintf("Failed to load config file: %s", err))
 	}
 	shutdown := make(chan struct{})
-	accessLogger, errorLogger, err := log.SetupLogger(conf.LogDir, conf.LogLevel, Flags.BackTrackLevel)
+	accessLogger, errorLogger, err := log.SetupLogger(conf.LogFormat, conf.LogDir, conf.LogLevel, Flags.BackTrackLevel)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to setup logger: %s", err))
 	}

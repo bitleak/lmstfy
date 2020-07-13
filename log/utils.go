@@ -34,7 +34,7 @@ func ReopenLogs(logDir string, accessLogger, errorLogger *logrus.Logger) error {
 }
 
 // @backtrackLevel: log the backtrack info when logging level is >= backtrackLevel
-func SetupLogger(logDir, logLevel, backtrackLevel string) (accessLogger *logrus.Logger, errorLogger *logrus.Logger, err error) {
+func SetupLogger(logFormat, logDir, logLevel, backtrackLevel string) (accessLogger *logrus.Logger, errorLogger *logrus.Logger, err error) {
 	level, err := logrus.ParseLevel(logLevel)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to parse log level: %s", err)
@@ -45,6 +45,12 @@ func SetupLogger(logDir, logLevel, backtrackLevel string) (accessLogger *logrus.
 	}
 	accessLogger = logrus.New()
 	errorLogger = logrus.New()
+
+	if logFormat == "json" {
+		accessLogger.SetFormatter(&logrus.JSONFormatter{})
+		errorLogger.SetFormatter(&logrus.JSONFormatter{})
+	}
+
 	errorLogger.Level = level
 	errorLogger.Hooks.Add(NewBackTrackHook(btLevel))
 	if logDir == "" {

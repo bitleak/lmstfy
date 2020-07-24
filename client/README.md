@@ -57,3 +57,6 @@ for _, job := range jobs {
 }
 
 ```
+
+> CAUTION: consume would return nil job and error when queue was empty or not found, you can enable
+the client option to return error when the job is nil by revoking `EnableErrorOnNilJob()` function. 

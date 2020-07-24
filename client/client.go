@@ -30,9 +30,10 @@ type LmstfyClient struct {
 	Host      string
 	Port      int
 
-	retry   int // retry when Publish failed (only some situations are worth of retrying)
-	backOff int // millisecond
-	httpCli *http.Client
+	retry         int // retry when Publish failed (only some situations are worth of retrying)
+	backOff       int // millisecond
+	httpCli       *http.Client
+	errorOnNilJob bool // return error when job is nil
 }
 
 const (
@@ -57,6 +58,12 @@ func NewLmstfyClient(host string, port int, namespace, token string) *LmstfyClie
 
 		httpCli: cli,
 	}
+}
+
+// EnableErrorOnNilJob would make the client return error when
+// the job was nil(maybe queue was not found)
+func (c *LmstfyClient) EnableErrorOnNilJob() {
+	c.errorOnNilJob = true
 }
 
 func (c *LmstfyClient) ConfigRetry(retryCount int, backOffMillisecond int) {
@@ -215,6 +222,13 @@ func (c *LmstfyClient) Consume(queue string, ttrSecond, timeoutSecond uint32) (j
 	switch resp.StatusCode {
 	case http.StatusNotFound:
 		discardResponseBody(resp.Body)
+		if c.errorOnNilJob {
+			return nil, &APIError{
+				Type:      ResponseErr,
+				Reason:    "no job or queue was not found",
+				RequestID: resp.Header.Get("X-Request-ID"),
+			}
+		}
 		return nil, nil
 	case http.StatusOK:
 		// continue

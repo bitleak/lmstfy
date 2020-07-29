@@ -130,6 +130,6 @@ func (e *Engine) Shutdown() {
 	e.newEngine.Shutdown()
 }
 
-func (e *Engine) DumpInfo(output io.Writer) {
-	e.newEngine.DumpInfo(output)
+func (e *Engine) DumpInfo(output io.Writer) error {
+	return e.newEngine.DumpInfo(output)
 }

@@ -24,7 +24,7 @@ type Engine interface {
 
 	Shutdown()
 
-	DumpInfo(output io.Writer)
+	DumpInfo(output io.Writer) error
 }
 
 type EnginePool map[string]Engine

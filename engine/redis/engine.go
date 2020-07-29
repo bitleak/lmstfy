@@ -42,7 +42,11 @@ func NewEngine(redisName string, conn *go_redis.Client) (engine.Engine, error) {
 	if err != nil {
 		return nil, err
 	}
-	monitor := NewSizeMonitor(redis, timer, meta.Dump())
+	metadata, err := meta.Dump()
+	if err != nil {
+		return nil, err
+	}
+	monitor := NewSizeMonitor(redis, timer, metadata)
 	go monitor.Loop()
 	return &Engine{
 		redis:   redis,
@@ -298,8 +302,12 @@ func (e *Engine) Shutdown() {
 	e.timer.Shutdown()
 }
 
-func (e *Engine) DumpInfo(out io.Writer) {
+func (e *Engine) DumpInfo(out io.Writer) error {
+	metadata, err := e.meta.Dump()
+	if err != nil {
+		return err
+	}
 	enc := json.NewEncoder(out)
 	enc.SetIndent("", "    ")
-	enc.Encode(e.meta.Dump())
+	return enc.Encode(metadata)
 }

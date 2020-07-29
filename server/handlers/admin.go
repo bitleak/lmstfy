@@ -258,11 +258,20 @@ func PProf(c *gin.Context) {
 // GET /info?pool=
 // List all namespaces and queues
 func EngineMetaInfo(c *gin.Context) {
+	logger := GetHTTPLogger(c)
 	e := engine.GetEngineByKind("redis", c.Query("pool"))
 	if e == nil {
 		return
 	}
-	e.DumpInfo(c.Writer)
+	err := e.DumpInfo(c.Writer)
+	if err != nil {
+		logger.WithFields(logrus.Fields{
+			"error": err,
+			"kind":  "redis",
+			"pool":  c.Query("pool"),
+		}).Error("dump engine meta info error")
+		return
+	}
 }
 
 // GetAccessLogStatus return whether the accesslog was enabled or not

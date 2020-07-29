@@ -2,6 +2,8 @@ package redis
 
 import (
 	"sync"
+
+	"github.com/sirupsen/logrus"
 )
 
 /**
@@ -80,9 +82,20 @@ func (m *MetaManager) ListQueues(namespace string) (queues []string, err error) 
 }
 
 func (m *MetaManager) initialize() {
-	namespaces, _ := m.ListNamespaces()
+	namespaces, err := m.ListNamespaces()
+	if err != nil {
+		logger.WithField("error", err).Error("initialize meta manager list namespaces error")
+		return
+	}
 	for _, n := range namespaces {
-		queues, _ := m.ListQueues(n)
+		queues, err := m.ListQueues(n)
+		if err != nil {
+			logger.WithFields(logrus.Fields{
+				"namespace": n,
+				"error":     err,
+			}).Error("initialize meta manager list queues error")
+			return
+		}
 		for _, q := range queues {
 			m.rwmu.Lock()
 			m.nsCache[n] = true
@@ -92,12 +105,18 @@ func (m *MetaManager) initialize() {
 	}
 }
 
-func (m *MetaManager) Dump() map[string][]string {
+func (m *MetaManager) Dump() (map[string][]string, error) {
 	data := make(map[string][]string)
-	namespaces, _ := m.ListNamespaces()
+	namespaces, err := m.ListNamespaces()
+	if err != nil {
+		return nil, err
+	}
 	for _, n := range namespaces {
-		queues, _ := m.ListQueues(n)
+		queues, err := m.ListQueues(n)
+		if err != nil {
+			return nil, err
+		}
 		data[n] = queues
 	}
-	return data
+	return data, nil
 }

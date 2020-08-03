@@ -53,7 +53,7 @@ GET /info
 ### Get Prometheus Metrics 
 
 ```
-GET /metric
+GET /metrics
 ```
 
 #### Request Query

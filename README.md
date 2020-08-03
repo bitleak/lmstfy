@@ -61,6 +61,10 @@ To start in developing mode:
 
 ---
 
+## Dashboard
+
+* [Grafana](https://grafana.com/grafana/dashboards/12748)
+
 ## Internal
 
 Detailed internal implementation looks like:

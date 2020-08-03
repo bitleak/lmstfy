@@ -53,7 +53,7 @@ GET /info
 ### 获取 prometheus 监控指标 
 
 ```
-GET /metric
+GET /metrics
 ```
 
 #### Request Query

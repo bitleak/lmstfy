@@ -1,3 +1,8 @@
+VERSION 1.0.3
+	* add publish bulk api testcase 
+	* print some logs while initialize meta and setup error 
+	* remove build install flag
+
 VERSION 1.0.2
 	* add token consume/produce rate limit 
 

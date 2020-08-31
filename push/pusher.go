@@ -15,6 +15,7 @@ import (
 
 type Pusher struct {
 	*Meta
+	Pool            string
 	Namespace       string
 	Queue           string
 	logger          *logrus.Logger
@@ -34,12 +35,15 @@ func (p *Pusher) start() error {
 		Timeout: time.Duration(p.Timeout) * time.Second,
 	}
 	p.logger.WithFields(logrus.Fields{
+		"pool":  p.Pool,
 		"ns":    p.Namespace,
 		"queue": p.Queue,
 	}).Info("Start the pusher")
+	// Todo: check pool exist
 	go p.startConsume()
 	for i := 0; i < p.Workers; i++ {
 		p.logger.WithFields(logrus.Fields{
+			"pool":        p.Pool,
 			"ns":          p.Namespace,
 			"queue":       p.Queue,
 			"process_num": i,
@@ -54,13 +58,15 @@ func (p *Pusher) startConsume() {
 	defer func() {
 		if err := recover(); err != nil {
 			p.logger.WithFields(logrus.Fields{
+				"pool":  p.Pool,
 				"ns":    p.Namespace,
 				"queue": p.Queue,
-				"errpr": err,
+				"error": err,
 			}).Error("Pusher consume panic")
 		}
 	}()
 	p.logger.WithFields(logrus.Fields{
+		"pool":  p.Pool,
 		"ns":    p.Namespace,
 		"queue": p.Queue,
 	}).Info("Pusher start consume")
@@ -68,6 +74,7 @@ func (p *Pusher) startConsume() {
 		select {
 		case <-p.consumerStopper:
 			p.logger.WithFields(logrus.Fields{
+				"pool":  p.Pool,
 				"ns":    p.Namespace,
 				"queue": p.Queue,
 			}).Info("Pusher stop consume")
@@ -75,14 +82,15 @@ func (p *Pusher) startConsume() {
 			return
 		default:
 		}
-		// Todo: change to pusher config
-		e := engine.GetEngine("default")
+		e := engine.GetEngine(p.Pool)
 		// consume
 		job, err := e.ConsumeByPush(p.Namespace, p.Queue, p.Timeout, 10)
 		if err != nil {
 			p.logger.WithFields(logrus.Fields{
-				"error":  err,
-				"pusher": p,
+				"pool":  p.Pool,
+				"ns":    p.Namespace,
+				"queue": p.Queue,
+				"error": err,
 			}).Error("Failed to consume")
 		}
 		p.jobChan <- job
@@ -94,9 +102,10 @@ func (p *Pusher) startPush(num int) {
 	defer func() {
 		if err := recover(); err != nil {
 			p.logger.WithFields(logrus.Fields{
+				"pool":  p.Pool,
 				"ns":    p.Namespace,
 				"queue": p.Queue,
-				"errpr": err,
+				"error": err,
 			}).Error("Pusher push panic")
 		}
 	}()
@@ -109,6 +118,7 @@ func (p *Pusher) startPush(num int) {
 			}
 		case <-p.pusherStopper:
 			p.logger.WithFields(logrus.Fields{
+				"pool":        p.Pool,
 				"ns":          p.Namespace,
 				"queue":       p.Queue,
 				"process_num": num,
@@ -144,8 +154,7 @@ func (p *Pusher) push(job engine.Job) {
 	ioutil.ReadAll(resp.Body)
 	resp.Body.Close()
 	if resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices {
-		// Todo: change to pusher config
-		e := engine.GetEngine("default")
+		e := engine.GetEngine(p.Pool)
 		err := e.Delete(p.Namespace, p.Queue, job.ID())
 		if err != nil {
 			p.logger.WithFields(logrus.Fields{
@@ -160,6 +169,7 @@ func (p *Pusher) push(job engine.Job) {
 
 func (p *Pusher) stop() error {
 	p.logger.WithFields(logrus.Fields{
+		"pool":  p.Pool,
 		"ns":    p.Namespace,
 		"queue": p.Queue,
 	}).Info("Stop the pusher")
@@ -171,6 +181,7 @@ func (p *Pusher) stop() error {
 
 func (p *Pusher) restart() error {
 	p.logger.WithFields(logrus.Fields{
+		"pool":  p.Pool,
 		"ns":    p.Namespace,
 		"queue": p.Queue,
 	}).Info("Restart the pusher")

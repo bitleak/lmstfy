@@ -33,13 +33,14 @@ func NewManger(redisCli *redis.Client, logger *logrus.Logger) (*Manager, error) 
 	return manager, nil
 }
 
-func (m *Manager) onCreated(ns, queue string, meta *Meta) {
-	key := m.buildKey(ns, queue)
+func (m *Manager) onCreated(pool, ns, queue string, meta *Meta) {
+	key := m.buildKey(pool, ns, queue)
 	if v, ok := m.pushers.Load(key); ok {
 		v.(*Pusher).stop()
 		m.pushers.Delete(key)
 	}
 	pusher := &Pusher{
+		Pool:      pool,
 		Namespace: ns,
 		Queue:     queue,
 		Meta:      meta,
@@ -47,6 +48,7 @@ func (m *Manager) onCreated(ns, queue string, meta *Meta) {
 	}
 	if err := pusher.start(); err != nil {
 		m.logger.WithFields(logrus.Fields{
+			"pool":  pool,
 			"ns":    ns,
 			"queue": queue,
 			"meta":  meta,
@@ -60,17 +62,18 @@ func (m *Manager) onCreated(ns, queue string, meta *Meta) {
 	m.pushers.Store(key, pusher)
 }
 
-func (m *Manager) onUpdated(ns, queue string, newMeta *Meta) {
-	key := m.buildKey(ns, queue)
+func (m *Manager) onUpdated(pool, ns, queue string, newMeta *Meta) {
+	key := m.buildKey(pool, ns, queue)
 	v, ok := m.pushers.Load(key)
 	if !ok {
-		m.onCreated(ns, queue, newMeta)
+		m.onCreated(pool, ns, queue, newMeta)
 		return
 	}
 	pusher := v.(*Pusher)
 	pusher.Meta = newMeta
 	if err := pusher.restart(); err != nil {
 		m.logger.WithFields(logrus.Fields{
+			"pool":  pool,
 			"ns":    ns,
 			"queue": queue,
 			"meta":  newMeta,
@@ -78,23 +81,26 @@ func (m *Manager) onUpdated(ns, queue string, newMeta *Meta) {
 		return
 	}
 	m.logger.WithFields(logrus.Fields{
+		"pool":  pool,
 		"ns":    ns,
 		"queue": queue,
 	}).Info("Success to update the pusher")
 	m.pushers.Store(key, pusher)
 }
 
-func (m *Manager) onDeleted(ns, queue string) {
-	key := m.buildKey(ns, queue)
+func (m *Manager) onDeleted(pool, ns, queue string) {
+	key := m.buildKey(pool, ns, queue)
 	if v, ok := m.pushers.Load(key); ok {
 		if err := v.(*Pusher).stop(); err != nil {
 			m.logger.WithFields(logrus.Fields{
+				"pool":  pool,
 				"ns":    ns,
 				"queue": queue,
 			}).Error("Failed to stop the Pusher")
 			return
 		}
 		m.logger.WithFields(logrus.Fields{
+			"pool":  pool,
 			"ns":    ns,
 			"queue": queue,
 		}).Info("Success to delete the pusher")

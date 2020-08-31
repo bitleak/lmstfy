@@ -27,6 +27,10 @@ type Meta struct {
 	Timeout  uint32 `json:"timeout"`
 }
 
+type onCreatedFunc func(pool, ns, queue string, meta *Meta)
+type onUpdatedFunc func(pool, ns, queue string, newMeta *Meta)
+type onDeletedFunc func(pool, ns, queue string)
+
 type MetaManager struct {
 	redisCli           *redis.Client
 	metas              map[string]*Meta
@@ -34,9 +38,9 @@ type MetaManager struct {
 	latestMetasVersion int64
 
 	// callback functions
-	onCreated func(ns, queue string, meta *Meta)
-	onUpdated func(ns, queue string, newMeta *Meta)
-	onDeleted func(ns, queue string)
+	onCreated onCreatedFunc
+	onUpdated onUpdatedFunc
+	onDeleted onDeletedFunc
 
 	stopCh chan struct{}
 }
@@ -44,9 +48,9 @@ type MetaManager struct {
 func newMetaManager(
 	redisCli *redis.Client,
 	logger *logrus.Logger,
-	onCreated func(ns, queue string, meta *Meta),
-	onUpdated func(ns, queue string, newMeta *Meta),
-	onDeleted func(ns, queue string)) (*MetaManager, error) {
+	onCreated onCreatedFunc,
+	onUpdated onUpdatedFunc,
+	onDeleted onDeletedFunc) (*MetaManager, error) {
 	latestMetasVersion, err := redisCli.Get(redisMetasVersionKey).Int64()
 	if err == redis.Nil {
 		latestMetasVersion, err = redisCli.Incr(redisMetasVersionKey).Result()
@@ -69,16 +73,16 @@ func (mm *MetaManager) Close() {
 	close(mm.stopCh)
 }
 
-func (mm *MetaManager) buildKey(ns, queue string) string {
-	return fmt.Sprintf("%s/%s/%s", metaKeyPrefix, ns, queue)
+func (mm *MetaManager) buildKey(pool, ns, queue string) string {
+	return fmt.Sprintf("%s/%s/%s/%s", metaKeyPrefix, pool, ns, queue)
 }
 
-func (mm *MetaManager) splitKey(key string) (string, string, error) {
+func (mm *MetaManager) splitKey(key string) (string, string, string, error) {
 	fields := strings.Split(key, "/")
-	if len(fields) != 3 || fields[0] != metaKeyPrefix {
-		return "", "", ErrInvalidKey
+	if len(fields) != 4 || fields[0] != metaKeyPrefix {
+		return "", "", "", ErrInvalidKey
 	}
-	return fields[1], fields[2], nil
+	return fields[1], fields[2], fields[3], nil
 }
 
 func (mm *MetaManager) updateMetas() error {
@@ -89,7 +93,7 @@ func (mm *MetaManager) updateMetas() error {
 	newMetas := make(map[string]*Meta, len(vals))
 	for key, meta := range vals {
 		newMeta := new(Meta)
-		ns, queue, err := mm.splitKey(key)
+		pool, ns, queue, err := mm.splitKey(key)
 		if err != nil {
 			mm.logger.WithFields(logrus.Fields{
 				"key": key,
@@ -99,6 +103,7 @@ func (mm *MetaManager) updateMetas() error {
 		}
 		if err := json.Unmarshal([]byte(meta), newMeta); err != nil {
 			mm.logger.WithFields(logrus.Fields{
+				"pool":  pool,
 				"ns":    ns,
 				"queue": queue,
 				"err":   err,
@@ -107,15 +112,15 @@ func (mm *MetaManager) updateMetas() error {
 		}
 		if oldMeta, ok := mm.metas[key]; ok {
 			if !cmp.Equal(newMeta, oldMeta) { // the meta was modified
-				mm.onUpdated(ns, queue, newMeta)
+				mm.onUpdated(pool, ns, queue, newMeta)
 			}
 		} else { // new meta was created
-			mm.onCreated(ns, queue, newMeta)
+			mm.onCreated(pool, ns, queue, newMeta)
 		}
 		newMetas[key] = newMeta
 	}
 	for oldKey := range mm.metas {
-		ns, queue, err := mm.splitKey(oldKey)
+		pool, ns, queue, err := mm.splitKey(oldKey)
 		if err != nil {
 			mm.logger.WithFields(logrus.Fields{
 				"key": oldKey,
@@ -125,7 +130,7 @@ func (mm *MetaManager) updateMetas() error {
 		}
 		if _, ok := newMetas[oldKey]; !ok {
 			// the meta was deleted
-			mm.onDeleted(ns, queue)
+			mm.onDeleted(pool, ns, queue)
 		}
 	}
 	mm.metas = newMetas
@@ -161,8 +166,8 @@ func (mm *MetaManager) asyncLoop() {
 	}
 }
 
-func (mm *MetaManager) GetFromRemote(ns, queue string) (*Meta, error) {
-	key := mm.buildKey(ns, queue)
+func (mm *MetaManager) GetFromRemote(pool, ns, queue string) (*Meta, error) {
+	key := mm.buildKey(pool, ns, queue)
 	metaStr, err := mm.redisCli.HGet(redisMetasKey, key).Result()
 	if err != nil && err != redis.Nil {
 		return nil, err
@@ -177,16 +182,16 @@ func (mm *MetaManager) GetFromRemote(ns, queue string) (*Meta, error) {
 	return meta, nil
 }
 
-func (mm *MetaManager) Get(ns, queue string) *Meta {
-	key := mm.buildKey(ns, queue)
+func (mm *MetaManager) Get(pool, ns, queue string) *Meta {
+	key := mm.buildKey(pool, ns, queue)
 	if pushMeta, ok := mm.metas[key]; ok {
 		return pushMeta
 	}
 	return nil
 }
 
-func (mm *MetaManager) Create(ns, queue string, meta *Meta) error {
-	key := mm.buildKey(ns, queue)
+func (mm *MetaManager) Create(pool, ns, queue string, meta *Meta) error {
+	key := mm.buildKey(pool, ns, queue)
 	bytes, _ := json.Marshal(meta)
 	ok, err := mm.redisCli.HSetNX(redisMetasKey, key, string(bytes)).Result()
 	if err != nil {
@@ -199,8 +204,8 @@ func (mm *MetaManager) Create(ns, queue string, meta *Meta) error {
 	return nil
 }
 
-func (mm *MetaManager) Update(ns, queue string, meta *Meta) error {
-	key := mm.buildKey(ns, queue)
+func (mm *MetaManager) Update(pool, ns, queue string, meta *Meta) error {
+	key := mm.buildKey(pool, ns, queue)
 	bytes, _ := json.Marshal(meta)
 	_, err := mm.redisCli.HSet(redisMetasKey, key, string(bytes)).Result()
 	if err != nil {
@@ -210,8 +215,8 @@ func (mm *MetaManager) Update(ns, queue string, meta *Meta) error {
 	return nil
 }
 
-func (mm *MetaManager) Delete(ns, queue string) error {
-	key := mm.buildKey(ns, queue)
+func (mm *MetaManager) Delete(pool, ns, queue string) error {
+	key := mm.buildKey(pool, ns, queue)
 	cnt, err := mm.redisCli.HDel(redisMetasKey, key).Result()
 	if err != nil {
 		return err
@@ -223,31 +228,34 @@ func (mm *MetaManager) Delete(ns, queue string) error {
 	return nil
 }
 
-func (mm *MetaManager) ListPusherByNamespace(wantedNamespace string) map[string]Meta {
+func (mm *MetaManager) ListPusherByNamespace(wantedPool, wantedNamespace string) map[string]Meta {
 	queueMetas := make(map[string]Meta)
 	for key, meta := range mm.metas {
-		ns, queue, err := mm.splitKey(key)
+		pool, ns, queue, err := mm.splitKey(key)
 		if err != nil {
 			continue
 		}
-		if wantedNamespace == ns {
+		if wantedPool == pool && wantedNamespace == ns {
 			queueMetas[queue] = *meta
 		}
 	}
 	return queueMetas
 }
 
-func (mm *MetaManager) Dump() map[string][]string {
-	pushQueues := make(map[string][]string)
+func (mm *MetaManager) Dump() map[string]map[string][]string {
+	pushQueues := make(map[string]map[string][]string)
 	for key := range mm.metas {
-		ns, queue, err := mm.splitKey(key)
+		pool, ns, queue, err := mm.splitKey(key)
 		if err != nil {
 			continue
 		}
-		if _, ok := pushQueues[ns]; !ok {
-			pushQueues[ns] = make([]string, 0)
+		if _, ok := pushQueues[pool]; !ok {
+			pushQueues[pool] = make(map[string][]string, 0)
 		}
-		pushQueues[ns] = append(pushQueues[ns], queue)
+		if _, ok := pushQueues[pool][ns]; !ok {
+			pushQueues[pool][ns] = make([]string, 0)
+		}
+		pushQueues[pool][ns] = append(pushQueues[pool][ns], queue)
 	}
 	return pushQueues
 }

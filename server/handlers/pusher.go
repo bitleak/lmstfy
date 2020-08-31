@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/bitleak/lmstfy/config"
 	"github.com/bitleak/lmstfy/push"
 )
 
@@ -19,8 +20,9 @@ func ListPushers(c *gin.Context) {
 // GET /pusher/:namespace
 func ListNamespacePushers(c *gin.Context) {
 	ns := c.Param("namespace")
+	pool := c.DefaultQuery("pool", config.DefaultPoolName)
 	manager := push.GetManager()
-	pushers := manager.ListPusherByNamespace(ns)
+	pushers := manager.ListPusherByNamespace(pool, ns)
 	c.JSON(http.StatusOK, gin.H{"pushers": pushers})
 }
 
@@ -29,11 +31,12 @@ func GetQueuePusher(c *gin.Context) {
 	var err error
 	ns := c.Param("namespace")
 	queue := c.Param("queue")
+	pool := c.DefaultQuery("pool", config.DefaultPoolName)
 	isForceRemote, _ := strconv.ParseBool(c.Param("force_remote"))
 	manager := push.GetManager()
-	pusher := manager.Get(ns, queue)
+	pusher := manager.Get(pool, ns, queue)
 	if pusher == nil || isForceRemote {
-		pusher, err = manager.GetFromRemote(ns, queue)
+		pusher, err = manager.GetFromRemote(pool, ns, queue)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -59,8 +62,9 @@ func CreateQueuePusher(c *gin.Context) {
 	}
 	ns := c.Param("namespace")
 	queue := c.Param("queue")
+	pool := c.DefaultQuery("pool", config.DefaultPoolName)
 	manager := push.GetManager()
-	if err := manager.Create(ns, queue, &meta); err != nil {
+	if err := manager.Create(pool, ns, queue, &meta); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -77,7 +81,8 @@ func UpdateQueuePusher(c *gin.Context) {
 	manager := push.GetManager()
 	ns := c.Param("namespace")
 	queue := c.Param("queue")
-	meta, err := manager.GetFromRemote(ns, queue)
+	pool := c.DefaultQuery("pool", config.DefaultPoolName)
+	meta, err := manager.GetFromRemote(pool, ns, queue)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -99,7 +104,7 @@ func UpdateQueuePusher(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := manager.Update(ns, queue, meta); err != nil {
+	if err := manager.Update(pool, ns, queue, meta); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -111,7 +116,8 @@ func DeleteQueuePusher(c *gin.Context) {
 	manager := push.GetManager()
 	ns := c.Param("namespace")
 	queue := c.Param("queue")
-	if err := manager.Delete(ns, queue); err != nil {
+	pool := c.DefaultQuery("pool", config.DefaultPoolName)
+	if err := manager.Delete(pool, ns, queue); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

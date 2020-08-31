@@ -11,13 +11,6 @@ import (
 	"github.com/bitleak/lmstfy/helper"
 )
 
-type Pusher struct {
-	*Meta
-	Namespace string
-	Queue     string
-	logger    *logrus.Logger
-}
-
 type Manager struct {
 	*MetaManager
 	pushers sync.Map
@@ -107,33 +100,6 @@ func (m *Manager) onDeleted(ns, queue string) {
 		}).Info("Success to delete the pusher")
 		m.pushers.Delete(key)
 	}
-}
-
-func (p *Pusher) start() error {
-	// TODO: ship me
-	p.logger.WithFields(logrus.Fields{
-		"ns":    p.Namespace,
-		"queue": p.Queue,
-	}).Info("Start the pusher")
-	return nil
-}
-
-func (p *Pusher) stop() error {
-	// TODO: ship me
-	p.logger.WithFields(logrus.Fields{
-		"ns":    p.Namespace,
-		"queue": p.Queue,
-	}).Info("Stop the pusher")
-	return nil
-}
-
-func (p *Pusher) restart() error {
-	// TODO: ship me
-	p.logger.WithFields(logrus.Fields{
-		"ns":    p.Namespace,
-		"queue": p.Queue,
-	}).Info("Restart the pusher")
-	return nil
 }
 
 var _manager *Manager

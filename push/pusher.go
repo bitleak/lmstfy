@@ -15,46 +15,45 @@ import (
 
 type Pusher struct {
 	*Meta
-	Pool            string
-	Namespace       string
-	Queue           string
-	logger          *logrus.Logger
-	jobChan         chan engine.Job
+	Pool       string
+	Namespace  string
+	Queue      string
+	logger     *logrus.Logger
+	httpClient *http.Client
+
 	wg              sync.WaitGroup
-	consumerStopper chan struct{}
-	pusherStopper   chan struct{}
-	httpClient      *http.Client
+	jobCh           chan engine.Job
+	stopCh          chan struct{}
+	restartWorkerCh chan struct{}
+}
+
+func newPusher(pool, ns, queue string, meta *Meta, logger *logrus.Logger) *Pusher {
+	pusher := &Pusher{
+		Meta:      meta,
+		Pool:      pool,
+		Namespace: ns,
+		Queue:     queue,
+		logger:    logger,
+
+		jobCh:           make(chan engine.Job),
+		stopCh:          make(chan struct{}),
+		restartWorkerCh: make(chan struct{}),
+		httpClient:      &http.Client{Timeout: time.Duration(meta.Timeout) * time.Second},
+	}
+	// TODO: check pool exist
+	go pusher.pollQueue()
+	return pusher
 }
 
 func (p *Pusher) start() error {
-	p.consumerStopper = make(chan struct{})
-	p.pusherStopper = make(chan struct{})
-	p.jobChan = make(chan engine.Job)
-	p.wg = sync.WaitGroup{}
-	p.httpClient = &http.Client{
-		Timeout: time.Duration(p.Timeout) * time.Second,
-	}
-	p.logger.WithFields(logrus.Fields{
-		"pool":  p.Pool,
-		"ns":    p.Namespace,
-		"queue": p.Queue,
-	}).Info("Start the pusher")
-	// Todo: check pool exist
-	go p.startConsume()
 	for i := 0; i < p.Workers; i++ {
-		p.logger.WithFields(logrus.Fields{
-			"pool":        p.Pool,
-			"ns":          p.Namespace,
-			"queue":       p.Queue,
-			"process_num": i,
-		}).Info("Pusher start push")
 		p.wg.Add(1)
-		go p.startPush(i)
+		go p.startWorker(i)
 	}
 	return nil
 }
 
-func (p *Pusher) startConsume() {
+func (p *Pusher) pollQueue() {
 	defer func() {
 		if err := recover(); err != nil {
 			p.logger.WithFields(logrus.Fields{
@@ -62,28 +61,19 @@ func (p *Pusher) startConsume() {
 				"ns":    p.Namespace,
 				"queue": p.Queue,
 				"error": err,
-			}).Error("Pusher consume panic")
+			}).Error("Panic in poll queue")
 		}
 	}()
+	defer p.wg.Done()
+
 	p.logger.WithFields(logrus.Fields{
 		"pool":  p.Pool,
 		"ns":    p.Namespace,
 		"queue": p.Queue,
-	}).Info("Pusher start consume")
+	}).Info("Start polling queue")
+
 	for {
-		select {
-		case <-p.consumerStopper:
-			p.logger.WithFields(logrus.Fields{
-				"pool":  p.Pool,
-				"ns":    p.Namespace,
-				"queue": p.Queue,
-			}).Info("Pusher stop consume")
-			close(p.pusherStopper)
-			return
-		default:
-		}
 		e := engine.GetEngine(p.Pool)
-		// consume
 		job, err := e.ConsumeByPush(p.Namespace, p.Queue, p.Timeout, 10)
 		if err != nil {
 			p.logger.WithFields(logrus.Fields{
@@ -93,12 +83,21 @@ func (p *Pusher) startConsume() {
 				"error": err,
 			}).Error("Failed to consume")
 		}
-		p.jobChan <- job
+		select {
+		case p.jobCh <- job:
+			/* do nothing */
+		case <-p.stopCh:
+			p.logger.WithFields(logrus.Fields{
+				"pool":  p.Pool,
+				"ns":    p.Namespace,
+				"queue": p.Queue,
+			}).Info("Stop polling queue while the stop signal was received")
+			return
+		}
 	}
-
 }
 
-func (p *Pusher) startPush(num int) {
+func (p *Pusher) startWorker(num int) {
 	defer func() {
 		if err := recover(); err != nil {
 			p.logger.WithFields(logrus.Fields{
@@ -106,36 +105,49 @@ func (p *Pusher) startPush(num int) {
 				"ns":    p.Namespace,
 				"queue": p.Queue,
 				"error": err,
-			}).Error("Pusher push panic")
+			}).Error("Panic in worker")
 		}
 	}()
 	defer p.wg.Done()
+
 	for {
 		select {
-		case job := <-p.jobChan:
+		case job := <-p.jobCh:
 			if job != nil {
-				p.push(job)
+				if err := p.sendJobToUser(job); err != nil {
+					p.logger.WithFields(logrus.Fields{
+						"pool":   p.Pool,
+						"ns":     p.Namespace,
+						"queue":  p.Queue,
+						"job_id": job.ID(),
+						"err":    err.Error(),
+					}).Warn("Failed to send the data to user endpoint")
+				}
 			}
-		case <-p.pusherStopper:
+		case <-p.restartWorkerCh:
 			p.logger.WithFields(logrus.Fields{
 				"pool":        p.Pool,
 				"ns":          p.Namespace,
 				"queue":       p.Queue,
 				"process_num": num,
-			}).Info("Pusher stop push")
+			}).Info("Stop the worker while the restart signal was received")
+			return
+		case <-p.stopCh:
+			p.logger.WithFields(logrus.Fields{
+				"pool":        p.Pool,
+				"ns":          p.Namespace,
+				"queue":       p.Queue,
+				"process_num": num,
+			}).Info("Stop the worker while the stop signal was received")
 			return
 		}
 	}
 }
 
-func (p *Pusher) push(job engine.Job) {
+func (p *Pusher) sendJobToUser(job engine.Job) error {
 	req, err := http.NewRequest(http.MethodPost, p.Endpoint, bytes.NewReader(job.Body()))
 	if err != nil {
-		p.logger.WithFields(logrus.Fields{
-			"error":  err,
-			"pusher": p,
-		}).Error("Pusher new request error")
-		return
+		return err
 	}
 	req.Header.Add("namespace", job.Namespace())
 	req.Header.Add("queue", job.Queue())
@@ -145,11 +157,7 @@ func (p *Pusher) push(job engine.Job) {
 	req.Header.Add("remain_tries", strconv.FormatUint(uint64(job.Tries()), 10))
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
-		p.logger.WithFields(logrus.Fields{
-			"error":  err,
-			"pusher": p,
-		}).Debug("Pusher do request error")
-		return
+		return err
 	}
 	ioutil.ReadAll(resp.Body)
 	resp.Body.Close()
@@ -157,35 +165,33 @@ func (p *Pusher) push(job engine.Job) {
 		e := engine.GetEngine(p.Pool)
 		err := e.Delete(p.Namespace, p.Queue, job.ID())
 		if err != nil {
-			p.logger.WithFields(logrus.Fields{
-				"error":  err,
-				"pusher": p,
-			}).Error("Pusher delete job error")
-			return
+			return err
 		}
 	}
-	return
+	return nil
 }
 
 func (p *Pusher) stop() error {
+	close(p.stopCh)
+	p.wg.Wait()
+	close(p.jobCh)
 	p.logger.WithFields(logrus.Fields{
 		"pool":  p.Pool,
 		"ns":    p.Namespace,
 		"queue": p.Queue,
 	}).Info("Stop the pusher")
-	close(p.consumerStopper)
-	p.wg.Wait()
-	close(p.jobChan)
 	return nil
 }
 
 func (p *Pusher) restart() error {
+	close(p.restartWorkerCh)
+	p.restartWorkerCh = make(chan struct{})
+	p.wg.Wait()
+	p.start()
 	p.logger.WithFields(logrus.Fields{
 		"pool":  p.Pool,
 		"ns":    p.Namespace,
 		"queue": p.Queue,
 	}).Info("Restart the pusher")
-	p.stop()
-	p.start()
 	return nil
 }

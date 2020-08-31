@@ -39,13 +39,7 @@ func (m *Manager) onCreated(pool, ns, queue string, meta *Meta) {
 		v.(*Pusher).stop()
 		m.pushers.Delete(key)
 	}
-	pusher := &Pusher{
-		Pool:      pool,
-		Namespace: ns,
-		Queue:     queue,
-		Meta:      meta,
-		logger:    m.logger,
-	}
+	pusher := newPusher(pool, ns, queue, meta, m.logger)
 	if err := pusher.start(); err != nil {
 		m.logger.WithFields(logrus.Fields{
 			"pool":  pool,

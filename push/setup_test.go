@@ -56,7 +56,7 @@ func setup() {
 }
 
 func teardown() {
-	_manager.Close()
+	Close()
 }
 
 func TestMain(m *testing.M) {

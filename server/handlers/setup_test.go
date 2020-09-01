@@ -2,7 +2,6 @@ package handlers_test
 
 import (
 	"fmt"
-	"github.com/bitleak/lmstfy/push"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,6 +11,7 @@ import (
 	"github.com/bitleak/lmstfy/config"
 	redis_engine "github.com/bitleak/lmstfy/engine/redis"
 	"github.com/bitleak/lmstfy/helper"
+	"github.com/bitleak/lmstfy/push"
 	"github.com/bitleak/lmstfy/server/handlers"
 	"github.com/bitleak/lmstfy/throttler"
 
@@ -51,6 +51,18 @@ func setup() {
 	level, _ := logrus.ParseLevel(CONF.LogLevel)
 	logger.SetLevel(level)
 
+	for _, poolConf := range CONF.Pool {
+		conn := helper.NewRedisClient(&poolConf, nil)
+		err := conn.Ping().Err()
+		if err != nil {
+			panic(fmt.Sprintf("Failed to ping: %s", err))
+		}
+		err = conn.FlushDB().Err()
+		if err != nil {
+			panic(fmt.Sprintf("Failed to flush db: %s", err))
+		}
+	}
+
 	if err := redis_engine.Setup(CONF, logger); err != nil {
 		panic(fmt.Sprintf("Failed to setup redis engine: %s", err))
 	}
@@ -66,17 +78,6 @@ func setup() {
 	}
 	handlers.SetupParamDefaults(CONF)
 	handlers.Setup(logger)
-	for _, poolConf := range CONF.Pool {
-		conn := helper.NewRedisClient(&poolConf, nil)
-		err := conn.Ping().Err()
-		if err != nil {
-			panic(fmt.Sprintf("Failed to ping: %s", err))
-		}
-		err = conn.FlushDB().Err()
-		if err != nil {
-			panic(fmt.Sprintf("Failed to flush db: %s", err))
-		}
-	}
 }
 
 func TestMain(m *testing.M) {

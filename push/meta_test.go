@@ -175,4 +175,5 @@ func TestMetaManager_ListPusherByNamespace(t *testing.T) {
 			t.Fatalf("expect list pusher by namespace return meta equel testMeta")
 		}
 	}
+
 }

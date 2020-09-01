@@ -11,7 +11,7 @@ import (
 )
 
 func TestCreateQueuePusher(t *testing.T) {
-	limitStr := "{\"timeout\": 3, \"workers\": 5, \"endpoint\":\"http://test-enpoint\"}"
+	limitStr := "{\"timeout\": 3, \"workers\": 5, \"endpoint\":\"http://test-endpoint\"}"
 	targetUrl := fmt.Sprintf("http://localhost/pusher/ns-pusher/queue-pusher")
 	req, err := http.NewRequest(http.MethodPost, targetUrl, strings.NewReader(limitStr))
 	if err != nil {
@@ -23,12 +23,12 @@ func TestCreateQueuePusher(t *testing.T) {
 	e.HandleContext(c)
 	if resp.Code != http.StatusCreated {
 		t.Logf(resp.Body.String())
-		t.Fatal("Failed to create new token")
+		t.Fatal("Failed to create new queue pusher")
 	}
 	time.Sleep(4 * time.Second)
 	meta := push.GetManager().Get("default", "ns-pusher", "queue-pusher")
-	if meta == nil || meta.Endpoint != "http://test-enpoint" || meta.Timeout != 3 || meta.Workers != 5 {
-		t.Fatal("Mismatch meta in update")
+	if meta == nil || meta.Endpoint != "http://test-endpoint" || meta.Timeout != 3 || meta.Workers != 5 {
+		t.Fatal("Mismatch meta in create")
 	}
 }
 
@@ -90,7 +90,7 @@ func TestUpdateQueuePusher(t *testing.T) {
 	e.HandleContext(c)
 	if resp.Code != http.StatusOK {
 		t.Logf(resp.Body.String())
-		t.Fatal("Failed to create new token")
+		t.Fatal("Failed to update queue pusher")
 	}
 	time.Sleep(7 * time.Second)
 	meta := push.GetManager().Get("default", "ns-pusher", "queue-pusher")

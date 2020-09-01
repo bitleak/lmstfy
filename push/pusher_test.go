@@ -2,14 +2,25 @@ package push
 
 import (
 	"context"
-	"github.com/bitleak/lmstfy/engine"
-	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
+	"encoding/json"
 	"io/ioutil"
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/bitleak/lmstfy/engine"
+	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 )
+
+type Job struct {
+	Namespace string `json:"namespace"`
+	Queue     string `json:"queue"`
+	ID        string `json:"id"`
+	TTL       uint32 `json:"ttl"`
+	ElapsedMS int64  `json:"elapsed_ms"`
+	Body      []byte `json:"body"`
+}
 
 func TestPusher(t *testing.T) {
 	pusher := newPusher("default", "test-pusher-ns", "test-pusher-queue", &Meta{
@@ -44,17 +55,19 @@ func TestPusher(t *testing.T) {
 	jobMap := map[string]bool{}
 	router := gin.New()
 	router.POST("/", func(c *gin.Context) {
-		jobMap[c.Request.Header.Get("job_id")] = true
-		body, err := ioutil.ReadAll(c.Request.Body)
+		var job Job
+		bytes, err := ioutil.ReadAll(c.Request.Body)
 		if err != nil {
 			t.Fatal("Failed to read request")
 		}
-		if string(body) == "test-body" {
+		_ = json.Unmarshal(bytes, &job)
+		jobMap[job.ID] = true
+		if string(job.Body) == "test-body" {
 			jobCount++
 			logger.WithFields(logrus.Fields{
-				"job_id": c.Request.Header.Get("job_id"),
-				"body":   string(body),
-				"count":  jobCount,
+				"id":    job.ID,
+				"body":  string(job.Body),
+				"count": jobCount,
 			}).Info("got job")
 		}
 		if jobCount == 10 {

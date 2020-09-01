@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"strconv"
 	"sync"
 	"time"
 
@@ -152,16 +151,12 @@ func (p *Pusher) startWorker(num int) {
 }
 
 func (p *Pusher) sendJobToUser(job engine.Job) error {
-	req, err := http.NewRequest(http.MethodPost, p.Endpoint, bytes.NewReader(job.Body()))
+	jobBytes, _ := job.MarshalText()
+	req, err := http.NewRequest(http.MethodPost, p.Endpoint, bytes.NewReader(jobBytes))
 	if err != nil {
 		return err
 	}
-	req.Header.Add("namespace", job.Namespace())
-	req.Header.Add("queue", job.Queue())
-	req.Header.Add("job_id", job.ID())
-	req.Header.Add("ttl", strconv.FormatUint(uint64(job.TTL()), 10))
-	req.Header.Add("elapsed_ms", strconv.FormatInt(job.ElapsedMS(), 10))
-	req.Header.Add("remain_tries", strconv.FormatUint(uint64(job.Tries()), 10))
+	req.Header.Add("Content-Type", "application/json")
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
 		return err

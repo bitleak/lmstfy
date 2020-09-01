@@ -75,8 +75,8 @@ func (p *Pusher) pollQueue() {
 	}).Info("Start polling queue")
 
 	for {
-		e := engine.GetEngine(p.Pool)
-		job, err := e.ConsumeByPush(p.Namespace, p.Queue, p.Timeout, 10)
+		e := engine.GetEngine(p.Pool) // Todo: move out for?
+		job, err := e.ConsumeByPush(p.Namespace, p.Queue, p.Timeout, 3)
 		if err != nil {
 			p.logger.WithFields(logrus.Fields{
 				"pool":  p.Pool,

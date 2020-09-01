@@ -2,6 +2,7 @@ package push
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strconv"
@@ -41,7 +42,6 @@ func newPusher(pool, ns, queue string, meta *Meta, logger *logrus.Logger) *Pushe
 		restartWorkerCh: make(chan struct{}),
 		httpClient:      &http.Client{Timeout: time.Duration(meta.Timeout) * time.Second},
 	}
-	// TODO: check pool exist
 	go pusher.pollQueue()
 	return pusher
 }
@@ -74,9 +74,9 @@ func (p *Pusher) pollQueue() {
 		"queue": p.Queue,
 	}).Info("Start polling queue")
 
+	engine := engine.GetEngine(p.Pool)
 	for {
-		e := engine.GetEngine(p.Pool) // Todo: move out for?
-		job, err := e.ConsumeByPush(p.Namespace, p.Queue, p.Timeout, 3)
+		job, err := engine.ConsumeByPush(p.Namespace, p.Queue, p.Timeout, 3)
 		if err != nil {
 			p.logger.WithFields(logrus.Fields{
 				"pool":  p.Pool,
@@ -170,12 +170,9 @@ func (p *Pusher) sendJobToUser(job engine.Job) error {
 	resp.Body.Close()
 	if resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices {
 		e := engine.GetEngine(p.Pool)
-		err := e.Delete(p.Namespace, p.Queue, job.ID())
-		if err != nil {
-			return err
-		}
+		return e.Delete(p.Namespace, p.Queue, job.ID())
 	}
-	return nil
+	return fmt.Errorf("got unexpected http code: %d", resp.StatusCode)
 }
 
 func (p *Pusher) stop() error {

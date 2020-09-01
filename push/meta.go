@@ -138,7 +138,13 @@ func (mm *MetaManager) updateMetas() error {
 }
 
 func (mm *MetaManager) asyncLoop() {
-	// TODO: catch panic here
+	defer func() {
+		if err := recover(); err != nil {
+			mm.logger.WithFields(logrus.Fields{
+				"error": err,
+			}).Error("Panic in meta manager")
+		}
+	}()
 	ticker := time.NewTicker(3 * time.Second)
 	mm.updateMetas()
 	for {

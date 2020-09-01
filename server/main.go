@@ -128,11 +128,15 @@ func adminServer(conf *config.Config, accessLogger *logrus.Logger, errorLogger *
 
 	// pusher's URI
 	engine.GET("/pushers", handlers.ListPushers)
-	engine.GET("/pusher/:namespace", handlers.ListNamespacePushers)
-	engine.GET("/pusher/:namespace/:queue", handlers.GetQueuePusher)
-	engine.POST("/pusher/:namespace/:queue", handlers.CreateQueuePusher)
-	engine.PUT("/pusher/:namespace/:queue", handlers.UpdateQueuePusher)
-	engine.DELETE("/pusher/:namespace/:queue", handlers.DeleteQueuePusher)
+	pusherGroup := engine.Group("/pusher/:namespace")
+	{
+		pusherGroup.Use(handlers.CheckPoolExists)
+		pusherGroup.GET("", handlers.ListNamespacePushers)
+		pusherGroup.GET("/:queue", handlers.GetQueuePusher)
+		pusherGroup.POST("/:queue", handlers.CreateQueuePusher)
+		pusherGroup.PUT("/:queue", handlers.UpdateQueuePusher)
+		pusherGroup.DELETE("/:queue", handlers.DeleteQueuePusher)
+	}
 
 	engine.Any("/debug/pprof/*profile", handlers.PProf)
 	engine.GET("/accesslog", handlers.GetAccessLogStatus)

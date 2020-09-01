@@ -17,10 +17,10 @@ func ListPushers(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"pushers": pushers})
 }
 
-// GET /pusher/:namespace
+// GET /pusher/:namespace?pool=xxx
 func ListNamespacePushers(c *gin.Context) {
 	ns := c.Param("namespace")
-	pool := c.DefaultQuery("pool", config.DefaultPoolName)
+	pool := c.Query("pool")
 	manager := push.GetManager()
 	pushers := manager.ListPusherByNamespace(pool, ns)
 	c.JSON(http.StatusOK, gin.H{"pushers": pushers})

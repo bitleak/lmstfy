@@ -35,15 +35,17 @@ func TestPusher(t *testing.T) {
 
 	stopPublish := make(chan struct{})
 	stopServer := make(chan struct{})
+	sentJobs := make(map[string]bool)
 	go func() {
 		tick := time.NewTicker(1 * time.Second)
 		for {
 			select {
 			case <-tick.C:
-				_, err := engine.GetEngine("default").Publish("test-pusher-ns", "test-pusher-queue", []byte("test-body"), 60, 1, 1)
+				jobID, err := engine.GetEngine("default").Publish("test-pusher-ns", "test-pusher-queue", []byte("test-body"), 60, 1, 1)
 				if err != nil {
 					t.Fatal("Pusher publish error", err)
 				}
+				sentJobs[jobID] = true
 			case <-stopPublish:
 				time.Sleep(time.Second)
 				close(stopServer)
@@ -52,7 +54,7 @@ func TestPusher(t *testing.T) {
 		}
 	}()
 	jobCount := 0
-	jobMap := map[string]bool{}
+	gotJobs := map[string]bool{}
 	router := gin.New()
 	router.POST("/", func(c *gin.Context) {
 		var job Job
@@ -61,7 +63,7 @@ func TestPusher(t *testing.T) {
 			t.Fatal("Failed to read request")
 		}
 		_ = json.Unmarshal(bytes, &job)
-		jobMap[job.ID] = true
+		gotJobs[job.ID] = true
 		if string(job.Body) == "test-body" {
 			jobCount++
 			logger.WithFields(logrus.Fields{
@@ -82,8 +84,8 @@ func TestPusher(t *testing.T) {
 	case <-stopServer:
 		server.Shutdown(context.Background())
 	}
-	if len(jobMap) != 10 {
-		t.Fatal("Mismatch job count")
+	if len(gotJobs) != len(sentJobs) {
+		t.Fatalf("Mismatch job count, expected: %d, but got %d", 10, len(gotJobs))
 	}
 	size, err := engine.GetEngine("default").Size("test-pusher-ns", "test-pusher-queue")
 	if err != nil {

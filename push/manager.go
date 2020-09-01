@@ -118,3 +118,11 @@ func Setup(conf *config.Config, logger *logrus.Logger) error {
 func GetManager() *Manager {
 	return _manager
 }
+
+func Close() {
+	_manager.Close()
+	_manager.pushers.Range(func(key, value interface{}) bool {
+		value.(*Pusher).stop()
+		return true
+	})
+}

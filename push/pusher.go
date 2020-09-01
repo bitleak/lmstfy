@@ -21,7 +21,8 @@ type Pusher struct {
 	logger     *logrus.Logger
 	httpClient *http.Client
 
-	wg              sync.WaitGroup
+	consumerWg      sync.WaitGroup
+	workerWg        sync.WaitGroup
 	jobCh           chan engine.Job
 	stopCh          chan struct{}
 	restartWorkerCh chan struct{}
@@ -47,7 +48,7 @@ func newPusher(pool, ns, queue string, meta *Meta, logger *logrus.Logger) *Pushe
 
 func (p *Pusher) start() error {
 	for i := 0; i < p.Workers; i++ {
-		p.wg.Add(1)
+		p.workerWg.Add(1)
 		go p.startWorker(i)
 	}
 	return nil
@@ -64,7 +65,8 @@ func (p *Pusher) pollQueue() {
 			}).Error("Panic in poll queue")
 		}
 	}()
-	defer p.wg.Done()
+	p.consumerWg.Add(1)
+	defer p.consumerWg.Done()
 
 	p.logger.WithFields(logrus.Fields{
 		"pool":  p.Pool,
@@ -108,8 +110,13 @@ func (p *Pusher) startWorker(num int) {
 			}).Error("Panic in worker")
 		}
 	}()
-	defer p.wg.Done()
-
+	defer p.workerWg.Done()
+	p.logger.WithFields(logrus.Fields{
+		"pool":        p.Pool,
+		"ns":          p.Namespace,
+		"queue":       p.Queue,
+		"process_num": num,
+	}).Info("Start the worker")
 	for {
 		select {
 		case job := <-p.jobCh:
@@ -173,7 +180,8 @@ func (p *Pusher) sendJobToUser(job engine.Job) error {
 
 func (p *Pusher) stop() error {
 	close(p.stopCh)
-	p.wg.Wait()
+	p.consumerWg.Wait()
+	p.workerWg.Wait()
 	close(p.jobCh)
 	p.logger.WithFields(logrus.Fields{
 		"pool":  p.Pool,
@@ -186,7 +194,7 @@ func (p *Pusher) stop() error {
 func (p *Pusher) restart() error {
 	close(p.restartWorkerCh)
 	p.restartWorkerCh = make(chan struct{})
-	p.wg.Wait()
+	p.workerWg.Wait()
 	p.start()
 	p.logger.WithFields(logrus.Fields{
 		"pool":  p.Pool,

@@ -102,3 +102,11 @@ func ValidateMultiConsume(c *gin.Context) {
 		return
 	}
 }
+
+func CheckPoolExists(c *gin.Context) {
+	pool := c.Query("pool")
+	if exists := engine.ExistsPool(pool); !exists {
+		c.JSON(http.StatusBadRequest, auth.ErrPoolNotExist)
+		c.Abort()
+	}
+}

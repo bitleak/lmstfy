@@ -3,6 +3,7 @@ package engine
 import (
 	"encoding"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 
 	"github.com/bitleak/lmstfy/uuid"
@@ -19,6 +20,7 @@ type Job interface {
 	ElapsedMS() int64
 	encoding.BinaryMarshaler
 	encoding.BinaryUnmarshaler
+	encoding.TextMarshaler
 }
 
 type jobImpl struct {
@@ -161,6 +163,24 @@ func (j *jobImpl) UnmarshalBinary(data []byte) error {
 	}
 	j.delay = delay
 	return nil
+}
+
+func (j *jobImpl) MarshalText() (text []byte, err error) {
+	var job struct {
+		Namespace string `json:"namespace"`
+		Queue     string `json:"queue"`
+		ID        string `json:"id"`
+		TTL       uint32 `json:"ttl"`
+		ElapsedMS int64  `json:"elapsed_ms"`
+		Body      []byte `json:"body"`
+	}
+	job.Namespace = j.namespace
+	job.Queue = j.queue
+	job.ID = j.id
+	job.TTL = j.ttl
+	job.ElapsedMS = j._elapsedMS
+	job.Body = j.body
+	return json.Marshal(job)
 }
 
 func (j *jobImpl) GetDelayHour() uint16 {

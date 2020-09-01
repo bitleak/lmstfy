@@ -73,7 +73,14 @@ func (q *Queue) Push(j engine.Job, tries uint16) error {
 // Pop a job. If the tries > 0, add job to the "in-flight" timer with timestamp
 // set to `TTR + now()`; Or we might just move the job to "dead-letter".
 func (q *Queue) Poll(timeoutSecond, ttrSecond uint32) (jobID string, tries uint16, err error) {
-	_, jobID, tries, err = PollQueues(q.redis, q.timer, []QueueName{q.name}, timeoutSecond, ttrSecond)
+	_, jobID, tries, err = PollQueues(q.redis, q.timer, []QueueName{q.name}, timeoutSecond, ttrSecond, false)
+	return jobID, tries, err
+}
+
+// Pop a job. If the tries > 0, add job to the "in-flight" timer with timestamp
+// set to `TTR + now()`; Or we might just move the job to "dead-letter".
+func (q *Queue) NoConsumePoll(timeoutSecond, ttrSecond uint32) (jobID string, tries uint16, err error) {
+	_, jobID, tries, err = PollQueues(q.redis, q.timer, []QueueName{q.name}, timeoutSecond, ttrSecond, true)
 	return jobID, tries, err
 }
 
@@ -121,7 +128,7 @@ func (q *Queue) Destroy() (count int64, err error) {
 }
 
 // Poll from multiple queues using blocking method; OR pop a job from one queue using non-blocking method
-func PollQueues(redis *RedisInstance, timer *Timer, queueNames []QueueName, timeoutSecond, ttrSecond uint32) (queueName *QueueName, jobID string, retries uint16, err error) {
+func PollQueues(redis *RedisInstance, timer *Timer, queueNames []QueueName, timeoutSecond, ttrSecond uint32, noConsume bool) (queueName *QueueName, jobID string, retries uint16, err error) {
 	defer func() {
 		if jobID != "" {
 			metrics.queuePopJobs.WithLabelValues(redis.Name).Inc()
@@ -171,8 +178,10 @@ func PollQueues(redis *RedisInstance, timer *Timer, queueNames []QueueName, time
 		}).Error("Job with tries == 0 appeared")
 		return nil, "", 0, fmt.Errorf("Job %s with tries == 0 appeared", jobID)
 	}
-
-	err = timer.Add(queueName.Namespace, queueName.Queue, jobID, ttrSecond, tries-1) // NOTE: tries is decreased
+	if !noConsume {
+		tries = tries - 1
+	}
+	err = timer.Add(queueName.Namespace, queueName.Queue, jobID, ttrSecond, tries) // NOTE: tries is not decreased
 	if err != nil {
 		logger.WithFields(logrus.Fields{
 			"err":   err,
@@ -180,9 +189,9 @@ func PollQueues(redis *RedisInstance, timer *Timer, queueNames []QueueName, time
 			"ttr":   ttrSecond,
 			"queue": queueName.String(),
 		}).Error("Failed to add job to timer for ttr")
-		return queueName, jobID, tries - 1, err
+		return queueName, jobID, tries, err
 	}
-	return queueName, jobID, tries - 1, nil
+	return queueName, jobID, tries, nil
 }
 
 // Pack (tries, jobID) into lua struct pack of format "HHHc0", in lua this can be done:

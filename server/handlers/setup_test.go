@@ -11,6 +11,7 @@ import (
 	"github.com/bitleak/lmstfy/config"
 	redis_engine "github.com/bitleak/lmstfy/engine/redis"
 	"github.com/bitleak/lmstfy/helper"
+	"github.com/bitleak/lmstfy/push"
 	"github.com/bitleak/lmstfy/server/handlers"
 	"github.com/bitleak/lmstfy/throttler"
 
@@ -50,18 +51,6 @@ func setup() {
 	level, _ := logrus.ParseLevel(CONF.LogLevel)
 	logger.SetLevel(level)
 
-	if err := redis_engine.Setup(CONF, logger); err != nil {
-		panic(fmt.Sprintf("Failed to setup redis engine: %s", err))
-	}
-
-	if err := auth.Setup(CONF); err != nil {
-		panic(fmt.Sprintf("Failed to setup auth module: %s", err))
-	}
-	if err := throttler.Setup(&CONF.AdminRedis, logger); err != nil {
-		panic(fmt.Sprintf("Failed to setup throttler module: %s", err))
-	}
-	handlers.SetupParamDefaults(CONF)
-	handlers.Setup(logger)
 	for _, poolConf := range CONF.Pool {
 		conn := helper.NewRedisClient(&poolConf, nil)
 		err := conn.Ping().Err()
@@ -73,6 +62,22 @@ func setup() {
 			panic(fmt.Sprintf("Failed to flush db: %s", err))
 		}
 	}
+
+	if err := redis_engine.Setup(CONF, logger); err != nil {
+		panic(fmt.Sprintf("Failed to setup redis engine: %s", err))
+	}
+
+	if err := auth.Setup(CONF); err != nil {
+		panic(fmt.Sprintf("Failed to setup auth module: %s", err))
+	}
+	if err := throttler.Setup(&CONF.AdminRedis, logger); err != nil {
+		panic(fmt.Sprintf("Failed to setup throttler module: %s", err))
+	}
+	if err := push.Setup(CONF, logger); err != nil {
+		panic(fmt.Sprintf("Failed to setup push module: %s", err))
+	}
+	handlers.SetupParamDefaults(CONF)
+	handlers.Setup(logger)
 }
 
 func TestMain(m *testing.M) {

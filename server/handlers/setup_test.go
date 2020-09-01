@@ -2,6 +2,7 @@ package handlers_test
 
 import (
 	"fmt"
+	"github.com/bitleak/lmstfy/push"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -59,6 +60,9 @@ func setup() {
 	}
 	if err := throttler.Setup(&CONF.AdminRedis, logger); err != nil {
 		panic(fmt.Sprintf("Failed to setup throttler module: %s", err))
+	}
+	if err := push.Setup(CONF, logger); err != nil {
+		panic(fmt.Sprintf("Failed to setup push module: %s", err))
 	}
 	handlers.SetupParamDefaults(CONF)
 	handlers.Setup(logger)

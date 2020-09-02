@@ -267,11 +267,11 @@ func (mm *MetaManager) Dump() map[string]map[string][]string {
 }
 
 func (meta *Meta) Validate() error {
-	if meta.Workers <= 0 {
-		return errors.New("workers should be > 0")
+	if meta.Workers <= 0 || meta.Workers > 16 {
+		return errors.New("workers should be between 1 and 16")
 	}
-	if meta.Timeout <= 0 {
-		return errors.New("timeout should be > 0")
+	if meta.Timeout <= 0 || meta.Timeout > 3600 {
+		return errors.New("timeout should be between 1 and 3600")
 	}
 	_, err := url.ParseRequestURI(meta.Endpoint)
 	return err

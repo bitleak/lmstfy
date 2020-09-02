@@ -1,10 +1,10 @@
 ## Pusher API
 
-任务推送管理API针对pool-namespace-queue级别来配置任务推送
+Pusher admin api config the pusher configuration on pool-namespace-queue
 
-> 注意:为了性能考虑，推送配置目前是异步每 3s 更新一次，增加或者删除需要等待异步更新才会生效
+> CAUTION: consideration of the performance, we sync pusher config every 3 seconds instead of fetching the config every time.
 
-### 创建推送
+### Create Pusher
 
 ```
 POST /pusher/:namespace/:queue
@@ -20,7 +20,7 @@ POST /pusher/:namespace/:queue
 }
 ```
 
-`timeout` 的单位是 秒，`workers` 是推送线程个数，`endpoint`是完整的任务推送地址，lmstfy会使用Post方法调用endpoint。请求如下：
+The unit of `timeout` is second and, `workers` is the number of pusher processes，`endpoint`is a full http network address, Lmstfy will Post this endpoint with body, like:
 
 ```$json
 {
@@ -33,7 +33,7 @@ POST /pusher/:namespace/:queue
 }
 ```
 
-### 列出所有配置的推送 
+### List All Pusher
 
 ```
 GET /pushers
@@ -57,7 +57,7 @@ no parameter
 }
 ```
 
-### 列出某个namespace下配置的推送 
+### List All Pusher of a namespace
 
 ```
 GET /pusher/:namespace
@@ -65,7 +65,7 @@ GET /pusher/:namespace
 
 #### Request Query
 
-- pool: 必须, pool名称
+- pool: must, pool name
 
 #### Response Body
 
@@ -81,7 +81,7 @@ GET /pusher/:namespace
 }
 ```
 
-### 列出某个queue配置的推送 
+### List the Pusher of a queue 
 
 ```
 GET /pusher/:namespace/:queue
@@ -89,7 +89,7 @@ GET /pusher/:namespace/:queue
 
 #### Request Query
 
-- pool: 非必须, pool名称，默认为default
+- pool: optional, pool name，default is `default`
 
 #### Response Body
 
@@ -104,7 +104,7 @@ GET /pusher/:namespace/:queue
 ```
 
 
-### 更新推送配置
+### Update a Pusher
 
 ```
 PUT /pusher/:namespace/:queue
@@ -112,7 +112,7 @@ PUT /pusher/:namespace/:queue
 
 #### Request Query
 
-- pool: 非必须, pool名称，默认为default
+- pool: optional, pool name，default is `default`
 
 #### Request Body 
 
@@ -124,7 +124,7 @@ PUT /pusher/:namespace/:queue
 }
 ```
 
-### 删除推送 
+### Delete a Pusher
 
 ```
 DELETE /pusher/:namespace/:queue
@@ -132,6 +132,6 @@ DELETE /pusher/:namespace/:queue
 
 #### Request Query
 
-- pool: 非必须, pool名称，默认为default
+- pool: optional, pool name，default is `default`
 
 

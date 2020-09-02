@@ -52,7 +52,7 @@ func GetQueuePusher(c *gin.Context) {
 // POST /pusher/:namespace/:queue
 func CreateQueuePusher(c *gin.Context) {
 	var meta push.Meta
-	if err := c.Bind(&meta); err != nil {
+	if err := c.BindJSON(&meta); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -74,7 +74,7 @@ func CreateQueuePusher(c *gin.Context) {
 // PUT /pusher/:namespace/:queue
 func UpdateQueuePusher(c *gin.Context) {
 	var newMeta push.Meta
-	if err := c.Bind(&newMeta); err != nil {
+	if err := c.BindJSON(&newMeta); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}

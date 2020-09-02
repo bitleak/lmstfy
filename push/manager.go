@@ -111,6 +111,7 @@ func Setup(conf *config.Config, logger *logrus.Logger) error {
 	if cli.Ping().Err() != nil {
 		return errors.New("can not connect to admin redis")
 	}
+	setupMetrics()
 	_manager, err = NewManger(cli, logger)
 	return err
 }

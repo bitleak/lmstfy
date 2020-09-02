@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
@@ -75,6 +76,7 @@ func (p *Pusher) pollQueue() {
 
 	engine := engine.GetEngine(p.Pool)
 	for {
+		now := time.Now()
 		job, err := engine.ConsumeByPush(p.Namespace, p.Queue, p.Timeout, 3)
 		if err != nil {
 			p.logger.WithFields(logrus.Fields{
@@ -86,6 +88,10 @@ func (p *Pusher) pollQueue() {
 		}
 		select {
 		case p.jobCh <- job:
+			metrics.ConsumeLatencies.WithLabelValues(
+				p.Pool,
+				p.Namespace,
+				p.Queue).Observe(time.Since(now).Seconds() * 1000)
 			/* do nothing */
 		case <-p.stopCh:
 			p.logger.WithFields(logrus.Fields{
@@ -151,6 +157,19 @@ func (p *Pusher) startWorker(num int) {
 }
 
 func (p *Pusher) sendJobToUser(job engine.Job) error {
+	var statusCode int
+	defer func(t time.Time) {
+		metrics.PushLatencies.WithLabelValues(
+			p.Pool,
+			p.Namespace,
+			p.Queue).Observe(time.Since(t).Seconds() * 1000)
+		metrics.PushHTTPCodes.WithLabelValues(
+			p.Pool,
+			p.Namespace,
+			p.Queue,
+			strconv.Itoa(statusCode),
+		).Inc()
+	}(time.Now())
 	jobBytes, _ := job.MarshalText()
 	req, err := http.NewRequest(http.MethodPost, p.Endpoint, bytes.NewReader(jobBytes))
 	if err != nil {
@@ -163,7 +182,8 @@ func (p *Pusher) sendJobToUser(job engine.Job) error {
 	}
 	ioutil.ReadAll(resp.Body)
 	resp.Body.Close()
-	if resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices {
+	statusCode = resp.StatusCode
+	if statusCode >= http.StatusOK && statusCode < http.StatusMultipleChoices {
 		e := engine.GetEngine(p.Pool)
 		return e.Delete(p.Namespace, p.Queue, job.ID())
 	}

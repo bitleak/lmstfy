@@ -166,7 +166,7 @@ func (mm *MetaManager) asyncLoop() {
 				mm.latestMetasVersion = latestMetasVersion
 			}
 		case <-mm.stopCh:
-			mm.logger.Info("meta manager would be exited while the stop signal was received")
+			mm.logger.Info("Meta manager would be exited while the stop signal was received")
 			return
 		}
 	}

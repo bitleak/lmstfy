@@ -222,9 +222,10 @@ func (t *Throttler) Delete(pool, namespace, token string) error {
 	return nil
 }
 
-// Stop would stop the throttler async update goroutine
-func (t *Throttler) Stop() {
+// Shutdown would stop the throttler async update goroutine
+func (t *Throttler) Shutdown() {
 	close(t.stop)
+	t.redisCli.Close()
 }
 
 func (t *Throttler) updateLimiters() {
@@ -255,6 +256,7 @@ func (t *Throttler) asyncLoop() {
 	for {
 		select {
 		case <-t.stop:
+			t.logger.Info("Throttler would be exited while the stop signal was received")
 			return
 		case <-ticker.C:
 			t.updateLimiters()

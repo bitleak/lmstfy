@@ -75,9 +75,14 @@ func (p *Pusher) pollQueue() {
 	}).Info("Start polling queue")
 
 	engine := engine.GetEngine(p.Pool)
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
 	for {
 		now := time.Now()
-		job, err := engine.ConsumeByPush(p.Namespace, p.Queue, p.Timeout, 3)
+		// Use non-blocking(timeout=0) consume to reduce the number of connections.
+		// So we should control the freq of polling by sleep 1 second when the job was nil,
+		// which means the queue maybe idle.
+		job, err := engine.ConsumeByPush(p.Namespace, p.Queue, p.Timeout /* TTR */, 0)
 		if err != nil {
 			p.logger.WithFields(logrus.Fields{
 				"pool":  p.Pool,
@@ -86,20 +91,33 @@ func (p *Pusher) pollQueue() {
 				"error": err,
 			}).Error("Failed to consume")
 		}
-		select {
-		case p.jobCh <- job:
-			metrics.ConsumeLatencies.WithLabelValues(
-				p.Pool,
-				p.Namespace,
-				p.Queue).Observe(time.Since(now).Seconds() * 1000)
-			/* do nothing */
-		case <-p.stopCh:
-			p.logger.WithFields(logrus.Fields{
-				"pool":  p.Pool,
-				"ns":    p.Namespace,
-				"queue": p.Queue,
-			}).Info("Stop polling queue while the stop signal was received")
-			return
+		if job != nil {
+			select {
+			case p.jobCh <- job:
+				metrics.ConsumeLatencies.WithLabelValues(
+					p.Pool,
+					p.Namespace,
+					p.Queue).Observe(time.Since(now).Seconds() * 1000)
+				/* do nothing */
+			case <-p.stopCh:
+				p.logger.WithFields(logrus.Fields{
+					"pool":  p.Pool,
+					"ns":    p.Namespace,
+					"queue": p.Queue,
+				}).Info("Stop polling queue while the stop signal was received")
+				return
+			}
+		} else {
+			select {
+			case <-ticker.C:
+			case <-p.stopCh:
+				p.logger.WithFields(logrus.Fields{
+					"pool":  p.Pool,
+					"ns":    p.Namespace,
+					"queue": p.Queue,
+				}).Info("Shutdown polling queue while the stop signal was received")
+				return
+			}
 		}
 	}
 }

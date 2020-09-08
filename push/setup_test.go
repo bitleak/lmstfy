@@ -2,9 +2,10 @@ package push
 
 import (
 	"fmt"
-	"github.com/bitleak/lmstfy/helper"
 	"os"
 	"testing"
+
+	"github.com/bitleak/lmstfy/helper"
 
 	"github.com/sirupsen/logrus"
 
@@ -56,7 +57,7 @@ func setup() {
 }
 
 func teardown() {
-	Close()
+	Shutdown()
 }
 
 func TestMain(m *testing.M) {

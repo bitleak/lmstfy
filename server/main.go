@@ -214,6 +214,8 @@ func main() {
 	removePidFile()
 	adminSrv.Close() // Admin server does not need to be stopped gracefully
 	apiSrv.Shutdown(context.Background())
-	push.Close()
+
+	push.Shutdown()
+	throttler.GetThrottler().Shutdown()
 	errorLogger.Infof("[%d] Bye bye", os.Getpid())
 }

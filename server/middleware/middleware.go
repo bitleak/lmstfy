@@ -43,7 +43,7 @@ func AccessLogMiddleware(logger *logrus.Logger) gin.HandlerFunc {
 		// Process request
 		c.Next()
 
-		// Stop timer
+		// Shutdown timer
 		end := time.Now()
 		latency := end.Sub(start)
 

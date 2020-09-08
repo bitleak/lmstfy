@@ -86,3 +86,11 @@ func Register(kind, pool string, e Engine) {
 		engines[kind] = p
 	}
 }
+
+func Shutdown() {
+	for _, enginePool := range engines {
+		for _, engine := range enginePool {
+			engine.Shutdown()
+		}
+	}
+}

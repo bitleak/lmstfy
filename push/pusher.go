@@ -98,7 +98,7 @@ func (p *Pusher) pollQueue() {
 				"pool":  p.Pool,
 				"ns":    p.Namespace,
 				"queue": p.Queue,
-			}).Info("Stop polling queue while the stop signal was received")
+			}).Info("Shutdown polling queue while the stop signal was received")
 			return
 		}
 	}
@@ -142,7 +142,7 @@ func (p *Pusher) startWorker(num int) {
 				"ns":          p.Namespace,
 				"queue":       p.Queue,
 				"process_num": num,
-			}).Info("Stop the worker while the restart signal was received")
+			}).Info("Shutdown the worker while the restart signal was received")
 			return
 		case <-p.stopCh:
 			p.logger.WithFields(logrus.Fields{
@@ -150,7 +150,7 @@ func (p *Pusher) startWorker(num int) {
 				"ns":          p.Namespace,
 				"queue":       p.Queue,
 				"process_num": num,
-			}).Info("Stop the worker while the stop signal was received")
+			}).Info("Shutdown the worker while the stop signal was received")
 			return
 		}
 	}
@@ -199,7 +199,7 @@ func (p *Pusher) stop() error {
 		"pool":  p.Pool,
 		"ns":    p.Namespace,
 		"queue": p.Queue,
-	}).Info("Stop the pusher")
+	}).Info("Shutdown the pusher")
 	return nil
 }
 

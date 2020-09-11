@@ -9,7 +9,7 @@ import (
 )
 
 type PerformanceMetrics struct {
-	Latencies  *prometheus.SummaryVec
+	Latencies  *prometheus.HistogramVec
 	HTTPCodes  *prometheus.CounterVec
 	RateLimits *prometheus.CounterVec
 }
@@ -18,13 +18,13 @@ var metrics *PerformanceMetrics
 
 func setup_metrics() {
 	metrics = &PerformanceMetrics{}
-	latencies := prometheus.NewSummaryVec(
-		prometheus.SummaryOpts{
+	latencies := prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
 			Namespace:  "infra",
 			Subsystem:  "lmstfy_http",
 			Name:       "latency_milliseconds",
 			Help:       "rest api latencies",
-			Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.95: 0.001},
+            Buckets:   prometheus.ExponentialBuckets(15, 2.5, 9),
 		},
 		[]string{"pool", "namespace", "api"},
 	)

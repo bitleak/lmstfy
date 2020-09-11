@@ -25,8 +25,8 @@ type Metrics struct {
 	deadletterRespawnJobs *prometheus.CounterVec
 	publishQueueJobs      *prometheus.CounterVec
 	consumeQueueJobs      *prometheus.CounterVec
-	jobElapsedMS          *prometheus.SummaryVec
-	jobAckElapsedMS       *prometheus.SummaryVec
+	jobElapsedMS          *prometheus.HistogramVec
+	jobAckElapsedMS       *prometheus.HistogramVec
 
 	timerSizes      *prometheus.GaugeVec
 	queueSizes      *prometheus.GaugeVec
@@ -53,7 +53,8 @@ const (
 func setupMetrics() {
 	cv := newCounterVecHelper
 	gv := newGaugeVecHelper
-	sv := newSummaryHelper
+	//sv := newSummaryHelper
+    hv := newHistogramHelper
 	metrics = &Metrics{
 		publishJobs:           cv("publish_jobs"),
 		consumeJobs:           cv("consume_jobs"),
@@ -69,8 +70,8 @@ func setupMetrics() {
 		deadletterRespawnJobs: cv("deadletter_respawn_jobs"),
 		publishQueueJobs:      cv("publish_queue_jobs", "namespace", "queue"),
 		consumeQueueJobs:      cv("consume_queue_jobs", "namespace", "queue"),
-		jobElapsedMS:          sv("job_elapsed_ms", "namespace", "queue"),
-		jobAckElapsedMS:       sv("job_ack_elapsed_ms", "namespace", "queue"),
+		jobElapsedMS:          hv("job_elapsed_ms", "namespace", "queue"),
+		jobAckElapsedMS:       hv("job_ack_elapsed_ms", "namespace", "queue"),
 
 		timerSizes:      gv("timer_sizes"),
 		queueSizes:      gv("queue_sizes", "namespace", "queue"),
@@ -121,6 +122,22 @@ func newSummaryHelper(name string, labels ...string) *prometheus.SummaryVec {
 	prometheus.MustRegister(summary)
 	return summary
 }
+
+func newHistogramHelper(name string, labels ...string) *prometheus.HistogramVec {
+    labels = append([]string{"pool"}, labels...)
+    opts := prometheus.HistogramOpts{}
+    opts.Namespace = Namespace
+    opts.Subsystem = Subsystem
+    opts.Name = name
+    opts.Help = name
+    opts.Buckets = prometheus.ExponentialBuckets(15, 3.5, 7)
+    histogram := prometheus.NewHistogramVec(opts, labels)
+    prometheus.MustRegister(histogram)
+    return histogram
+}
+
+
+
 
 type SizeProvider interface {
 	Size() (size int64, err error)

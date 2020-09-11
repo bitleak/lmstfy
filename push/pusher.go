@@ -14,7 +14,6 @@ import (
 
 	"github.com/bitleak/lmstfy/engine"
 )
-qq
 type Pusher struct {
 	*Meta
 	Pool       string

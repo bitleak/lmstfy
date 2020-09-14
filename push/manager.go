@@ -120,7 +120,7 @@ func GetManager() *Manager {
 	return _manager
 }
 
-func Close() {
+func Shutdown() {
 	_manager.Close()
 	_manager.pushers.Range(func(key, value interface{}) bool {
 		value.(*Pusher).stop()

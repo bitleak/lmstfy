@@ -7,7 +7,7 @@ env:
   - GO111MODULE=on
 
 go:
-  - 1.12.x
+  - 1.13.x
 
 cache:
   directories:
@@ -16,7 +16,7 @@ cache:
     - /home/travis/.cache/go-build
 
 stages:
-  - lint   
+  - lint
   - build
   - test
   - coverage
@@ -27,7 +27,7 @@ jobs:
     - stage: lint
       name: lint the go files
       script:
-        - make lint 
+        - make lint
 
     - stage: build
       name: Build binary

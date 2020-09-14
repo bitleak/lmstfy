@@ -53,7 +53,6 @@ const (
 func setupMetrics() {
 	cv := newCounterVecHelper
 	gv := newGaugeVecHelper
-	//sv := newSummaryHelper
     hv := newHistogramHelper
 	metrics = &Metrics{
 		publishJobs:           cv("publish_jobs"),

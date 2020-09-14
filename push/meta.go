@@ -269,7 +269,7 @@ func (mm *MetaManager) Dump() map[string]map[string][]string {
 
 func (meta *Meta) Validate() error {
 	if meta.Workers <= 0 || meta.Workers > maxWorkerNum {
-		return errors.New(fmt.Sprintf("workers should be between 1 and %d",maxWorkerNum))
+		return fmt.Errorf("workers should be between 1 and %d", maxWorkerNum)
 	}
 	if meta.Timeout <= 0 || meta.Timeout > 3600 {
 		return errors.New("timeout should be between 1 and 3600")

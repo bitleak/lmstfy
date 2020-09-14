@@ -130,7 +130,7 @@ func (t *Throttler) IsReachRateLimit(pool, namespace, token string, isRead bool)
 	if limiter == nil {
 		return false, nil
 	}
-	if (isRead && limiter.Read <= 0) && (!isRead && limiter.Write <= 0) {
+	if (isRead && limiter.Read <= 0) || (!isRead && limiter.Write <= 0) {
 		return false, nil
 	}
 

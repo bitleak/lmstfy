@@ -29,7 +29,7 @@ return v
 `
 	throttleDecrLuaScript = `
 local key = KEYS[1]
-local exists = redis.call("decr", key)
+local exists = redis.call("exists", key)
 if exists == 1 then
 	return redis.call('decr', key)
 end

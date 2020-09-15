@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/bitleak/lmstfy/auth"
 	"github.com/bitleak/lmstfy/config"
@@ -198,7 +199,7 @@ func main() {
 	if err := auth.Setup(conf); err != nil {
 		panic(fmt.Sprintf("Failed to setup auth module: %s", err))
 	}
-	if err := push.Setup(conf, errorLogger); err != nil {
+	if err := push.Setup(conf, 3*time.Second, errorLogger); err != nil {
 		panic(fmt.Sprintf("Failed to setup push module: %s", err))
 	}
 	if conf.EnableAccessLog {

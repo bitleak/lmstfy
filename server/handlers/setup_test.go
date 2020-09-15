@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/bitleak/lmstfy/auth"
 	"github.com/bitleak/lmstfy/config"
@@ -83,7 +84,7 @@ func setup() {
 	if err := throttler.Setup(&CONF.AdminRedis, logger); err != nil {
 		panic(fmt.Sprintf("Failed to setup throttler module: %s", err))
 	}
-	if err := push.Setup(CONF, logger); err != nil {
+	if err := push.Setup(CONF, 100*time.Millisecond, logger); err != nil {
 		panic(fmt.Sprintf("Failed to setup push module: %s", err))
 	}
 	handlers.SetupParamDefaults(CONF)

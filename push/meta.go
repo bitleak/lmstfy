@@ -37,6 +37,7 @@ type MetaManager struct {
 	metas              map[string]*Meta
 	logger             *logrus.Logger
 	latestMetasVersion int64
+	updateInterval     time.Duration
 
 	// callback functions
 	onCreated onCreatedFunc
@@ -48,6 +49,7 @@ type MetaManager struct {
 
 func newMetaManager(
 	redisCli *redis.Client,
+	updateInterval time.Duration,
 	logger *logrus.Logger,
 	onCreated onCreatedFunc,
 	onUpdated onUpdatedFunc,
@@ -58,6 +60,7 @@ func newMetaManager(
 	}
 	mm := &MetaManager{
 		redisCli:           redisCli,
+		updateInterval:     updateInterval,
 		logger:             logger,
 		onCreated:          onCreated,
 		onUpdated:          onUpdated,
@@ -146,7 +149,7 @@ func (mm *MetaManager) asyncLoop() {
 			}).Error("Panic in meta manager")
 		}
 	}()
-	ticker := time.NewTicker(3 * time.Second)
+	ticker := time.NewTicker(mm.updateInterval)
 	mm.updateMetas()
 	for {
 		select {

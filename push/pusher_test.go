@@ -37,7 +37,7 @@ func TestPusher(t *testing.T) {
 	stopServer := make(chan struct{})
 	sentJobs := make(map[string]bool)
 	go func() {
-		tick := time.NewTicker(1 * time.Second)
+		tick := time.NewTicker(time.Second)
 		for {
 			select {
 			case <-tick.C:

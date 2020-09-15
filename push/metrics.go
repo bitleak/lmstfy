@@ -3,8 +3,8 @@ package push
 import "github.com/prometheus/client_golang/prometheus"
 
 type PerformanceMetrics struct {
-	ConsumeLatencies *prometheus.SummaryVec
-	PushLatencies    *prometheus.SummaryVec
+	ConsumeLatencies *prometheus.HistogramVec
+	PushLatencies    *prometheus.HistogramVec
 	PushHTTPCodes    *prometheus.CounterVec
 }
 
@@ -12,24 +12,24 @@ var metrics *PerformanceMetrics
 
 func setupMetrics() {
 	metrics = &PerformanceMetrics{}
-	consumeLatencies := prometheus.NewSummaryVec(
-		prometheus.SummaryOpts{
-			Namespace:  "infra",
-			Subsystem:  "lmstfy_pusher",
-			Name:       "consume_latency_milliseconds",
-			Help:       "latencies",
-			Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.95: 0.001},
+	consumeLatencies := prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: "infra",
+			Subsystem: "lmstfy_pusher",
+			Name:      "consume_latency_milliseconds",
+			Help:      "latencies",
+			Buckets:   prometheus.ExponentialBuckets(8, 2.5, 8),
 		},
 		[]string{"pool", "namespace", "queue"},
 	)
 
-	pushLatencies := prometheus.NewSummaryVec(
-		prometheus.SummaryOpts{
-			Namespace:  "infra",
-			Subsystem:  "lmstfy_pusher",
-			Name:       "push_latency_milliseconds",
-			Help:       "push http latencies",
-			Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.95: 0.001},
+	pushLatencies := prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: "infra",
+			Subsystem: "lmstfy_pusher",
+			Name:      "push_latency_milliseconds",
+			Help:      "push http latencies",
+			Buckets:   prometheus.ExponentialBuckets(50, 2.5, 9),
 		},
 		[]string{"pool", "namespace", "queue"},
 	)

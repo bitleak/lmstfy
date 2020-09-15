@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"strconv"
 	"sync"
@@ -13,7 +14,6 @@ import (
 
 	"github.com/bitleak/lmstfy/engine"
 )
-
 type Pusher struct {
 	*Meta
 	Pool       string
@@ -37,10 +37,10 @@ func newPusher(pool, ns, queue string, meta *Meta, logger *logrus.Logger) *Pushe
 		Queue:     queue,
 		logger:    logger,
 
-		jobCh:           make(chan engine.Job),
+		jobCh:           make(chan engine.Job, maxWorkerNum),
 		stopCh:          make(chan struct{}),
 		restartWorkerCh: make(chan struct{}),
-		httpClient:      &http.Client{Timeout: time.Duration(meta.Timeout) * time.Second},
+		httpClient:      newHttpClient(meta),
 	}
 	go pusher.pollQueue()
 	return pusher
@@ -91,7 +91,7 @@ func (p *Pusher) pollQueue() {
 			metrics.ConsumeLatencies.WithLabelValues(
 				p.Pool,
 				p.Namespace,
-				p.Queue).Observe(time.Since(now).Seconds() * 1000)
+				p.Queue).Observe(float64(time.Since(now).Milliseconds()))
 			/* do nothing */
 		case <-p.stopCh:
 			p.logger.WithFields(logrus.Fields{
@@ -133,7 +133,7 @@ func (p *Pusher) startWorker(num int) {
 						"queue":  p.Queue,
 						"job_id": job.ID(),
 						"err":    err.Error(),
-					}).Warn("Failed to send the data to user endpoint")
+					}).Debug("Failed to send the data to user endpoint")
 				}
 			}
 		case <-p.restartWorkerCh:
@@ -162,7 +162,8 @@ func (p *Pusher) sendJobToUser(job engine.Job) error {
 		metrics.PushLatencies.WithLabelValues(
 			p.Pool,
 			p.Namespace,
-			p.Queue).Observe(time.Since(t).Seconds() * 1000)
+			p.Queue).Observe(float64(time.Since(t).Milliseconds()))
+
 		metrics.PushHTTPCodes.WithLabelValues(
 			p.Pool,
 			p.Namespace,
@@ -205,8 +206,8 @@ func (p *Pusher) stop() error {
 
 func (p *Pusher) restart() error {
 	close(p.restartWorkerCh)
-	p.restartWorkerCh = make(chan struct{})
 	p.workerWg.Wait()
+	p.restartWorkerCh = make(chan struct{})
 	p.start()
 	p.logger.WithFields(logrus.Fields{
 		"pool":  p.Pool,
@@ -214,4 +215,24 @@ func (p *Pusher) restart() error {
 		"queue": p.Queue,
 	}).Info("Restart the pusher")
 	return nil
+}
+func newHttpClient(meta *Meta) *http.Client {
+	transport := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 20 * time.Second,
+		}).DialContext,
+		MaxIdleConns:        50,
+		MaxIdleConnsPerHost: 20,
+		MaxConnsPerHost:     0,
+		IdleConnTimeout:     60 * time.Second,
+		TLSHandshakeTimeout: 10 * time.Second,
+	}
+	client := &http.Client{
+		Transport: transport,
+		Timeout:   time.Duration(meta.Timeout) * time.Second,
+	}
+
+	return client
 }

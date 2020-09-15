@@ -20,11 +20,11 @@ func setup_metrics() {
 	metrics = &PerformanceMetrics{}
 	latencies := prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Namespace:  "infra",
-			Subsystem:  "lmstfy_http",
-			Name:       "latency_milliseconds",
-			Help:       "rest api latencies",
-            Buckets:   prometheus.ExponentialBuckets(15, 2.5, 9),
+			Namespace: "infra",
+			Subsystem: "lmstfy_http",
+			Name:      "latency_milliseconds",
+			Help:      "rest api latencies",
+			Buckets:   prometheus.ExponentialBuckets(15, 2.5, 9),
 		},
 		[]string{"pool", "namespace", "api"},
 	)

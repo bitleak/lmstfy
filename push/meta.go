@@ -207,8 +207,7 @@ func (mm *MetaManager) Create(pool, ns, queue string, meta *Meta) error {
 	if !ok {
 		return ErrMetaKeyExists
 	}
-	mm.redisCli.Incr(redisMetasVersionKey)
-	return nil
+	return mm.redisCli.Incr(redisMetasVersionKey).Err()
 }
 
 func (mm *MetaManager) Update(pool, ns, queue string, meta *Meta) error {
@@ -218,8 +217,7 @@ func (mm *MetaManager) Update(pool, ns, queue string, meta *Meta) error {
 	if err != nil {
 		return err
 	}
-	mm.redisCli.Incr(redisMetasVersionKey)
-	return nil
+	return mm.redisCli.Incr(redisMetasVersionKey).Err()
 }
 
 func (mm *MetaManager) Delete(pool, ns, queue string) error {
@@ -231,8 +229,7 @@ func (mm *MetaManager) Delete(pool, ns, queue string) error {
 	if cnt == 0 {
 		return ErrMetaKeyNotFound
 	}
-	mm.redisCli.Incr(redisMetasVersionKey)
-	return nil
+	return mm.redisCli.Incr(redisMetasVersionKey).Err()
 }
 
 func (mm *MetaManager) ListPusherByNamespace(wantedPool, wantedNamespace string) map[string]Meta {

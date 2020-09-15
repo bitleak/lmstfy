@@ -92,7 +92,7 @@ func TestUpdateQueuePusher(t *testing.T) {
 		t.Logf(resp.Body.String())
 		t.Fatal("Failed to update queue pusher")
 	}
-	time.Sleep(7 * time.Second)
+	time.Sleep(12 * time.Second)
 	meta := push.GetManager().Get("default", "ns-pusher", "queue-pusher")
 	if meta == nil || meta.Endpoint != "http://test-enpoint-new" || meta.Timeout != 1 || meta.Workers != 3 {
 		t.Fatal("Mismatch meta in update queue pusher")
@@ -112,7 +112,7 @@ func TestDeleteQueuePusher(t *testing.T) {
 		t.Logf(resp.Body.String())
 		t.Fatal("Failed to list namespace pusher")
 	}
-	time.Sleep(7 * time.Second)
+	time.Sleep(12 * time.Second)
 	meta := push.GetManager().Get("default", "ns-pusher", "queue-pusher")
 	if meta != nil {
 		t.Fatal("Mismatch meta in delete queue pusher")

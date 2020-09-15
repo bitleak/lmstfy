@@ -51,6 +51,16 @@ func setup() {
 	level, _ := logrus.ParseLevel(CONF.LogLevel)
 	logger.SetLevel(level)
 
+	conn := helper.NewRedisClient(&CONF.AdminRedis, nil)
+	err := conn.Ping().Err()
+	if err != nil {
+		panic(fmt.Sprintf("Failed to ping: %s", err))
+	}
+	err = conn.FlushDB().Err()
+	if err != nil {
+		panic(fmt.Sprintf("Failed to flush db: %s", err))
+	}
+
 	for _, poolConf := range CONF.Pool {
 		conn := helper.NewRedisClient(&poolConf, nil)
 		err := conn.Ping().Err()

@@ -85,7 +85,7 @@ func TestPusher(t *testing.T) {
 		server.Shutdown(context.Background())
 	}
 	if len(gotJobs) != len(sentJobs) {
-		t.Fatalf("Mismatch job count, expected: %d, but got %d", 10, len(gotJobs))
+		t.Fatalf("Mismatch job count, expected: %d, but got %d", len(sentJobs), len(gotJobs))
 	}
 	size, err := engine.GetEngine("default").Size("test-pusher-ns", "test-pusher-queue")
 	if err != nil {

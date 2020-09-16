@@ -91,6 +91,9 @@ func UpdatePushGroup(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "the pusher was not found"})
 		return
 	}
+	if len(newMeta.Queues) > 0 {
+		meta.Queues = newMeta.Queues
+	}
 	if newMeta.Endpoint != "" {
 		meta.Endpoint = newMeta.Endpoint
 	}

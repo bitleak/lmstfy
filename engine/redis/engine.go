@@ -124,11 +124,11 @@ func (e *Engine) Consume(namespace, queue string, ttrSecond, timeoutSecond uint3
 	return e.consume(namespace, queue, ttrSecond, timeoutSecond, false)
 }
 
-func (e *Engine) ConsumeByPush(namespace, queue string, ttrSecond, timeoutSecond uint32) (job engine.Job, err error) {
+func (e *Engine) ConsumeWithFrozenTries(namespace, queue string, ttrSecond, timeoutSecond uint32) (job engine.Job, err error) {
 	return e.consume(namespace, queue, ttrSecond, timeoutSecond, true)
 }
 
-func (e *Engine) consume(namespace, queue string, ttrSecond, timeoutSecond uint32, noConsume bool) (job engine.Job, err error) {
+func (e *Engine) consume(namespace, queue string, ttrSecond, timeoutSecond uint32, freezeTries bool) (job engine.Job, err error) {
 	defer func() {
 		if job != nil {
 			metrics.consumeJobs.WithLabelValues(e.redis.Name).Inc()
@@ -142,8 +142,8 @@ func (e *Engine) consume(namespace, queue string, ttrSecond, timeoutSecond uint3
 			jobID string
 			tries uint16
 		)
-		if noConsume {
-			jobID, tries, err = q.PollWithoutConsumeTries(timeoutSecond, ttrSecond)
+		if freezeTries {
+			jobID, tries, err = q.PollWithFrozenTries(timeoutSecond, ttrSecond)
 		} else {
 			jobID, tries, err = q.Poll(timeoutSecond, ttrSecond)
 		}
@@ -190,7 +190,7 @@ func (e *Engine) ConsumeMulti(namespace string, queues []string, ttrSecond, time
 	return e.consumeMulti(namespace, queues, ttrSecond, timeoutSecond, false)
 }
 
-func (e *Engine) ConsumeMultiByPush(namespace string, queues []string, ttrSecond, timeoutSecond uint32) (job engine.Job, err error) {
+func (e *Engine) ConsumeMultiWithFrozenTries(namespace string, queues []string, ttrSecond, timeoutSecond uint32) (job engine.Job, err error) {
 	return e.consumeMulti(namespace, queues, ttrSecond, timeoutSecond, true)
 }
 

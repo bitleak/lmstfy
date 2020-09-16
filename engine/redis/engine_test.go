@@ -77,7 +77,7 @@ func TestEngine_NoConsumeTries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to publish: %s", err)
 	}
-	job, err := e.ConsumeByPush("ns-engine", "q2", 3, 3)
+	job, err := e.ConsumeWithFrozenTries("ns-engine", "q2", 3, 3)
 	if err != nil {
 		t.Fatalf("Failed to consume: %s", err)
 	}
@@ -94,7 +94,7 @@ func TestEngine_NoConsumeTries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to publish: %s", err)
 	}
-	job, err = e.ConsumeByPush("ns-engine", "q2", 3, 0)
+	job, err = e.ConsumeWithFrozenTries("ns-engine", "q2", 3, 0)
 	if err != nil {
 		t.Fatalf("Failed to consume: %s", err)
 	}
@@ -186,7 +186,7 @@ func TestEngine_ConsumeMultiWithoutConsumeTries(t *testing.T) {
 		t.Fatalf("Failed to publish: %s", err)
 	}
 
-	job2, err := e.ConsumeMultiByPush("ns-engine", []string{"q4", "q5"}, 5, 5)
+	job2, err := e.ConsumeMultiWithFrozenTries("ns-engine", []string{"q4", "q5"}, 5, 5)
 	if err != nil {
 		t.Fatalf("Failed to consume from multiple queues: %s", err)
 	}
@@ -197,7 +197,7 @@ func TestEngine_ConsumeMultiWithoutConsumeTries(t *testing.T) {
 		t.Error("Mismatched job data")
 	}
 
-	job1, err := e.ConsumeMultiByPush("ns-engine", []string{"q4", "q5"}, 5, 5)
+	job1, err := e.ConsumeMultiWithFrozenTries("ns-engine", []string{"q4", "q5"}, 5, 5)
 	if err != nil {
 		t.Fatalf("Failed to consume from multiple queues: %s", err)
 	}

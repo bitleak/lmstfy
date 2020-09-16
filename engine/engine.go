@@ -11,6 +11,7 @@ type Engine interface {
 	Consume(namespace, queue string, ttrSecond, timeoutSecond uint32) (job Job, err error)
 	ConsumeByPush(namespace, queue string, ttrSecond, timeoutSecond uint32) (job Job, err error)
 	ConsumeMulti(namespace string, queues []string, ttrSecond, timeoutSecond uint32) (job Job, err error)
+	ConsumeMultiByPush(namespace string, queues []string, ttrSecond, timeoutSecond uint32) (job Job, err error)
 	BatchConsume(namespace, queue string, count, ttrSecond, timeoutSecond uint32) (jobs []Job, err error)
 	Delete(namespace, queue, jobID string) error
 	Peek(namespace, queue, optionalJobID string) (job Job, err error)

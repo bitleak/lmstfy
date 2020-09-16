@@ -1,7 +1,7 @@
 package push
 
 import (
-	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -14,8 +14,8 @@ import (
 
 type Manager struct {
 	*MetaManager
-	pushers sync.Map
-	logger  *logrus.Logger
+	pushGroups sync.Map
+	logger     *logrus.Logger
 }
 
 func NewManger(redisCli *redis.Client, updateInterval time.Duration, logger *logrus.Logger) (*Manager, error) {
@@ -35,34 +35,34 @@ func NewManger(redisCli *redis.Client, updateInterval time.Duration, logger *log
 	return manager, nil
 }
 
-func (m *Manager) onCreated(pool, ns, queue string, meta *Meta) {
-	key := m.buildKey(pool, ns, queue)
-	if v, ok := m.pushers.Load(key); ok {
+func (m *Manager) onCreated(pool, ns, group string, meta *Meta) {
+	key := m.buildKey(pool, ns, group)
+	if v, ok := m.pushGroups.Load(key); ok {
 		v.(*Pusher).stop()
-		m.pushers.Delete(key)
+		m.pushGroups.Delete(key)
 	}
-	pusher := newPusher(pool, ns, queue, meta, m.logger)
+	pusher := newPusher(pool, ns, group, meta, m.logger)
 	if err := pusher.start(); err != nil {
 		m.logger.WithFields(logrus.Fields{
 			"pool":  pool,
 			"ns":    ns,
-			"queue": queue,
+			"group": group,
 			"meta":  meta,
-		}).Error("Failed to start the pusher")
+		}).Error("Failed to start the push group")
 		return
 	}
 	m.logger.WithFields(logrus.Fields{
 		"ns":    ns,
-		"queue": queue,
-	}).Info("Success to create the new pusher")
-	m.pushers.Store(key, pusher)
+		"group": group,
+	}).Info("Success to create the push group")
+	m.pushGroups.Store(key, pusher)
 }
 
-func (m *Manager) onUpdated(pool, ns, queue string, newMeta *Meta) {
-	key := m.buildKey(pool, ns, queue)
-	v, ok := m.pushers.Load(key)
+func (m *Manager) onUpdated(pool, ns, group string, newMeta *Meta) {
+	key := m.buildKey(pool, ns, group)
+	v, ok := m.pushGroups.Load(key)
 	if !ok {
-		m.onCreated(pool, ns, queue, newMeta)
+		m.onCreated(pool, ns, group, newMeta)
 		return
 	}
 	pusher := v.(*Pusher)
@@ -71,36 +71,36 @@ func (m *Manager) onUpdated(pool, ns, queue string, newMeta *Meta) {
 		m.logger.WithFields(logrus.Fields{
 			"pool":  pool,
 			"ns":    ns,
-			"queue": queue,
+			"group": group,
 			"meta":  newMeta,
-		}).Error("Failed to restart the Pusher")
+		}).Error("Failed to restart the push group")
 		return
 	}
 	m.logger.WithFields(logrus.Fields{
 		"pool":  pool,
 		"ns":    ns,
-		"queue": queue,
-	}).Info("Success to update the pusher")
-	m.pushers.Store(key, pusher)
+		"group": group,
+	}).Info("Success to update the push group")
+	m.pushGroups.Store(key, pusher)
 }
 
-func (m *Manager) onDeleted(pool, ns, queue string) {
-	key := m.buildKey(pool, ns, queue)
-	if v, ok := m.pushers.Load(key); ok {
+func (m *Manager) onDeleted(pool, ns, group string) {
+	key := m.buildKey(pool, ns, group)
+	if v, ok := m.pushGroups.Load(key); ok {
 		if err := v.(*Pusher).stop(); err != nil {
 			m.logger.WithFields(logrus.Fields{
 				"pool":  pool,
 				"ns":    ns,
-				"queue": queue,
-			}).Error("Failed to stop the Pusher")
+				"group": group,
+			}).Error("Failed to stop the push group")
 			return
 		}
 		m.logger.WithFields(logrus.Fields{
 			"pool":  pool,
 			"ns":    ns,
-			"queue": queue,
-		}).Info("Success to delete the pusher")
-		m.pushers.Delete(key)
+			"group": group,
+		}).Info("Success to delete the push group")
+		m.pushGroups.Delete(key)
 	}
 }
 
@@ -121,7 +121,7 @@ func Setup(conf *config.Config, updateInterval time.Duration, logger *logrus.Log
 	redisConf := conf.AdminRedis
 	cli := helper.NewRedisClient(&redisConf, nil)
 	if cli.Ping().Err() != nil {
-		return errors.New("can not connect to admin redis")
+		return fmt.Errorf("can not connect to admin redis: %s", err.Error())
 	}
 	setupMetrics()
 	_manager, err = NewManger(cli, updateInterval, logger)
@@ -134,7 +134,7 @@ func GetManager() *Manager {
 
 func Shutdown() {
 	_manager.Close()
-	_manager.pushers.Range(func(key, value interface{}) bool {
+	_manager.pushGroups.Range(func(key, value interface{}) bool {
 		value.(*Pusher).stop()
 		return true
 	})

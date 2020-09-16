@@ -55,6 +55,14 @@ func (e *Engine) ConsumeMulti(namespace string, queues []string, ttrSecond, time
 	return e.newEngine.ConsumeMulti(namespace, queues, ttrSecond, timeoutSecond)
 }
 
+func (e *Engine) ConsumeMultiByPush(namespace string, queues []string, ttrSecond, timeoutSecond uint32) (job engine.Job, err error) {
+	job, err = e.oldEngine.ConsumeMultiByPush(namespace, queues, ttrSecond, 1)
+	if job != nil {
+		return // During migration, we always prefer the old engine's data as we need to drain it
+	}
+	return e.newEngine.ConsumeMultiByPush(namespace, queues, ttrSecond, timeoutSecond)
+}
+
 func (e *Engine) Delete(namespace, queue, jobID string) error {
 	err := e.oldEngine.Delete(namespace, queue, jobID)
 	if err != nil {

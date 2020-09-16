@@ -14,11 +14,12 @@ import (
 
 	"github.com/bitleak/lmstfy/engine"
 )
+
 type Pusher struct {
 	*Meta
 	Pool       string
 	Namespace  string
-	Queue      string
+	Group      string
 	logger     *logrus.Logger
 	httpClient *http.Client
 
@@ -29,12 +30,12 @@ type Pusher struct {
 	restartWorkerCh chan struct{}
 }
 
-func newPusher(pool, ns, queue string, meta *Meta, logger *logrus.Logger) *Pusher {
+func newPusher(pool, ns, group string, meta *Meta, logger *logrus.Logger) *Pusher {
 	pusher := &Pusher{
 		Meta:      meta,
 		Pool:      pool,
 		Namespace: ns,
-		Queue:     queue,
+		Group:     group,
 		logger:    logger,
 
 		jobCh:           make(chan engine.Job, maxWorkerNum),
@@ -42,7 +43,7 @@ func newPusher(pool, ns, queue string, meta *Meta, logger *logrus.Logger) *Pushe
 		restartWorkerCh: make(chan struct{}),
 		httpClient:      newHttpClient(meta),
 	}
-	go pusher.pollQueue()
+	go pusher.pollQueues()
 	return pusher
 }
 
@@ -54,15 +55,15 @@ func (p *Pusher) start() error {
 	return nil
 }
 
-func (p *Pusher) pollQueue() {
+func (p *Pusher) pollQueues() {
 	defer func() {
 		if err := recover(); err != nil {
 			p.logger.WithFields(logrus.Fields{
 				"pool":  p.Pool,
 				"ns":    p.Namespace,
-				"queue": p.Queue,
+				"group": p.Group,
 				"error": err,
-			}).Error("Panic in poll queue")
+			}).Error("Panic in poll queues")
 		}
 	}()
 	p.consumerWg.Add(1)
@@ -71,18 +72,18 @@ func (p *Pusher) pollQueue() {
 	p.logger.WithFields(logrus.Fields{
 		"pool":  p.Pool,
 		"ns":    p.Namespace,
-		"queue": p.Queue,
-	}).Info("Start polling queue")
+		"group": p.Group,
+	}).Info("Start polling queues")
 
 	engine := engine.GetEngine(p.Pool)
 	for {
 		now := time.Now()
-		job, err := engine.ConsumeByPush(p.Namespace, p.Queue, p.Timeout, 3)
+		job, err := engine.ConsumeMultiByPush(p.Namespace, p.Meta.Queues, p.Timeout, 3)
 		if err != nil {
 			p.logger.WithFields(logrus.Fields{
 				"pool":  p.Pool,
 				"ns":    p.Namespace,
-				"queue": p.Queue,
+				"group": p.Group,
 				"error": err,
 			}).Error("Failed to consume")
 		}
@@ -91,14 +92,14 @@ func (p *Pusher) pollQueue() {
 			metrics.ConsumeLatencies.WithLabelValues(
 				p.Pool,
 				p.Namespace,
-				p.Queue).Observe(float64(time.Since(now).Milliseconds()))
+				p.Group).Observe(float64(time.Since(now).Milliseconds()))
 			/* do nothing */
 		case <-p.stopCh:
 			p.logger.WithFields(logrus.Fields{
 				"pool":  p.Pool,
 				"ns":    p.Namespace,
-				"queue": p.Queue,
-			}).Info("Shutdown polling queue while the stop signal was received")
+				"group": p.Group,
+			}).Info("Shutdown polling queues while the stop signal was received")
 			return
 		}
 	}
@@ -110,7 +111,7 @@ func (p *Pusher) startWorker(num int) {
 			p.logger.WithFields(logrus.Fields{
 				"pool":  p.Pool,
 				"ns":    p.Namespace,
-				"queue": p.Queue,
+				"group": p.Group,
 				"error": err,
 			}).Error("Panic in worker")
 		}
@@ -119,7 +120,7 @@ func (p *Pusher) startWorker(num int) {
 	p.logger.WithFields(logrus.Fields{
 		"pool":        p.Pool,
 		"ns":          p.Namespace,
-		"queue":       p.Queue,
+		"group":       p.Group,
 		"process_num": num,
 	}).Info("Start the worker")
 	for {
@@ -130,7 +131,7 @@ func (p *Pusher) startWorker(num int) {
 					p.logger.WithFields(logrus.Fields{
 						"pool":   p.Pool,
 						"ns":     p.Namespace,
-						"queue":  p.Queue,
+						"group":  p.Group,
 						"job_id": job.ID(),
 						"err":    err.Error(),
 					}).Debug("Failed to send the data to user endpoint")
@@ -140,7 +141,7 @@ func (p *Pusher) startWorker(num int) {
 			p.logger.WithFields(logrus.Fields{
 				"pool":        p.Pool,
 				"ns":          p.Namespace,
-				"queue":       p.Queue,
+				"group":       p.Group,
 				"process_num": num,
 			}).Info("Shutdown the worker while the restart signal was received")
 			return
@@ -148,7 +149,7 @@ func (p *Pusher) startWorker(num int) {
 			p.logger.WithFields(logrus.Fields{
 				"pool":        p.Pool,
 				"ns":          p.Namespace,
-				"queue":       p.Queue,
+				"group":       p.Group,
 				"process_num": num,
 			}).Info("Shutdown the worker while the stop signal was received")
 			return
@@ -162,12 +163,12 @@ func (p *Pusher) sendJobToUser(job engine.Job) error {
 		metrics.PushLatencies.WithLabelValues(
 			p.Pool,
 			p.Namespace,
-			p.Queue).Observe(float64(time.Since(t).Milliseconds()))
+			p.Group).Observe(float64(time.Since(t).Milliseconds()))
 
 		metrics.PushHTTPCodes.WithLabelValues(
 			p.Pool,
 			p.Namespace,
-			p.Queue,
+			p.Group,
 			strconv.Itoa(statusCode),
 		).Inc()
 	}(time.Now())
@@ -186,7 +187,7 @@ func (p *Pusher) sendJobToUser(job engine.Job) error {
 	statusCode = resp.StatusCode
 	if statusCode >= http.StatusOK && statusCode < http.StatusMultipleChoices {
 		e := engine.GetEngine(p.Pool)
-		return e.Delete(p.Namespace, p.Queue, job.ID())
+		return e.Delete(p.Namespace, p.Group, job.ID())
 	}
 	return fmt.Errorf("got unexpected http code: %d", resp.StatusCode)
 }
@@ -199,7 +200,7 @@ func (p *Pusher) stop() error {
 	p.logger.WithFields(logrus.Fields{
 		"pool":  p.Pool,
 		"ns":    p.Namespace,
-		"queue": p.Queue,
+		"group": p.Group,
 	}).Info("Shutdown the pusher")
 	return nil
 }
@@ -212,7 +213,7 @@ func (p *Pusher) restart() error {
 	p.logger.WithFields(logrus.Fields{
 		"pool":  p.Pool,
 		"ns":    p.Namespace,
-		"queue": p.Queue,
+		"group": p.Group,
 	}).Info("Restart the pusher")
 	return nil
 }

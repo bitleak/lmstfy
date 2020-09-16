@@ -77,9 +77,8 @@ func (q *Queue) Poll(timeoutSecond, ttrSecond uint32) (jobID string, tries uint1
 	return jobID, tries, err
 }
 
-// Pop a job. If the tries > 0, add job to the "in-flight" timer with timestamp
-// set to `TTR + now()`; Or we might just move the job to "dead-letter".
-func (q *Queue) NoConsumePoll(timeoutSecond, ttrSecond uint32) (jobID string, tries uint16, err error) {
+// PollWithoutConsumeTries was same as `Poll` except would not consume tries
+func (q *Queue) PollWithoutConsumeTries(timeoutSecond, ttrSecond uint32) (jobID string, tries uint16, err error) {
 	_, jobID, tries, err = PollQueues(q.redis, q.timer, []QueueName{q.name}, timeoutSecond, ttrSecond, true)
 	return jobID, tries, err
 }

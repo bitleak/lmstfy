@@ -13,24 +13,31 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const redisMetasKey = "__push_metas__"
-const redisMetasVersionKey = "__push_metas_version__"
-const metaKeyPrefix = "pm"
-const maxWorkerNum = 64
+const (
+	metaKeyPrefix        = "pm"
+	redisMetasKey        = "__push_metas__"
+	redisMetasVersionKey = "__push_metas_version__"
+)
+
+const (
+	maxWorkerNum = 64
+	maxTopicNum  = 16
+)
 
 var ErrInvalidKey = errors.New("invalid push meta key")
 var ErrMetaKeyExists = errors.New("the meta key has already exists")
 var ErrMetaKeyNotFound = errors.New("the meta key was not found")
 
 type Meta struct {
-	Endpoint string `json:"endpoint"`
-	Workers  int    `json:"workers"`
-	Timeout  uint32 `json:"timeout"`
+	Queues   []string `json:"queues"`
+	Endpoint string   `json:"endpoint"`
+	Workers  int      `json:"workers"`
+	Timeout  uint32   `json:"timeout"`
 }
 
-type onCreatedFunc func(pool, ns, queue string, meta *Meta)
-type onUpdatedFunc func(pool, ns, queue string, newMeta *Meta)
-type onDeletedFunc func(pool, ns, queue string)
+type onCreatedFunc func(pool, ns, group string, meta *Meta)
+type onUpdatedFunc func(pool, ns, group string, newMeta *Meta)
+type onDeletedFunc func(pool, ns, group string)
 
 type MetaManager struct {
 	redisCli           *redis.Client
@@ -77,8 +84,8 @@ func (mm *MetaManager) Close() {
 	close(mm.stopCh)
 }
 
-func (mm *MetaManager) buildKey(pool, ns, queue string) string {
-	return fmt.Sprintf("%s/%s/%s/%s", metaKeyPrefix, pool, ns, queue)
+func (mm *MetaManager) buildKey(pool, ns, group string) string {
+	return fmt.Sprintf("%s/%s/%s/%s", metaKeyPrefix, pool, ns, group)
 }
 
 func (mm *MetaManager) splitKey(key string) (string, string, string, error) {
@@ -97,7 +104,7 @@ func (mm *MetaManager) updateMetas() error {
 	newMetas := make(map[string]*Meta, len(vals))
 	for key, meta := range vals {
 		newMeta := new(Meta)
-		pool, ns, queue, err := mm.splitKey(key)
+		pool, ns, group, err := mm.splitKey(key)
 		if err != nil {
 			mm.logger.WithFields(logrus.Fields{
 				"key": key,
@@ -109,22 +116,22 @@ func (mm *MetaManager) updateMetas() error {
 			mm.logger.WithFields(logrus.Fields{
 				"pool":  pool,
 				"ns":    ns,
-				"queue": queue,
+				"group": group,
 				"err":   err,
 			}).Warn("Failed to marshal the pusher's meta")
 			continue
 		}
 		if oldMeta, ok := mm.metas[key]; ok {
 			if !cmp.Equal(newMeta, oldMeta) { // the meta was modified
-				mm.onUpdated(pool, ns, queue, newMeta)
+				mm.onUpdated(pool, ns, group, newMeta)
 			}
 		} else { // new meta was created
-			mm.onCreated(pool, ns, queue, newMeta)
+			mm.onCreated(pool, ns, group, newMeta)
 		}
 		newMetas[key] = newMeta
 	}
 	for oldKey := range mm.metas {
-		pool, ns, queue, err := mm.splitKey(oldKey)
+		pool, ns, group, err := mm.splitKey(oldKey)
 		if err != nil {
 			mm.logger.WithFields(logrus.Fields{
 				"key": oldKey,
@@ -134,7 +141,7 @@ func (mm *MetaManager) updateMetas() error {
 		}
 		if _, ok := newMetas[oldKey]; !ok {
 			// the meta was deleted
-			mm.onDeleted(pool, ns, queue)
+			mm.onDeleted(pool, ns, group)
 		}
 	}
 	mm.metas = newMetas
@@ -176,8 +183,8 @@ func (mm *MetaManager) asyncLoop() {
 	}
 }
 
-func (mm *MetaManager) GetFromRemote(pool, ns, queue string) (*Meta, error) {
-	key := mm.buildKey(pool, ns, queue)
+func (mm *MetaManager) GetFromRemote(pool, ns, group string) (*Meta, error) {
+	key := mm.buildKey(pool, ns, group)
 	metaStr, err := mm.redisCli.HGet(redisMetasKey, key).Result()
 	if err != nil && err != redis.Nil {
 		return nil, err
@@ -192,16 +199,16 @@ func (mm *MetaManager) GetFromRemote(pool, ns, queue string) (*Meta, error) {
 	return meta, nil
 }
 
-func (mm *MetaManager) Get(pool, ns, queue string) *Meta {
-	key := mm.buildKey(pool, ns, queue)
+func (mm *MetaManager) Get(pool, ns, group string) *Meta {
+	key := mm.buildKey(pool, ns, group)
 	if pushMeta, ok := mm.metas[key]; ok {
 		return pushMeta
 	}
 	return nil
 }
 
-func (mm *MetaManager) Create(pool, ns, queue string, meta *Meta) error {
-	key := mm.buildKey(pool, ns, queue)
+func (mm *MetaManager) Create(pool, ns, group string, meta *Meta) error {
+	key := mm.buildKey(pool, ns, group)
 	bytes, _ := json.Marshal(meta)
 	ok, err := mm.redisCli.HSetNX(redisMetasKey, key, string(bytes)).Result()
 	if err != nil {
@@ -213,8 +220,8 @@ func (mm *MetaManager) Create(pool, ns, queue string, meta *Meta) error {
 	return mm.redisCli.Incr(redisMetasVersionKey).Err()
 }
 
-func (mm *MetaManager) Update(pool, ns, queue string, meta *Meta) error {
-	key := mm.buildKey(pool, ns, queue)
+func (mm *MetaManager) Update(pool, ns, group string, meta *Meta) error {
+	key := mm.buildKey(pool, ns, group)
 	bytes, _ := json.Marshal(meta)
 	_, err := mm.redisCli.HSet(redisMetasKey, key, string(bytes)).Result()
 	if err != nil {
@@ -223,8 +230,8 @@ func (mm *MetaManager) Update(pool, ns, queue string, meta *Meta) error {
 	return mm.redisCli.Incr(redisMetasVersionKey).Err()
 }
 
-func (mm *MetaManager) Delete(pool, ns, queue string) error {
-	key := mm.buildKey(pool, ns, queue)
+func (mm *MetaManager) Delete(pool, ns, group string) error {
+	key := mm.buildKey(pool, ns, group)
 	cnt, err := mm.redisCli.HDel(redisMetasKey, key).Result()
 	if err != nil {
 		return err
@@ -236,38 +243,41 @@ func (mm *MetaManager) Delete(pool, ns, queue string) error {
 }
 
 func (mm *MetaManager) ListPusherByNamespace(wantedPool, wantedNamespace string) map[string]Meta {
-	queueMetas := make(map[string]Meta)
+	pushGroupMetas := make(map[string]Meta)
 	for key, meta := range mm.metas {
-		pool, ns, queue, err := mm.splitKey(key)
+		pool, ns, group, err := mm.splitKey(key)
 		if err != nil {
 			continue
 		}
 		if wantedPool == pool && wantedNamespace == ns {
-			queueMetas[queue] = *meta
+			pushGroupMetas[group] = *meta
 		}
 	}
-	return queueMetas
+	return pushGroupMetas
 }
 
 func (mm *MetaManager) Dump() map[string]map[string][]string {
-	pushQueues := make(map[string]map[string][]string)
+	pushGroups := make(map[string]map[string][]string)
 	for key := range mm.metas {
-		pool, ns, queue, err := mm.splitKey(key)
+		pool, ns, group, err := mm.splitKey(key)
 		if err != nil {
 			continue
 		}
-		if _, ok := pushQueues[pool]; !ok {
-			pushQueues[pool] = make(map[string][]string, 0)
+		if _, ok := pushGroups[pool]; !ok {
+			pushGroups[pool] = make(map[string][]string, 0)
 		}
-		if _, ok := pushQueues[pool][ns]; !ok {
-			pushQueues[pool][ns] = make([]string, 0)
+		if _, ok := pushGroups[pool][ns]; !ok {
+			pushGroups[pool][ns] = make([]string, 0)
 		}
-		pushQueues[pool][ns] = append(pushQueues[pool][ns], queue)
+		pushGroups[pool][ns] = append(pushGroups[pool][ns], group)
 	}
-	return pushQueues
+	return pushGroups
 }
 
 func (meta *Meta) Validate() error {
+	if len(meta.Queues) <= 0 || len(meta.Queues) > maxTopicNum {
+		return fmt.Errorf("the number of queues should be between 1 and %d", maxTopicNum)
+	}
 	if meta.Workers <= 0 || meta.Workers > maxWorkerNum {
 		return fmt.Errorf("workers should be between 1 and %d", maxWorkerNum)
 	}

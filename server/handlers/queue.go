@@ -598,6 +598,6 @@ func DestroyQueue(c *gin.Context) {
 		"namespace": namespace,
 		"queue":     queue,
 		"count":     count,
-	}).Info("Queue destroyed")
+	}).Info("queue destroyed")
 	c.Status(http.StatusNoContent)
 }

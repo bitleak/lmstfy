@@ -3,50 +3,53 @@ package push
 import (
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
 )
+
+const defaultPool = "default"
+const defaultNamespace = "test-ns"
 
 func TestSetup(t *testing.T) {
 	GetManager().SetCallbacks(
-		func(pool, ns, queue string, meta *Meta) {},
-		func(pool, ns, queue string, newMeta *Meta) {},
-		func(pool, ns, queue string) {})
+		func(pool, ns, group string, meta *Meta) {},
+		func(pool, ns, group string, newMeta *Meta) {},
+		func(pool, ns, group string) {})
 }
 
 func TestMetaManager_Dump(t *testing.T) {
 	testMeta := &Meta{
+		Queues:   []string{"abc"},
 		Endpoint: "test-endpoint",
 		Workers:  5,
 		Timeout:  5,
 	}
-	err := _manager.Create("default", "test-ns-dump1", "test-queue1", testMeta)
-	if err != nil {
-		t.Fatalf("expect metaManager create return nil, but got %v", err)
-	}
-	err = _manager.Create("default", "test-ns-dump2", "test-queue2", testMeta)
-	if err != nil {
-		t.Fatalf("expect metaManager create return nil, but got %v", err)
+	namespace := "test-ns-dump"
+	groups := []string{"test-group1", "test-group2"}
+	for _, group := range groups {
+		err := _manager.Create(defaultPool, namespace, group, testMeta)
+		if err != nil {
+			t.Fatalf("create group expect error is nil, but got %v", err)
+		}
 	}
 	time.Sleep(500 * time.Millisecond)
-	metaMap := _manager.Dump()
-	if len(metaMap) != 1 {
-		t.Fatalf("expect dump return 1 metaMaps, but got %d", len(metaMap))
+	poolMetas := _manager.Dump()
+	if len(poolMetas) != 1 {
+		t.Fatalf("expect dump return 1 metaMaps, but got %d", len(poolMetas))
 	}
-	for pool, poolMetaMap := range metaMap {
-		if len(poolMetaMap) != 2 {
-			t.Fatalf("expect dump return 2 poolMetaMap, but got %d", len(poolMetaMap))
+	for poolName, poolMeta := range poolMetas {
+		if len(poolMeta) != 1 {
+			t.Fatalf("the number of the metas %d was expected, but got %d", 1, len(poolMeta))
 		}
-		if pool != "default" {
-			t.Fatalf("expect dump metaMap contains default, but got %s", pool)
+		if poolName != defaultPool {
+			t.Fatalf("pool name %s was expected, but got %s", defaultPool, poolName)
 		}
-		for ns, nsMetas := range poolMetaMap {
-			if ns != "test-ns-dump1" && ns != "test-ns-dump2" {
-				t.Fatalf("expect dump metaMap[default] contains ns %s or %s , but got %s", "test-ns-dump1", "test-ns-dump2", ns)
+		for ns, gotGroups := range poolMeta {
+			if ns != namespace {
+				t.Fatalf("namespace %s was expected, but got %s", namespace, ns)
 			}
-			if len(nsMetas) != 1 {
-				t.Fatalf("expect dump metaMap[default][pool] contains 1 queue, but got %d", len(nsMetas))
-			}
-			if nsMetas[0] != "test-queue1" && nsMetas[0] != "test-queue2" {
-				t.Fatalf("expect dump metaMap[default][pool] contains queue %s or %s , but got %s", "test-queue1", "test-queue2", nsMetas[0])
+			if len(gotGroups) != len(groups) {
+				t.Fatalf("the number of group %d was expected, but got %d", len(groups), len(gotGroups))
 			}
 		}
 	}
@@ -58,23 +61,25 @@ func TestMetaManager_CreateAndGet(t *testing.T) {
 		Workers:  5,
 		Timeout:  5,
 	}
-	err := _manager.Create("default", "test-ns", "test-queue-get", testMeta)
+	namespace := "test-ns"
+	group := "test-get-group"
+	err := _manager.Create(defaultPool, namespace, group, testMeta)
 	if err != nil {
 		t.Fatalf("expect metaManager create return nil, but got %v", err)
 	}
-	meta, err := _manager.GetFromRemote("default", "test-ns", "test-queue-get")
+	meta, err := _manager.GetFromRemote(defaultPool, defaultNamespace, group)
 	if err != nil {
 		t.Fatalf("expect metaManager get from remote return nil, but got %v", err)
 	}
-	if meta.Timeout != testMeta.Timeout || meta.Workers != testMeta.Workers || meta.Endpoint != testMeta.Endpoint {
+	if !cmp.Equal(meta, testMeta) {
 		t.Fatalf("expect metaManager get from remote meta equel testMeta")
 	}
 	time.Sleep(500 * time.Millisecond)
-	meta = _manager.Get("default", "test-ns", "test-queue-get")
+	meta = _manager.Get(defaultPool, defaultNamespace, group)
 	if meta == nil {
 		t.Fatalf("expect metaManager get return meta, but got nil")
 	}
-	if meta.Timeout != testMeta.Timeout || meta.Workers != testMeta.Workers || meta.Endpoint != testMeta.Endpoint {
+	if !cmp.Equal(meta, testMeta) {
 		t.Fatalf("expect metaManager get meta equel testMeta")
 	}
 }
@@ -85,7 +90,8 @@ func TestMetaManager_Update(t *testing.T) {
 		Workers:  5,
 		Timeout:  5,
 	}
-	err := _manager.Create("default", "test-ns", "test-queue-update", testMeta)
+	group := "test-group-update"
+	err := _manager.Create(defaultPool, defaultNamespace, group, testMeta)
 	if err != nil {
 		t.Fatalf("expect metaManager create return nil, but got %v", err)
 	}
@@ -95,25 +101,25 @@ func TestMetaManager_Update(t *testing.T) {
 		Workers:  10,
 		Timeout:  10,
 	}
-	err = _manager.Update("default", "test-ns", "test-queue-update", newMeta)
+	err = _manager.Update(defaultPool, defaultNamespace, group, newMeta)
 	if err != nil {
 		t.Fatalf("expect metaManager create return nil, but got %v", err)
 	}
-	meta, err := _manager.GetFromRemote("default", "test-ns", "test-queue-update")
+	meta, err := _manager.GetFromRemote(defaultPool, defaultNamespace, group)
 	if err != nil {
 		t.Fatalf("expect metaManager get from remote return nil, but got %v", err)
 	}
-	if meta.Timeout != newMeta.Timeout || meta.Workers != newMeta.Workers || meta.Endpoint != newMeta.Endpoint {
-		t.Fatalf("expect metaManager get from remote meta equel newMeta")
+	if !cmp.Equal(meta, newMeta) {
+		t.Fatalf("expect metaManager get from remote meta equel testMeta")
 	}
 	// wait for meta update and pusher restart
 	time.Sleep(500 * time.Millisecond)
-	meta = _manager.Get("default", "test-ns", "test-queue-update")
+	meta = _manager.Get(defaultPool, defaultNamespace, group)
 	if meta == nil {
 		t.Fatalf("expect metaManager get return meta, but got nil")
 	}
-	if meta.Timeout != newMeta.Timeout || meta.Workers != newMeta.Workers || meta.Endpoint != newMeta.Endpoint {
-		t.Fatalf("expect metaManager get meta equel newMeta")
+	if !cmp.Equal(meta, newMeta) {
+		t.Fatalf("expect metaManager get meta equel testMeta")
 	}
 }
 
@@ -123,24 +129,25 @@ func TestMetaManager_Delete(t *testing.T) {
 		Workers:  5,
 		Timeout:  5,
 	}
-	err := _manager.Create("default", "test-ns", "test-queue-delete", testMeta)
+	group := "test-group-delete"
+	err := _manager.Create(defaultPool, defaultNamespace, group, testMeta)
 	if err != nil {
 		t.Fatalf("expect metaManager create return nil, but got %v", err)
 	}
 	time.Sleep(500 * time.Millisecond)
-	meta := _manager.Get("default", "test-ns", "test-queue-delete")
+	meta := _manager.Get(defaultPool, defaultNamespace, group)
 	if meta == nil {
 		t.Fatalf("expect metaManager get return meta, but got nil")
 	}
-	if meta.Timeout != testMeta.Timeout || meta.Workers != testMeta.Workers || meta.Endpoint != testMeta.Endpoint {
+	if !cmp.Equal(meta, testMeta) {
 		t.Fatalf("expect metaManager get meta equel testMeta")
 	}
 
-	err = _manager.MetaManager.Delete("default", "test-ns", "test-queue-delete")
+	err = _manager.MetaManager.Delete(defaultPool, defaultNamespace, group)
 	if err != nil {
 		t.Fatalf("expect metaManager delete return nil, but got %v", err)
 	}
-	meta, err = _manager.GetFromRemote("default", "test-ns", "test-queue-delete")
+	meta, err = _manager.GetFromRemote(defaultPool, defaultNamespace, group)
 	if err != nil {
 		t.Fatalf("expect metaManager get from remote return nil, but got %v", err)
 	}
@@ -149,7 +156,7 @@ func TestMetaManager_Delete(t *testing.T) {
 	}
 	// wait for meta update and pusher stop
 	time.Sleep(500 * time.Millisecond)
-	meta = _manager.Get("default", "test-ns", "test-queue-delete")
+	meta = _manager.Get(defaultPool, defaultNamespace, group)
 	if meta != nil {
 		t.Fatalf("expect metaManager get return nil")
 	}
@@ -161,21 +168,22 @@ func TestMetaManager_ListPusherByNamespace(t *testing.T) {
 		Workers:  5,
 		Timeout:  5,
 	}
-	err := _manager.Create("default", "test-ns-list", "test-queue1", testMeta)
+	namespace := "test-ns-list"
+	err := _manager.Create(defaultPool, namespace, "test-group1", testMeta)
 	if err != nil {
 		t.Fatalf("expect metaManager create return nil, but got %v", err)
 	}
-	err = _manager.Create("default", "test-ns-list", "test-queue2", testMeta)
+	err = _manager.Create(defaultPool, namespace, "test-group2", testMeta)
 	if err != nil {
 		t.Fatalf("expect metaManager create return nil, but got %v", err)
 	}
 	time.Sleep(500 * time.Millisecond)
-	metaMap := _manager.ListPusherByNamespace("default", "test-ns-list")
+	metaMap := _manager.ListPusherByNamespace(defaultPool, namespace)
 	if len(metaMap) != 2 {
 		t.Fatalf("expect list pusher by namespace return 2 meta, but got %d", len(metaMap))
 	}
 	for queue, meta := range metaMap {
-		if queue != "test-queue1" && queue != "test-queue2" {
+		if queue != "test-group1" && queue != "test-group2" {
 			t.Fatalf("expect list pusher by namespace return queue %s or %s , but got %s", "test-queue1", "test-queue2", queue)
 		}
 		if meta.Timeout != testMeta.Timeout || meta.Workers != testMeta.Workers || meta.Endpoint != testMeta.Endpoint {

@@ -11,14 +11,14 @@ import (
 )
 
 // GET /pushers
-func ListPushers(c *gin.Context) {
+func ListPushGroups(c *gin.Context) {
 	manager := push.GetManager()
 	pushers := manager.Dump()
 	c.JSON(http.StatusOK, gin.H{"pushers": pushers})
 }
 
 // GET /pusher/:namespace?pool=xxx
-func ListNamespacePushers(c *gin.Context) {
+func ListNamespacePushGroups(c *gin.Context) {
 	ns := c.Param("namespace")
 	pool := c.Query("pool")
 	manager := push.GetManager()
@@ -26,17 +26,17 @@ func ListNamespacePushers(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"pushers": pushers})
 }
 
-// GET /pusher/:namespace/:queue
-func GetQueuePusher(c *gin.Context) {
+// GET /pusher/:namespace/:group
+func GetPushGroup(c *gin.Context) {
 	var err error
 	ns := c.Param("namespace")
-	queue := c.Param("queue")
+	group := c.Param("group")
 	pool := c.DefaultQuery("pool", config.DefaultPoolName)
 	isForceRemote, _ := strconv.ParseBool(c.Param("force_remote"))
 	manager := push.GetManager()
-	pusher := manager.Get(pool, ns, queue)
+	pusher := manager.Get(pool, ns, group)
 	if pusher == nil || isForceRemote {
-		pusher, err = manager.GetFromRemote(pool, ns, queue)
+		pusher, err = manager.GetFromRemote(pool, ns, group)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -49,8 +49,8 @@ func GetQueuePusher(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"pusher": pusher})
 }
 
-// POST /pusher/:namespace/:queue
-func CreateQueuePusher(c *gin.Context) {
+// POST /pusher/:namespace/:group
+func CreatePushGroup(c *gin.Context) {
 	var meta push.Meta
 	if err := c.BindJSON(&meta); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -61,18 +61,18 @@ func CreateQueuePusher(c *gin.Context) {
 		return
 	}
 	ns := c.Param("namespace")
-	queue := c.Param("queue")
+	group := c.Param("group")
 	pool := c.DefaultQuery("pool", config.DefaultPoolName)
 	manager := push.GetManager()
-	if err := manager.Create(pool, ns, queue, &meta); err != nil {
+	if err := manager.Create(pool, ns, group, &meta); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusCreated, gin.H{"status": "created"})
 }
 
-// PUT /pusher/:namespace/:queue
-func UpdateQueuePusher(c *gin.Context) {
+// PUT /pusher/:namespace/:group
+func UpdatePushGroup(c *gin.Context) {
 	var newMeta push.Meta
 	if err := c.BindJSON(&newMeta); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -80,9 +80,9 @@ func UpdateQueuePusher(c *gin.Context) {
 	}
 	manager := push.GetManager()
 	ns := c.Param("namespace")
-	queue := c.Param("queue")
+	group := c.Param("group")
 	pool := c.DefaultQuery("pool", config.DefaultPoolName)
-	meta, err := manager.GetFromRemote(pool, ns, queue)
+	meta, err := manager.GetFromRemote(pool, ns, group)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -104,20 +104,20 @@ func UpdateQueuePusher(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := manager.Update(pool, ns, queue, meta); err != nil {
+	if err := manager.Update(pool, ns, group, meta); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
-// DELETE /pusher/:namespace/:queue
-func DeleteQueuePusher(c *gin.Context) {
+// DELETE /pusher/:namespace/:group
+func DeletePushGroup(c *gin.Context) {
 	manager := push.GetManager()
 	ns := c.Param("namespace")
-	queue := c.Param("queue")
+	group := c.Param("group")
 	pool := c.DefaultQuery("pool", config.DefaultPoolName)
-	if err := manager.Delete(pool, ns, queue); err != nil {
+	if err := manager.Delete(pool, ns, group); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

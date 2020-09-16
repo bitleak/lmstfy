@@ -2,13 +2,21 @@ package handlers_test
 
 import (
 	"fmt"
-	"github.com/bitleak/lmstfy/push"
-	"github.com/bitleak/lmstfy/server/handlers"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/bitleak/lmstfy/push"
+	"github.com/bitleak/lmstfy/server/handlers"
 )
+
+func TestSetup(t *testing.T) {
+	push.GetManager().SetCallbacks(
+		func(pool, ns, queue string, meta *push.Meta) {},
+		func(pool, ns, queue string, newMeta *push.Meta) {},
+		func(pool, ns, queue string) {})
+}
 
 func TestCreateQueuePusher(t *testing.T) {
 	limitStr := "{\"timeout\": 3, \"workers\": 5, \"endpoint\":\"http://test-endpoint\"}"
@@ -25,7 +33,7 @@ func TestCreateQueuePusher(t *testing.T) {
 		t.Logf(resp.Body.String())
 		t.Fatal("Failed to create new queue pusher")
 	}
-	time.Sleep(6 * time.Second)
+	time.Sleep(500 * time.Millisecond)
 	meta := push.GetManager().Get("default", "ns-pusher", "queue-pusher")
 	if meta == nil || meta.Endpoint != "http://test-endpoint" || meta.Timeout != 3 || meta.Workers != 5 {
 		t.Fatal("Mismatch meta in create")
@@ -92,7 +100,7 @@ func TestUpdateQueuePusher(t *testing.T) {
 		t.Logf(resp.Body.String())
 		t.Fatal("Failed to update queue pusher")
 	}
-	time.Sleep(15 * time.Second)
+	time.Sleep(500 * time.Millisecond)
 	meta := push.GetManager().Get("default", "ns-pusher", "queue-pusher")
 	if meta == nil || meta.Endpoint != "http://test-enpoint-new" || meta.Timeout != 1 || meta.Workers != 3 {
 		t.Fatal("Mismatch meta in update queue pusher")
@@ -112,7 +120,7 @@ func TestDeleteQueuePusher(t *testing.T) {
 		t.Logf(resp.Body.String())
 		t.Fatal("Failed to list namespace pusher")
 	}
-	time.Sleep(15 * time.Second)
+	time.Sleep(500 * time.Millisecond)
 	meta := push.GetManager().Get("default", "ns-pusher", "queue-pusher")
 	if meta != nil {
 		t.Fatal("Mismatch meta in delete queue pusher")

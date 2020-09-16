@@ -5,22 +5,29 @@ import (
 	"time"
 )
 
+func TestSetup(t *testing.T) {
+	GetManager().SetCallbacks(
+		func(pool, ns, queue string, meta *Meta) {},
+		func(pool, ns, queue string, newMeta *Meta) {},
+		func(pool, ns, queue string) {})
+}
+
 func TestMetaManager_Dump(t *testing.T) {
 	testMeta := &Meta{
 		Endpoint: "test-endpoint",
 		Workers:  5,
 		Timeout:  5,
 	}
-	err := _manager.MetaManager.Create("default", "test-ns-dump1", "test-queue1", testMeta)
+	err := _manager.Create("default", "test-ns-dump1", "test-queue1", testMeta)
 	if err != nil {
 		t.Fatalf("expect metaManager create return nil, but got %v", err)
 	}
-	err = _manager.MetaManager.Create("default", "test-ns-dump2", "test-queue2", testMeta)
+	err = _manager.Create("default", "test-ns-dump2", "test-queue2", testMeta)
 	if err != nil {
 		t.Fatalf("expect metaManager create return nil, but got %v", err)
 	}
-	time.Sleep(4 * time.Second)
-	metaMap := _manager.MetaManager.Dump()
+	time.Sleep(500 * time.Millisecond)
+	metaMap := _manager.Dump()
 	if len(metaMap) != 1 {
 		t.Fatalf("expect dump return 1 metaMaps, but got %d", len(metaMap))
 	}
@@ -51,19 +58,19 @@ func TestMetaManager_CreateAndGet(t *testing.T) {
 		Workers:  5,
 		Timeout:  5,
 	}
-	err := _manager.MetaManager.Create("default", "test-ns", "test-queue-get", testMeta)
+	err := _manager.Create("default", "test-ns", "test-queue-get", testMeta)
 	if err != nil {
 		t.Fatalf("expect metaManager create return nil, but got %v", err)
 	}
-	meta, err := _manager.MetaManager.GetFromRemote("default", "test-ns", "test-queue-get")
+	meta, err := _manager.GetFromRemote("default", "test-ns", "test-queue-get")
 	if err != nil {
 		t.Fatalf("expect metaManager get from remote return nil, but got %v", err)
 	}
 	if meta.Timeout != testMeta.Timeout || meta.Workers != testMeta.Workers || meta.Endpoint != testMeta.Endpoint {
 		t.Fatalf("expect metaManager get from remote meta equel testMeta")
 	}
-	time.Sleep(4 * time.Second)
-	meta = _manager.MetaManager.Get("default", "test-ns", "test-queue-get")
+	time.Sleep(500 * time.Millisecond)
+	meta = _manager.Get("default", "test-ns", "test-queue-get")
 	if meta == nil {
 		t.Fatalf("expect metaManager get return meta, but got nil")
 	}
@@ -78,21 +85,21 @@ func TestMetaManager_Update(t *testing.T) {
 		Workers:  5,
 		Timeout:  5,
 	}
-	err := _manager.MetaManager.Create("default", "test-ns", "test-queue-update", testMeta)
+	err := _manager.Create("default", "test-ns", "test-queue-update", testMeta)
 	if err != nil {
 		t.Fatalf("expect metaManager create return nil, but got %v", err)
 	}
-	time.Sleep(4 * time.Second)
+	time.Sleep(500 * time.Millisecond)
 	newMeta := &Meta{
 		Endpoint: "test-endpoint-new",
 		Workers:  10,
 		Timeout:  10,
 	}
-	err = _manager.MetaManager.Update("default", "test-ns", "test-queue-update", newMeta)
+	err = _manager.Update("default", "test-ns", "test-queue-update", newMeta)
 	if err != nil {
 		t.Fatalf("expect metaManager create return nil, but got %v", err)
 	}
-	meta, err := _manager.MetaManager.GetFromRemote("default", "test-ns", "test-queue-update")
+	meta, err := _manager.GetFromRemote("default", "test-ns", "test-queue-update")
 	if err != nil {
 		t.Fatalf("expect metaManager get from remote return nil, but got %v", err)
 	}
@@ -100,8 +107,8 @@ func TestMetaManager_Update(t *testing.T) {
 		t.Fatalf("expect metaManager get from remote meta equel newMeta")
 	}
 	// wait for meta update and pusher restart
-	time.Sleep(6 * time.Second)
-	meta = _manager.MetaManager.Get("default", "test-ns", "test-queue-update")
+	time.Sleep(500 * time.Millisecond)
+	meta = _manager.Get("default", "test-ns", "test-queue-update")
 	if meta == nil {
 		t.Fatalf("expect metaManager get return meta, but got nil")
 	}
@@ -116,12 +123,12 @@ func TestMetaManager_Delete(t *testing.T) {
 		Workers:  5,
 		Timeout:  5,
 	}
-	err := _manager.MetaManager.Create("default", "test-ns", "test-queue-delete", testMeta)
+	err := _manager.Create("default", "test-ns", "test-queue-delete", testMeta)
 	if err != nil {
 		t.Fatalf("expect metaManager create return nil, but got %v", err)
 	}
-	time.Sleep(6 * time.Second)
-	meta := _manager.MetaManager.Get("default", "test-ns", "test-queue-delete")
+	time.Sleep(500 * time.Millisecond)
+	meta := _manager.Get("default", "test-ns", "test-queue-delete")
 	if meta == nil {
 		t.Fatalf("expect metaManager get return meta, but got nil")
 	}
@@ -133,7 +140,7 @@ func TestMetaManager_Delete(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expect metaManager delete return nil, but got %v", err)
 	}
-	meta, err = _manager.MetaManager.GetFromRemote("default", "test-ns", "test-queue-delete")
+	meta, err = _manager.GetFromRemote("default", "test-ns", "test-queue-delete")
 	if err != nil {
 		t.Fatalf("expect metaManager get from remote return nil, but got %v", err)
 	}
@@ -141,8 +148,8 @@ func TestMetaManager_Delete(t *testing.T) {
 		t.Fatalf("expect metaManager get from remote meta equel nil")
 	}
 	// wait for meta update and pusher stop
-	time.Sleep(12 * time.Second)
-	meta = _manager.MetaManager.Get("default", "test-ns", "test-queue-delete")
+	time.Sleep(500 * time.Millisecond)
+	meta = _manager.Get("default", "test-ns", "test-queue-delete")
 	if meta != nil {
 		t.Fatalf("expect metaManager get return nil")
 	}
@@ -154,16 +161,16 @@ func TestMetaManager_ListPusherByNamespace(t *testing.T) {
 		Workers:  5,
 		Timeout:  5,
 	}
-	err := _manager.MetaManager.Create("default", "test-ns-list", "test-queue1", testMeta)
+	err := _manager.Create("default", "test-ns-list", "test-queue1", testMeta)
 	if err != nil {
 		t.Fatalf("expect metaManager create return nil, but got %v", err)
 	}
-	err = _manager.MetaManager.Create("default", "test-ns-list", "test-queue2", testMeta)
+	err = _manager.Create("default", "test-ns-list", "test-queue2", testMeta)
 	if err != nil {
 		t.Fatalf("expect metaManager create return nil, but got %v", err)
 	}
-	time.Sleep(6 * time.Second)
-	metaMap := _manager.MetaManager.ListPusherByNamespace("default", "test-ns-list")
+	time.Sleep(500 * time.Millisecond)
+	metaMap := _manager.ListPusherByNamespace("default", "test-ns-list")
 	if len(metaMap) != 2 {
 		t.Fatalf("expect list pusher by namespace return 2 meta, but got %d", len(metaMap))
 	}
@@ -176,4 +183,8 @@ func TestMetaManager_ListPusherByNamespace(t *testing.T) {
 		}
 	}
 
+}
+
+func TestShutdown(t *testing.T) {
+	GetManager().SetCallbacks(_manager.onCreated, _manager.onUpdated, _manager.onDeleted)
 }

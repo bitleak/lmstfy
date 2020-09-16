@@ -3,6 +3,7 @@ package push
 import (
 	"errors"
 	"sync"
+	"time"
 
 	"github.com/go-redis/redis"
 	"github.com/sirupsen/logrus"
@@ -17,12 +18,13 @@ type Manager struct {
 	logger  *logrus.Logger
 }
 
-func NewManger(redisCli *redis.Client, logger *logrus.Logger) (*Manager, error) {
+func NewManger(redisCli *redis.Client, updateInterval time.Duration, logger *logrus.Logger) (*Manager, error) {
 	var err error
 	manager := new(Manager)
 	manager.logger = logger
 	manager.MetaManager, err = newMetaManager(
 		redisCli,
+		updateInterval,
 		logger,
 		manager.onCreated,
 		manager.onUpdated,
@@ -102,9 +104,19 @@ func (m *Manager) onDeleted(pool, ns, queue string) {
 	}
 }
 
+// SetCallbacks used to set custom callback when meta was changed.
+// e.g. we want to use empty callback function to fasten test cases
+func (m *Manager) SetCallbacks(onCreated onCreatedFunc,
+	onUpdated onUpdatedFunc,
+	onDeleted onDeletedFunc) {
+	m.MetaManager.onCreated = onCreated
+	m.MetaManager.onUpdated = onUpdated
+	m.MetaManager.onDeleted = onDeleted
+}
+
 var _manager *Manager
 
-func Setup(conf *config.Config, logger *logrus.Logger) error {
+func Setup(conf *config.Config, updateInterval time.Duration, logger *logrus.Logger) error {
 	var err error
 	redisConf := conf.AdminRedis
 	cli := helper.NewRedisClient(&redisConf, nil)
@@ -112,7 +124,7 @@ func Setup(conf *config.Config, logger *logrus.Logger) error {
 		return errors.New("can not connect to admin redis")
 	}
 	setupMetrics()
-	_manager, err = NewManger(cli, logger)
+	_manager, err = NewManger(cli, updateInterval, logger)
 	return err
 }
 

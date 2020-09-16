@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/bitleak/lmstfy/helper"
 
@@ -51,7 +52,7 @@ func setup() {
 		panic(fmt.Sprintf("Failed to flush db: %s", err))
 	}
 
-	if err := Setup(CONF, logger); err != nil {
+	if err := Setup(CONF, 100*time.Millisecond, logger); err != nil {
 		panic(fmt.Sprintf("Failed to setup push engine: %s", err))
 	}
 }

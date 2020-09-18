@@ -124,10 +124,6 @@ func (e *Engine) Consume(namespace, queue string, ttrSecond, timeoutSecond uint3
 	return e.consume(namespace, queue, ttrSecond, timeoutSecond, false)
 }
 
-func (e *Engine) ConsumeWithFrozenTries(namespace, queue string, ttrSecond, timeoutSecond uint32) (job engine.Job, err error) {
-	return e.consume(namespace, queue, ttrSecond, timeoutSecond, true)
-}
-
 func (e *Engine) consume(namespace, queue string, ttrSecond, timeoutSecond uint32, freezeTries bool) (job engine.Job, err error) {
 	defer func() {
 		if job != nil {

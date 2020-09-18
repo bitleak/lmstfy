@@ -65,47 +65,6 @@ func TestEngine_Consume(t *testing.T) {
 	}
 }
 
-func TestEngine_NoConsumeTries(t *testing.T) {
-	e, err := NewEngine(R.Name, R.Conn)
-	if err != nil {
-		panic(fmt.Sprintf("Setup engine error: %s", err))
-	}
-	defer e.Shutdown()
-	body := []byte("hello msg 2")
-	jobID, err := e.Publish("ns-engine", "q2", body, 10, 2, 1)
-	t.Log(jobID)
-	if err != nil {
-		t.Fatalf("Failed to publish: %s", err)
-	}
-	job, err := e.ConsumeWithFrozenTries("ns-engine", "q2", 3, 3)
-	if err != nil {
-		t.Fatalf("Failed to consume: %s", err)
-	}
-	if job.Tries() != 1 {
-		t.Fatalf("job tries = 1 was expected, but got %d", job.Tries())
-	}
-	if !bytes.Equal(body, job.Body()) || jobID != job.ID() {
-		t.Fatalf("Mistmatched job data")
-	}
-
-	// Consume job that's published in no-delay way
-	jobID, err = e.Publish("ns-engine", "q2", body, 10, 0, 1)
-	t.Log(jobID)
-	if err != nil {
-		t.Fatalf("Failed to publish: %s", err)
-	}
-	job, err = e.ConsumeWithFrozenTries("ns-engine", "q2", 3, 0)
-	if err != nil {
-		t.Fatalf("Failed to consume: %s", err)
-	}
-	if job.Tries() != 1 {
-		t.Fatalf("job tries = 1 was expected, but got %d", job.Tries())
-	}
-	if !bytes.Equal(body, job.Body()) || jobID != job.ID() {
-		t.Fatalf("Mistmatched job data")
-	}
-}
-
 // Consume the first one from multi publish
 func TestEngine_Consume2(t *testing.T) {
 	e, err := NewEngine(R.Name, R.Conn)
@@ -170,7 +129,7 @@ func TestEngine_ConsumeMulti(t *testing.T) {
 	}
 }
 
-func TestEngine_ConsumeMultiWithoutConsumeTries(t *testing.T) {
+func TestEngine_ConsumeMultiWithFrozenTries(t *testing.T) {
 	e, err := NewEngine(R.Name, R.Conn)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))

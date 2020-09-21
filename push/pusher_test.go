@@ -8,9 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bitleak/lmstfy/engine"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+
+	"github.com/bitleak/lmstfy/engine"
 )
 
 type Job struct {
@@ -23,10 +24,13 @@ type Job struct {
 }
 
 func TestPusher(t *testing.T) {
-	pusher := newPusher("default", "test-pusher-ns", "test-pusher-queue", &Meta{
+	namespace := "test-pusher-ns"
+	queue := "test-pusher-queue"
+	pusher := newPusher("default", "test-pusher-ns", "test-pusher-group", &Meta{
+		Queues:   []string{"test-pusher-queue"},
 		Endpoint: "http://localhost:9090",
 		Workers:  5,
-		Timeout:  1,
+		Timeout:  3,
 	}, logger)
 	if err := pusher.start(); err != nil {
 		t.Fatal("Start pusher error", err)
@@ -36,12 +40,19 @@ func TestPusher(t *testing.T) {
 	stopPublish := make(chan struct{})
 	stopServer := make(chan struct{})
 	sentJobs := make(map[string]bool)
+	for i := 0; i < 10; i++ {
+		jobID, err := engine.GetEngine(defaultPool).Publish(namespace, queue, []byte("test-body"), 60, 1, 1)
+		if err != nil {
+			t.Fatal("Pusher publish error", err)
+		}
+		sentJobs[jobID] = true
+	}
 	go func() {
 		tick := time.NewTicker(time.Second)
 		for {
 			select {
 			case <-tick.C:
-				jobID, err := engine.GetEngine("default").Publish("test-pusher-ns", "test-pusher-queue", []byte("test-body"), 60, 1, 1)
+				jobID, err := engine.GetEngine(defaultPool).Publish(namespace, queue, []byte("test-body"), 60, 1, 1)
 				if err != nil {
 					t.Fatal("Pusher publish error", err)
 				}
@@ -87,7 +98,7 @@ func TestPusher(t *testing.T) {
 	if len(gotJobs) != len(sentJobs) {
 		t.Fatalf("Mismatch job count, expected: %d, but got %d", len(sentJobs), len(gotJobs))
 	}
-	size, err := engine.GetEngine("default").Size("test-pusher-ns", "test-pusher-queue")
+	size, err := engine.GetEngine(defaultPool).Size(namespace, queue)
 	if err != nil {
 		t.Fatal("Pusher get size error", err)
 	}

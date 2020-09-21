@@ -1,19 +1,20 @@
 ## Pusher API
 
-任务推送管理API针对pool-namespace-queue级别来配置任务推送
+任务推送管理API针对pool-namespace-group级别来配置任务推送
 
 > 注意:为了性能考虑，推送配置目前是异步每 3s 更新一次，增加或者删除需要等待异步更新才会生效
 
 ### 创建推送
 
 ```
-POST /pusher/:namespace/:queue
+POST /pusher/:namespace/:group
 ```
 
 #### Request Body 
 
 ```
 {
+    "queues": ["high_prio_queue", "normal_prio_queue", "low_prio_queue"]
     "endpoint": "http://endpoint-url",
     "workers": 10,
     "timeout": 3
@@ -25,7 +26,7 @@ POST /pusher/:namespace/:queue
 ```$json
 {
     "namespace": "test-namespace",
-    "queue": "test-queue",
+    "queue": "high_prio_queue",
     "id": "job_id",
     "ttl": 10,
     "elapsed_ms": 15842,
@@ -84,7 +85,7 @@ GET /pusher/:namespace
 ### 列出某个queue配置的推送 
 
 ```
-GET /pusher/:namespace/:queue
+GET /pusher/:namespace/:group
 ```
 
 #### Request Query
@@ -96,6 +97,7 @@ GET /pusher/:namespace/:queue
 ```
 {
     "pusher": {
+        "queues": ["high_prio_queue", "normal_prio_queue", "low_prio_queue"],
         "endpoint": "http://0.0.0.0:9090",
         "workers": 10,
         "timeout": 3
@@ -107,7 +109,7 @@ GET /pusher/:namespace/:queue
 ### 更新推送配置
 
 ```
-PUT /pusher/:namespace/:queue
+PUT /pusher/:namespace/:group
 ```
 
 #### Request Query
@@ -118,6 +120,7 @@ PUT /pusher/:namespace/:queue
 
 ```
 {
+    "queues": ["high_prio_queue", "normal_prio_queue", "low_prio_queue"],
     "endpoint": "http://endpoint-url",
     "workers": 10,
     "timeout": 3
@@ -127,7 +130,7 @@ PUT /pusher/:namespace/:queue
 ### 删除推送 
 
 ```
-DELETE /pusher/:namespace/:queue
+DELETE /pusher/:namespace/:group
 ```
 
 #### Request Query

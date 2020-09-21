@@ -1,19 +1,20 @@
 ## Pusher API
 
-Pusher admin api config the pusher configuration on pool-namespace-queue
+Pusher admin api config the pusher configuration on pool-namespace-group
 
 > CAUTION: consideration of the performance, we sync pusher config every 3 seconds instead of fetching the config every time.
 
 ### Create Pusher
 
 ```
-POST /pusher/:namespace/:queue
+POST /pusher/:namespace/:group
 ```
 
 #### Request Body 
 
 ```
 {
+    "queues": ["high_prio_queue", "normal_prio_queue", "low_prio_queue"]
     "endpoint": "http://endpoint-url",
     "workers": 10,
     "timeout": 3
@@ -25,7 +26,7 @@ The unit of `timeout` is second and, `workers` is the number of pusher processes
 ```$json
 {
     "namespace": "test-namespace",
-    "queue": "test-queue",
+    "queue": "high_prio_queue",
     "id": "job_id",
     "ttl": 10,
     "elapsed_ms": 15842,
@@ -73,6 +74,7 @@ GET /pusher/:namespace
 {
     "pushers": {
         "test-queue": {
+            "queues": ["high_prio_queue", "normal_prio_queue", "low_prio_queue"],
             "endpoint": "http://0.0.0.0:9090",
             "workers": 10,
             "timeout": 3
@@ -81,10 +83,10 @@ GET /pusher/:namespace
 }
 ```
 
-### List the Pusher of a queue 
+### Get push group
 
 ```
-GET /pusher/:namespace/:queue
+GET /pusher/:namespace/:group
 ```
 
 #### Request Query
@@ -96,6 +98,7 @@ GET /pusher/:namespace/:queue
 ```
 {
     "pusher": {
+        "queues": ["high_prio_queue", "normal_prio_queue", "low_prio_queue"],
         "endpoint": "http://0.0.0.0:9090",
         "workers": 10,
         "timeout": 3
@@ -118,6 +121,7 @@ PUT /pusher/:namespace/:queue
 
 ```
 {
+    "queues": ["high_prio_queue", "normal_prio_queue", "low_prio_queue"]
     "endpoint": "http://endpoint-url",
     "workers": 10,
     "timeout": 3
@@ -127,7 +131,7 @@ PUT /pusher/:namespace/:queue
 ### Delete a Pusher
 
 ```
-DELETE /pusher/:namespace/:queue
+DELETE /pusher/:namespace/:group
 ```
 
 #### Request Query

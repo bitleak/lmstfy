@@ -63,7 +63,7 @@ func TestThrottlePublish(t *testing.T) {
 	namespace := "ns-throttler"
 	queue := "q1"
 	token, _ := tk.New("", namespace, uuid.GenUniqueID(), "test publish throttler")
-	limitStr := "{\"read\": 0, \"write\": 3, \"interval\":2}"
+	limitStr := "{\"read\": 0, \"write\": 3, \"interval\":1}"
 	if err := addTokenLimit(namespace, token, limitStr); err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestThrottleConsume(t *testing.T) {
 	namespace := "ns-throttler"
 	queue := "q2"
 	token, _ := tk.New("", namespace, uuid.GenUniqueID(), "test publish throttler")
-	limitStr := "{\"read\": 3, \"write\": 100, \"interval\":2}"
+	limitStr := "{\"read\": 3, \"write\": 100, \"interval\":1}"
 	if err := addTokenLimit(namespace, token, limitStr); err != nil {
 		t.Fatal(err)
 	}

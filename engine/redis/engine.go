@@ -124,11 +124,7 @@ func (e *Engine) Consume(namespace, queue string, ttrSecond, timeoutSecond uint3
 	return e.consume(namespace, queue, ttrSecond, timeoutSecond, false)
 }
 
-func (e *Engine) ConsumeByPush(namespace, queue string, ttrSecond, timeoutSecond uint32) (job engine.Job, err error) {
-	return e.consume(namespace, queue, ttrSecond, timeoutSecond, true)
-}
-
-func (e *Engine) consume(namespace, queue string, ttrSecond, timeoutSecond uint32, noConsume bool) (job engine.Job, err error) {
+func (e *Engine) consume(namespace, queue string, ttrSecond, timeoutSecond uint32, freezeTries bool) (job engine.Job, err error) {
 	defer func() {
 		if job != nil {
 			metrics.consumeJobs.WithLabelValues(e.redis.Name).Inc()
@@ -142,8 +138,8 @@ func (e *Engine) consume(namespace, queue string, ttrSecond, timeoutSecond uint3
 			jobID string
 			tries uint16
 		)
-		if noConsume {
-			jobID, tries, err = q.NoConsumePoll(timeoutSecond, ttrSecond)
+		if freezeTries {
+			jobID, tries, err = q.PollWithFrozenTries(timeoutSecond, ttrSecond)
 		} else {
 			jobID, tries, err = q.Poll(timeoutSecond, ttrSecond)
 		}
@@ -187,6 +183,14 @@ func (e *Engine) consume(namespace, queue string, ttrSecond, timeoutSecond uint3
 // be consumed. if none of the queues has any job, then consume wait for any queue that
 // has job first.
 func (e *Engine) ConsumeMulti(namespace string, queues []string, ttrSecond, timeoutSecond uint32) (job engine.Job, err error) {
+	return e.consumeMulti(namespace, queues, ttrSecond, timeoutSecond, false)
+}
+
+func (e *Engine) ConsumeMultiWithFrozenTries(namespace string, queues []string, ttrSecond, timeoutSecond uint32) (job engine.Job, err error) {
+	return e.consumeMulti(namespace, queues, ttrSecond, timeoutSecond, true)
+}
+
+func (e *Engine) consumeMulti(namespace string, queues []string, ttrSecond, timeoutSecond uint32, noConsume bool) (job engine.Job, err error) {
 	defer func() {
 		if job != nil {
 			metrics.consumeMultiJobs.WithLabelValues(e.redis.Name).Inc()
@@ -200,7 +204,7 @@ func (e *Engine) ConsumeMulti(namespace string, queues []string, ttrSecond, time
 	}
 	for {
 		startTime := time.Now().Unix()
-		queueName, jobID, tries, err := PollQueues(e.redis, e.timer, queueNames, timeoutSecond, ttrSecond, false)
+		queueName, jobID, tries, err := PollQueues(e.redis, e.timer, queueNames, timeoutSecond, ttrSecond, noConsume)
 		if err != nil {
 			return nil, fmt.Errorf("queue: %s", err)
 		}

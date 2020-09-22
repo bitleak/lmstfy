@@ -28,7 +28,7 @@ coverage:
 lint:
 	@rm -rf lint.log
 	@printf $(CCCOLOR)"Checking format...\n"$(ENDCOLOR)
-	@go list ./... | sed -e 's=github.com/bitleak/lmstfy/=./=' | xargs -n 1 gofmt -d -s 2>&1 | tee lint.log
+	@go list ./... | sed -e 's=github.com/bitleak/lmstfy/=./=' | xargs -n 1 gofmt -d -s 2>&1 | tee -a lint.log
 	@printf $(CCCOLOR)"Checking vet...\n"$(ENDCOLOR)
-	@go list ./... | sed -e 's=github.com/bitleak/lmstfy/=./=' | xargs -n 1 go vet 2>&1 | tee lint.log
+	@go list ./... | sed -e 's=github.com/bitleak/lmstfy/=./=' | xargs -n 1 go vet 2>&1 | tee -a lint.log
 	@[ ! -s lint.log ]

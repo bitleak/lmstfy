@@ -53,7 +53,7 @@ const (
 func setupMetrics() {
 	cv := newCounterVecHelper
 	gv := newGaugeVecHelper
-    hv := newHistogramHelper
+	hv := newHistogramHelper
 	metrics = &Metrics{
 		publishJobs:           cv("publish_jobs"),
 		consumeJobs:           cv("consume_jobs"),
@@ -123,20 +123,17 @@ func newSummaryHelper(name string, labels ...string) *prometheus.SummaryVec {
 }
 
 func newHistogramHelper(name string, labels ...string) *prometheus.HistogramVec {
-    labels = append([]string{"pool"}, labels...)
-    opts := prometheus.HistogramOpts{}
-    opts.Namespace = Namespace
-    opts.Subsystem = Subsystem
-    opts.Name = name
-    opts.Help = name
-    opts.Buckets = prometheus.ExponentialBuckets(15, 3.5, 7)
-    histogram := prometheus.NewHistogramVec(opts, labels)
-    prometheus.MustRegister(histogram)
-    return histogram
+	labels = append([]string{"pool"}, labels...)
+	opts := prometheus.HistogramOpts{}
+	opts.Namespace = Namespace
+	opts.Subsystem = Subsystem
+	opts.Name = name
+	opts.Help = name
+	opts.Buckets = prometheus.ExponentialBuckets(15, 3.5, 7)
+	histogram := prometheus.NewHistogramVec(opts, labels)
+	prometheus.MustRegister(histogram)
+	return histogram
 }
-
-
-
 
 type SizeProvider interface {
 	Size() (size int64, err error)

@@ -11,7 +11,7 @@ all: $(PROGRAM)
 .PHONY: all
 
 $(PROGRAM):
-	@sh build.sh
+	@bash build.sh
 	@echo ""
 	@printf $(MAKECOLOR)"Hint: It's a good idea to run 'make test' ;)"$(ENDCOLOR)
 	@echo ""
@@ -19,7 +19,6 @@ $(PROGRAM):
 test:
 	- cd scripts/redis && docker-compose up -d && cd ../..
 	@LMSTFY_TEST_CONFIG=`pwd`/scripts/test-conf.toml sh scripts/run-test.sh 
-	@cp coverage.out build/
 	- cd scripts/redis && docker-compose down && cd ../..
 
 coverage:
@@ -29,7 +28,7 @@ coverage:
 lint:
 	@rm -rf lint.log
 	@printf $(CCCOLOR)"Checking format...\n"$(ENDCOLOR)
-	@go list ./... | sed -e 's=github.com/bitleak/lmstfy/=./=' | xargs -n 1 gofmt -d -s 2>&1 | tee lint.log
+	@go list ./... | sed -e 's=github.com/bitleak/lmstfy/=./=' | xargs -n 1 gofmt -d -s 2>&1 | tee -a lint.log
 	@printf $(CCCOLOR)"Checking vet...\n"$(ENDCOLOR)
-	@go list ./... | sed -e 's=github.com/bitleak/lmstfy/=./=' | xargs -n 1 go vet 2>&1 | tee lint.log
+	@go list ./... | sed -e 's=github.com/bitleak/lmstfy/=./=' | xargs -n 1 go vet 2>&1 | tee -a lint.log
 	@[ ! -s lint.log ]

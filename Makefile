@@ -11,7 +11,7 @@ all: $(PROGRAM)
 .PHONY: all
 
 $(PROGRAM):
-	@sh build.sh
+	@bash build.sh
 	@echo ""
 	@printf $(MAKECOLOR)"Hint: It's a good idea to run 'make test' ;)"$(ENDCOLOR)
 	@echo ""
@@ -19,7 +19,6 @@ $(PROGRAM):
 test:
 	- cd scripts/redis && docker-compose up -d && cd ../..
 	@LMSTFY_TEST_CONFIG=`pwd`/scripts/test-conf.toml sh scripts/run-test.sh 
-	@cp coverage.out build/
 	- cd scripts/redis && docker-compose down && cd ../..
 
 coverage:

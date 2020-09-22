@@ -1,0 +1,37 @@
+name: Lmstfy Actions 
+
+on: [push, pull_request]
+
+jobs:
+  lint-build-test:
+    name: Lint/Build/Test 
+    strategy:
+      matrix:
+        go-version: [1.14.x, 1.15.x]
+        os: [ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+
+    - name: Install Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: ${{matrix.go-version}}
+
+    - name: Checkout Code Base
+      uses: actions/checkout@v2
+
+    - name: Restore Go Module Cache
+      uses: actions/cache@v2
+      with:
+        path: ${HOME}/go/pkg/mod
+        key: ${{ runner.os }}-${{ hashFiles('**/go.sum') }}
+
+    - name: Make Lint
+      run: make lint
+
+    - name: Build
+      run: make
+
+    - name: Test
+      run: make test
+

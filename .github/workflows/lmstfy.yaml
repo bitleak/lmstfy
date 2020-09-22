@@ -32,8 +32,10 @@ jobs:
     - name: Restore Go Module Cache
       uses: actions/cache@v2
       with:
-        path: ${HOME}/go/pkg/mod
-        key: ${{ runner.os }}-${{ hashFiles('**/go.sum') }}
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
 
     - name: Make Lint
       run: make lint

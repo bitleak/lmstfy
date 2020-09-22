@@ -1,6 +1,15 @@
-name: Lmstfy Actions 
+name: Lmstfy Actions  # don't edit while the badge was depend on this
 
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - v*
+    
+  pull_request:     
+    branches:
+      - master
 
 jobs:
   lint-build-test:

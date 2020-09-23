@@ -55,10 +55,10 @@ To start in developing mode:
 
 * [HTTP API Doc](https://github.com/bitleak/lmstfy/blob/master/doc/API.md)
 * [Administration API Doc](https://github.com/bitleak/lmstfy/blob/master/doc/administration.en.md)
-* [Throtter API Doc](https://github.com/bitleak/lmstfy/blob/master/doc/throtter.en.md)
+* [Throttler API Doc](https://github.com/bitleak/lmstfy/blob/master/doc/throttler.en.md)
 * [Pusher API Doc](https://github.com/bitleak/lmstfy/blob/master/doc/pusher.en.md)
 * [管理 API 中文文档](https://github.com/bitleak/lmstfy/blob/master/doc/administration.cn.md)
-* [限流 API 中文文档](https://github.com/bitleak/lmstfy/blob/master/doc/throtter.cn.md)
+* [限流 API 中文文档](https://github.com/bitleak/lmstfy/blob/master/doc/throttler.cn.md)
 * [推送 API 中文文档](https://github.com/bitleak/lmstfy/blob/master/doc/pusher.cn.md)
 
 ---

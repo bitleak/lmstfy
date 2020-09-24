@@ -139,13 +139,13 @@ func (t *Throttler) IsReachRateLimit(pool, namespace, token string, isRead bool)
 	if err != nil && strings.HasPrefix(err.Error(), "NOSCRIPT") {
 		sha, err := t.redisCli.ScriptLoad(throttleIncrLuaScript).Result()
 		if err != nil {
-			return true, fmt.Errorf("failed to load the throtter incr script err: %s", err.Error())
+			return true, fmt.Errorf("failed to load the throttler incr script err: %s", err.Error())
 		}
 		t.incrSHA = sha
 		val, err = t.redisCli.EvalSha(t.incrSHA, []string{tokenCounterKey}, limiter.Interval).Result()
 	}
 	if err != nil {
-		return true, fmt.Errorf("failed to eval the throtter incr script err: %s", err.Error())
+		return true, fmt.Errorf("failed to eval the throttler incr script err: %s", err.Error())
 	}
 	if isRead {
 		return val.(int64) > limiter.Read, nil

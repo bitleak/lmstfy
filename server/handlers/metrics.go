@@ -50,6 +50,7 @@ func setup_metrics() {
 	)
 	prometheus.MustRegister(latencies)
 	prometheus.MustRegister(httpCodes)
+	prometheus.MustRegister(rateLimits)
 	metrics.Latencies = latencies
 	metrics.HTTPCodes = httpCodes
 	metrics.RateLimits = rateLimits

@@ -16,7 +16,7 @@ type PerformanceMetrics struct {
 
 var metrics *PerformanceMetrics
 
-func setup_metrics() {
+func setupMetrics() {
 	metrics = &PerformanceMetrics{}
 	latencies := prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{

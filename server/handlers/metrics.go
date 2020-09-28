@@ -16,7 +16,7 @@ type PerformanceMetrics struct {
 
 var metrics *PerformanceMetrics
 
-func setup_metrics() {
+func setupMetrics() {
 	metrics = &PerformanceMetrics{}
 	latencies := prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -50,6 +50,7 @@ func setup_metrics() {
 	)
 	prometheus.MustRegister(latencies)
 	prometheus.MustRegister(httpCodes)
+	prometheus.MustRegister(rateLimits)
 	metrics.Latencies = latencies
 	metrics.HTTPCodes = httpCodes
 	metrics.RateLimits = rateLimits

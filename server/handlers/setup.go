@@ -20,7 +20,7 @@ var (
 
 func Setup(l *logrus.Logger) {
 	_logger = l
-	setup_metrics()
+	setupMetrics()
 }
 
 func GetHTTPLogger(c *gin.Context) *logrus.Entry {

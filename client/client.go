@@ -270,6 +270,12 @@ RETRY:
 //   - timeoutSecond is the long-polling wait time. If it's zero, this method will return immediately
 //     with or without a job; if it's positive, this method would polling for new job until timeout.
 func (c *LmstfyClient) Consume(queue string, ttrSecond, timeoutSecond uint32) (job *Job, e error) {
+	if strings.TrimSpace(queue) == "" {
+		return nil, &APIError{
+			Type:   RequestErr,
+			Reason: "Queue name shouldn't be empty",
+		}
+	}
 	if ttrSecond <= 0 {
 		return nil, &APIError{
 			Type:   RequestErr,
@@ -346,6 +352,12 @@ func (c *LmstfyClient) Consume(queue string, ttrSecond, timeoutSecond uint32) (j
 //   - count is the job count of this consume. If it's zero or over 100, this method will return an error.
 //     If it's positive, this method would return some jobs, and it's count is between 0 and count.
 func (c *LmstfyClient) BatchConsume(queue string, count, ttrSecond, timeoutSecond uint32) (jobs []*Job, e error) {
+	if strings.TrimSpace(queue) == "" {
+		return nil, &APIError{
+			Type:   RequestErr,
+			Reason: "Queue name shouldn't be empty",
+		}
+	}
 	if ttrSecond <= 0 {
 		return nil, &APIError{
 			Type:   RequestErr,
@@ -434,6 +446,12 @@ func (c *LmstfyClient) BatchConsume(queue string, count, ttrSecond, timeoutSecon
 //   ConsumeFromQueues(120, 5, "queue-a", "queue-b", "queue-c")
 // if all the queues have jobs to be fetched, the job in `queue-a` will be return.
 func (c *LmstfyClient) ConsumeFromQueues(ttrSecond, timeoutSecond uint32, queues ...string) (job *Job, e error) {
+	if len(queues) == 0 {
+		return nil, &APIError{
+			Type:   RequestErr,
+			Reason: "At least one queue was required",
+		}
+	}
 	if ttrSecond <= 0 {
 		return nil, &APIError{
 			Type:   RequestErr,

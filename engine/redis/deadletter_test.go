@@ -25,9 +25,13 @@ func TestDeadLetter_Peek(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to peek deadletter: %s", err)
 	}
-	if size != 3 || jobID != "x" {
-		t.Fatal("Mismatched job")
+	if jobID != "x" {
+		t.Fatalf("Mismatched job, id: %s was expected but got %s", "x", jobID)
 	}
+	if size != 3 {
+		t.Fatalf("Mismatched queue size: %d was expected but got %d", 3, size)
+	}
+	dl.Delete(3)
 }
 
 func TestDeadLetter_Delete(t *testing.T) {
@@ -57,9 +61,9 @@ func TestDeadLetter_Delete(t *testing.T) {
 
 func TestDeadLetter_Respawn(t *testing.T) {
 	p := NewPool(R)
-	job1 := engine.NewJob("ns-dead", "q3", []byte("1"), 60, 0, 1)
-	job2 := engine.NewJob("ns-dead", "q3", []byte("2"), 60, 0, 1)
-	job3 := engine.NewJob("ns-dead", "q3", []byte("3"), 60, 0, 1)
+	job1 := engine.NewJob("ns-dead", "q3", []byte("1"), 60, 0, 1, 0)
+	job2 := engine.NewJob("ns-dead", "q3", []byte("2"), 60, 0, 1, 0)
+	job3 := engine.NewJob("ns-dead", "q3", []byte("3"), 60, 0, 1, 0)
 	p.Add(job1)
 	p.Add(job2)
 	p.Add(job3)
@@ -120,7 +124,7 @@ func TestDeadLetter_Size(t *testing.T) {
 	dl, _ := NewDeadLetter("ns-dead", "q3", R)
 	cnt := 3
 	for i := 0; i < cnt; i++ {
-		job := engine.NewJob("ns-dead", "q3", []byte("1"), 60, 0, 1)
+		job := engine.NewJob("ns-dead", "q3", []byte("1"), 60, 0, 1, 0)
 		p.Add(job)
 		dl.Add(job.ID())
 	}
@@ -132,5 +136,89 @@ func TestDeadLetter_Size(t *testing.T) {
 	size, _ = dl.Size()
 	if size != 0 {
 		t.Fatalf("Expected the deadletter queue size is: %d, but got %d\n", 0, size)
+	}
+}
+
+func TestSetup(t *testing.T) {
+	// switch to prior queue mode
+	PreloadDeadLetterLuaScript(R, true)
+}
+
+func TestDeadLetterWithPriorQueue_Add(t *testing.T) {
+	TestDeadLetter_Add(t)
+}
+
+func TestDeadLetterWithPriorQueue_Peek(t *testing.T) {
+	TestDeadLetter_Peek(t)
+}
+
+func TestDeadLetterWithPriorQueue_Delete(t *testing.T) {
+	TestDeadLetter_Delete(t)
+}
+
+func TestDeadLetterWithPriorQueue_Size(t *testing.T) {
+	TestDeadLetter_Size(t)
+}
+
+func TestDeadLetterWithPriorQueue_Respawn(t *testing.T) {
+	p := NewPool(R)
+	namespace := "ns-deadletter-prior-queue"
+	queue := "q1"
+	dl, _ := NewDeadLetter(namespace, queue, R)
+	jobIDs := make([]string, 3)
+	for i := 0; i < 3; i++ {
+		job := engine.NewJob(namespace, queue, []byte("1"), 60, 0, 1, uint8(i))
+		jobIDs[i] = job.ID()
+		p.Add(job)
+		dl.Add(job.ID())
+		// Ensure TTL is removed when put into deadletter
+		jobKey := PoolJobKey(job)
+		jobTTL := R.Conn.TTL(jobKey).Val()
+		if jobTTL.Seconds() > 0 {
+			t.Fatalf("Respawned job's TTL should be removed")
+		}
+	}
+
+	timer, err := NewPriorQueueTimer("ns-dead-prior-queue-timer", R, time.Second)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to new timer: %s", err))
+	}
+	defer timer.Shutdown()
+	q := NewPriorQueue(namespace, queue, R, timer)
+
+	count, err := dl.Respawn(3, 10)
+	if err != nil || count != 3 {
+		t.Fatalf("Failed to respawn two jobs: %s", err)
+	}
+	for i := 0; i < 3; i++ {
+		jobID, _, err := q.Poll(1, 1)
+		if err != nil || jobID != jobIDs[2-i] {
+			t.Fatalf("Mismatch job id, %s was expected but got %s", jobIDs[2-i], jobID)
+		}
+		// Ensure TTL is set
+		jobKey := join(PoolPrefix, namespace, queue, jobID)
+		jobTTL := R.Conn.TTL(jobKey).Val()
+		if 10-jobTTL.Seconds() > 2 { // 2 seconds passed? no way.
+			t.Fatal("Deadletter job's TTL is not correct")
+		}
+	}
+
+	job := engine.NewJob(namespace, queue, []byte("1"), 60, 0, 1, uint8(2))
+	p.Add(job)
+	dl.Add(job.ID())
+	count, err = dl.Respawn(1, 10)
+	if err != nil || count != 1 {
+		t.Fatalf("Failed to respawn one jobs: %s", err)
+	}
+	jobID, _, err := q.Poll(1, 1)
+	if err != nil || jobID != job.ID() {
+		t.Fatalf("Mismatch job id, %s was expected but got %s", job.ID(), jobID)
+	}
+
+	// Ensure TTL is set
+	jobKey := join(PoolPrefix, namespace, queue, jobID)
+	jobTTL := R.Conn.TTL(jobKey).Val()
+	if 10-jobTTL.Seconds() > 2 {
+		t.Fatal("Deadletter job's TTL is not correct")
 	}
 }

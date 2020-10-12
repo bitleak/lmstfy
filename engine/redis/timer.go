@@ -8,7 +8,42 @@ import (
 )
 
 const (
-	LUA_T_PUMP = `
+	LuaPumpToPriorQueue = `
+local zset_key = KEYS[1]
+local output_queue_prefix = KEYS[2]
+local pool_prefix = KEYS[3]
+local output_deadletter_prefix = KEYS[4]
+local now = ARGV[1]
+local limit = ARGV[2]
+
+local expiredMembers = redis.call("ZRANGEBYSCORE", zset_key, 0, now, "LIMIT", 0, limit)
+
+if #expiredMembers == 0 then
+	return 0
+end
+
+for _,v in ipairs(expiredMembers) do
+	local ns, q, tries, job_id = struct.unpack("Hc0Hc0HHc0", v)
+	if redis.call("EXISTS", table.concat({pool_prefix, ns, q, job_id}, "/")) > 0 then
+		-- only pump job to ready queue/dead letter if the job did not expire
+		if tries == 0 then
+			-- no more tries, move to dead letter
+			local val = struct.pack("HHc0", 1, #job_id, job_id)
+			redis.call("PERSIST", table.concat({pool_prefix, ns, q, job_id}, "/"))  -- remove ttl
+			redis.call("LPUSH", table.concat({output_deadletter_prefix, ns, q}, "/"), val)
+		else
+			-- move to prior ready queue
+			local val = struct.pack("HHc0", tonumber(tries), #job_id, job_id)
+			-- last four bytes in job id was little endian, so the position of priority was third last
+			local priority = string.char(string.byte(job_id, -3))
+			redis.call("ZADD", table.concat({output_queue_prefix, ns, q}, "/"), priority, val)
+		end
+	end
+end
+redis.call("ZREM", zset_key, unpack(expiredMembers))
+return #expiredMembers
+`
+	LuaPumpToFIFO = `
 local zset_key = KEYS[1]
 local output_queue_prefix = KEYS[2]
 local pool_prefix = KEYS[3]
@@ -51,25 +86,36 @@ type Timer struct {
 	interval time.Duration
 	shutdown chan struct{}
 
-	lua_pump_sha string
+	luaPumpSHA    string
+	luaPumpScript string
 }
 
-// NewTimer return an instance of delay queue
+// NewTimer return an instance of fifo delay queue
 func NewTimer(name string, redis *RedisInstance, interval time.Duration) (*Timer, error) {
+	return newTimerWithLuaScript(name, LuaPumpToFIFO, redis, interval)
+}
+
+// NewPriorQueueTimer return an instance of priority delay queue
+func NewPriorQueueTimer(name string, redis *RedisInstance, interval time.Duration) (*Timer, error) {
+	return newTimerWithLuaScript(name, LuaPumpToPriorQueue, redis, interval)
+}
+
+func newTimerWithLuaScript(name string, luaPumpScript string, redis *RedisInstance, interval time.Duration) (*Timer, error) {
 	timer := &Timer{
-		name:     name,
-		redis:    redis,
-		interval: interval,
-		shutdown: make(chan struct{}),
+		name:          name,
+		redis:         redis,
+		interval:      interval,
+		shutdown:      make(chan struct{}),
+		luaPumpScript: luaPumpScript,
 	}
 
 	// Preload the lua scripts
-	sha, err := redis.Conn.ScriptLoad(LUA_T_PUMP).Result()
+	sha, err := redis.Conn.ScriptLoad(luaPumpScript).Result()
 	if err != nil {
 		logger.WithField("err", err).Error("Failed to preload lua script in timer")
 		return nil, err
 	}
-	timer.lua_pump_sha = sha
+	timer.luaPumpSHA = sha
 
 	go timer.tick()
 	return timer, nil
@@ -117,16 +163,16 @@ func (t *Timer) tick() {
 
 func (t *Timer) pump(currentSecond int64) {
 	for {
-		val, err := t.redis.Conn.EvalSha(t.lua_pump_sha, []string{t.Name(), QueuePrefix, PoolPrefix, DeadLetterPrefix}, currentSecond, BATCH_SIZE).Result()
+		val, err := t.redis.Conn.EvalSha(t.luaPumpSHA, []string{t.Name(), QueuePrefix, PoolPrefix, DeadLetterPrefix}, currentSecond, BATCH_SIZE).Result()
 		if err != nil {
 			if isLuaScriptGone(err) { // when redis restart, the script needs to be uploaded again
-				sha, err := t.redis.Conn.ScriptLoad(LUA_T_PUMP).Result()
+				sha, err := t.redis.Conn.ScriptLoad(t.luaPumpScript).Result()
 				if err != nil {
 					logger.WithField("err", err).Error("Failed to reload script")
 					time.Sleep(time.Second)
 					return
 				}
-				t.lua_pump_sha = sha
+				t.luaPumpSHA = sha
 			}
 			logger.WithField("err", err).Error("Failed to pump")
 			time.Sleep(time.Second)

@@ -33,7 +33,7 @@ func NewEngine(redisName string, conn *go_redis.Client) (engine.Engine, error) {
 		Name: redisName,
 		Conn: conn,
 	}
-	if err := PreloadDeadLetterLuaScript(redis); err != nil {
+	if err := PreloadDeadLetterLuaScript(redis, false); err != nil {
 		return nil, err
 	}
 	go RedisInstanceMonitor(redis)
@@ -66,7 +66,7 @@ func (e *Engine) Publish(namespace, queue string, body []byte, ttlSecond, delayS
 	}()
 	e.meta.RecordIfNotExist(namespace, queue)
 	e.monitor.MonitorIfNotExist(namespace, queue)
-	job := engine.NewJob(namespace, queue, body, ttlSecond, delaySecond, tries)
+	job := engine.NewJob(namespace, queue, body, ttlSecond, delaySecond, tries, 0)
 	if tries == 0 {
 		return job.ID(), nil
 	}

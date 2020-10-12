@@ -17,6 +17,7 @@ type Job interface {
 	TTL() uint32
 	Delay() uint32
 	Tries() uint16
+	Priority() uint8
 	ElapsedMS() int64
 	encoding.BinaryMarshaler
 	encoding.BinaryUnmarshaler
@@ -31,6 +32,7 @@ type jobImpl struct {
 	ttl       uint32
 	delay     uint32
 	tries     uint16
+	priority  uint8
 
 	_elapsedMS int64
 }
@@ -38,8 +40,8 @@ type jobImpl struct {
 // NOTE: there is a trick in this factory, the delay is embedded in the jobID.
 // By doing this we can delete the job that's located in hourly AOF, by placing
 // a tombstone record in that AOF.
-func NewJob(namespace, queue string, body []byte, ttl, delay uint32, tries uint16) Job {
-	id := uuid.GenUniqueJobIDWithDelay(delay)
+func NewJob(namespace, queue string, body []byte, ttl, delay uint32, tries uint16, priority uint8) Job {
+	id := uuid.GenUniqueJobID(delay, priority)
 	return &jobImpl{
 		namespace: namespace,
 		queue:     queue,
@@ -48,11 +50,13 @@ func NewJob(namespace, queue string, body []byte, ttl, delay uint32, tries uint1
 		ttl:       ttl,
 		delay:     delay,
 		tries:     tries,
+		priority:  priority,
 	}
 }
 
 func NewJobWithID(namespace, queue string, body []byte, ttl uint32, tries uint16, jobID string) Job {
 	delay, _ := uuid.ExtractDelaySecondFromUniqueID(jobID)
+	priority, _ := uuid.ExtractPriorityFromUniqueID(jobID)
 	return &jobImpl{
 		namespace: namespace,
 		queue:     queue,
@@ -61,6 +65,7 @@ func NewJobWithID(namespace, queue string, body []byte, ttl uint32, tries uint16
 		ttl:       ttl,
 		delay:     delay,
 		tries:     tries,
+		priority:  priority,
 	}
 }
 
@@ -90,6 +95,10 @@ func (j *jobImpl) Delay() uint32 {
 
 func (j *jobImpl) Tries() uint16 {
 	return j.tries
+}
+
+func (j *jobImpl) Priority() uint8 {
+	return j.priority
 }
 
 func (j *jobImpl) ElapsedMS() int64 {

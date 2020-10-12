@@ -50,7 +50,7 @@ func setup() {
 		Conn: conn,
 	}
 
-	if err = PreloadDeadLetterLuaScript(R); err != nil {
+	if err = PreloadDeadLetterLuaScript(R, false); err != nil {
 		panic(fmt.Sprintf("Failed to preload deadletter lua script: %s", err))
 	}
 }

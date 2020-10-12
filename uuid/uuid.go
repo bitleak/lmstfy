@@ -10,6 +10,11 @@ import (
 	"github.com/oklog/ulid"
 )
 
+const (
+	delaySecondMask = uint32(0xFFFF)
+	priorityMask = uint32(0xFF0000)
+)
+
 // Use pool to avoid concurrent access for rand.Source
 var entropyPool = sync.Pool{
 	New: func() interface{} {
@@ -26,15 +31,23 @@ func GenUniqueID() string {
 	return id.String()
 }
 
-// Use the last four bytes of the 16-byte's ULID to store the delaySecond.
+// Use the last four bytes of the 16-byte's ULID to store the delaySecond,
+// and 1-byte to store the priority. ID format like below:
+//
+// <-           12bytes           -><- 1byte -><- 1byte -><-     2bytes    ->
+// +--------------------------------+----------+----------+-----------------+
+// |    random bytes                | reserved | priority | delay second    |
+// +--------------------------------+----------+----------+-----------------+
+//
 // The last fours bytes was some random value in ULID, so changing that value won't
 // affect anything except randomness.
-func GenUniqueJobIDWithDelay(delaySecond uint32) string {
+func GenUniqueJobID(delaySecond uint32, priority uint8) string {
 	entropy := entropyPool.Get().(*rand.Rand)
 	defer entropyPool.Put(entropy)
 	id := ulid.MustNew(ulid.Now(), entropy)
-	// Encode the delayHour in littleEndian and store at the last four bytes
-	binary.LittleEndian.PutUint32(id[len(id)-4:], delaySecond)
+	// Encode the delay second and priority in littleEndian and store at the last four bytes
+	customBits := (uint32(priority)<<16) | (delaySecond & delaySecondMask)
+	binary.LittleEndian.PutUint32(id[len(id)-4:], customBits)
 	return id.String()
 }
 
@@ -65,5 +78,13 @@ func ExtractDelaySecondFromUniqueID(s string) (uint32, error) {
 	if err != nil {
 		return 0, err
 	}
-	return binary.LittleEndian.Uint32(id[len(id)-4:]), nil
+	return binary.LittleEndian.Uint32(id[len(id)-4:]) & delaySecondMask, nil
+}
+
+func ExtractPriorityFromUniqueID(s string) (uint8, error) {
+	id, err := ulid.Parse(s)
+	if err != nil {
+		return 0, err
+	}
+	return uint8((binary.LittleEndian.Uint32(id[len(id)-4:]) & priorityMask)>>16), nil
 }

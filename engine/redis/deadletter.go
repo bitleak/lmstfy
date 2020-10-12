@@ -3,14 +3,13 @@ package redis
 import (
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/bitleak/lmstfy/engine"
 	go_redis "github.com/go-redis/redis"
 )
 
 const (
-	LUA_D_RESPAWN = `
+	luaDLRespawnToFIFO = `
 local deadletter = KEYS[1]
 local queue = KEYS[2]
 local poolPrefix = KEYS[3]
@@ -30,7 +29,47 @@ for i = 1, limit do
 end
 return limit  -- deadletter has more data when return value is >= limit
 `
-	LUA_D_DELETE = `
+	luaDLRespawnToPriorityQueue = `
+local deadletter = KEYS[1]
+local queue = KEYS[2]
+local poolPrefix = KEYS[3]
+local limit = tonumber(ARGV[1])
+local respawnTTL = tonumber(ARGV[2])
+
+for i = 1, limit do
+    local data = redis.call("RPOP", deadletter)
+	if data == false then
+		return i - 1  -- deadletter is empty
+	end
+    -- unpack the jobID, and set the TTL
+    local _, jobID = struct.unpack("HHc0", data)
+	local priority = string.byte(jobID, -3)
+	redis.call("ZADD", queue, priority, data)
+    if respawnTTL > 0 then
+		redis.call("EXPIRE", poolPrefix .. "/" .. jobID, respawnTTL)
+	end
+end
+return limit  -- deadletter has more data when return value is >= limit
+`
+
+	luaPriorQueueDelete = `
+local queue = KEYS[1]
+local poolPrefix = KEYS[2]
+local limit = tonumber(ARGV[1])
+
+local members = redis.call("ZPOPMAX", queue, limit)
+if #members == 0 then
+	return 0
+end
+for i = 1, #members, 2 do
+	-- unpack the jobID, and delete the job from the job pool
+	local _, jobID = struct.unpack("HHc0", members[i])
+	redis.call("DEL", poolPrefix .. "/" .. jobID)
+end
+return #members/2
+`
+
+	luaDeadLetterDelete = `
 local deadletter = KEYS[1]
 local poolPrefix = KEYS[2]
 local limit = tonumber(ARGV[1])
@@ -49,47 +88,58 @@ return limit
 )
 
 var (
-	_lua_respawn_deadletter_sha string
-	_lua_delete_deadletter_sha  string
+	_luaRespawnDeadLetterSHA string
+	_luaDeleteDeadLetterSHA  string
+	_luaDeletePriorQueueSHA  string
 )
 
 // Because the DeadLetter is not like Timer which is a singleton,
 // DeadLetters are transient objects like Queue. So we have to preload
 // the lua scripts separately.
-func PreloadDeadLetterLuaScript(redis *RedisInstance) error {
-	sha, err := redis.Conn.ScriptLoad(LUA_D_RESPAWN).Result()
-	if err != nil {
-		return fmt.Errorf("failed to preload lua script: %s", err)
+func PreloadDeadLetterLuaScript(redis *RedisInstance, isPriorQueue bool) error {
+	luaRespawnScript := luaDLRespawnToFIFO
+	if isPriorQueue {
+		luaRespawnScript = luaDLRespawnToPriorityQueue
 	}
-	_lua_respawn_deadletter_sha = sha
+	sha, err := redis.Conn.ScriptLoad(luaRespawnScript).Result()
+	if err != nil {
+		return fmt.Errorf("failed to preload dead letter lua respawn script: %s", err)
+	}
+	_luaRespawnDeadLetterSHA = sha
 
-	sha, err = redis.Conn.ScriptLoad(LUA_D_DELETE).Result()
+	sha, err = redis.Conn.ScriptLoad(luaDeadLetterDelete).Result()
 	if err != nil {
-		return fmt.Errorf("failed to preload luascript: %s", err)
+		return fmt.Errorf("failed to preload dead letter lua delete script: %s", err)
 	}
-	_lua_delete_deadletter_sha = sha
+	_luaDeleteDeadLetterSHA = sha
+
+	sha, err = redis.Conn.ScriptLoad(luaPriorQueueDelete).Result()
+	if err != nil {
+		return fmt.Errorf("failed to preload dead letter lua prior queue delete script: %s", err)
+	}
+	_luaDeletePriorQueueSHA = sha
 	return nil
 }
 
 // DeadLetter is where dead job will be buried, the job can be respawned into ready queue
 type DeadLetter struct {
-	redis           *RedisInstance
-	namespace       string
-	queue           string
-	lua_respawn_sha string
-	lua_delete_sha  string
+	redis         *RedisInstance
+	namespace     string
+	queue         string
+	luaRespawnSHA string
+	luaDeleteSHA  string
 }
 
 // NewDeadLetter return an instance of DeadLetter storage
 func NewDeadLetter(namespace, queue string, redis *RedisInstance) (*DeadLetter, error) {
 	dl := &DeadLetter{
-		redis:           redis,
-		namespace:       namespace,
-		queue:           queue,
-		lua_respawn_sha: _lua_respawn_deadletter_sha,
-		lua_delete_sha:  _lua_delete_deadletter_sha,
+		redis:         redis,
+		namespace:     namespace,
+		queue:         queue,
+		luaRespawnSHA: _luaRespawnDeadLetterSHA,
+		luaDeleteSHA:  _luaDeleteDeadLetterSHA,
 	}
-	if dl.lua_respawn_sha == "" {
+	if dl.luaRespawnSHA == "" {
 		return nil, errors.New("dead letter's lua script is not preloaded")
 	}
 	return dl, nil
@@ -104,7 +154,7 @@ func (dl *DeadLetter) Name() string {
 // the dead job back to the ready queue.
 //
 // NOTE: this method is not called any where except in tests, but this logic is
-// implement in the timer's LUA_T_PUMP script. please refer to that.
+// implement in the timer's LuaPumpToFIFO script. please refer to that.
 func (dl *DeadLetter) Add(jobID string) error {
 	val := structPack(1, jobID)
 	if err := dl.redis.Conn.Persist(PoolJobKey2(dl.namespace, dl.queue, jobID)).Err(); err != nil {
@@ -142,10 +192,10 @@ func (dl *DeadLetter) Delete(limit int64) (count int64, err error) {
 			batchSize = limit
 		}
 		for {
-			val, err := dl.redis.Conn.EvalSha(dl.lua_delete_sha, []string{dl.Name(), poolPrefix}, batchSize).Result()
+			val, err := dl.redis.Conn.EvalSha(dl.luaDeleteSHA, []string{dl.Name(), poolPrefix}, batchSize).Result()
 			if err != nil {
 				if isLuaScriptGone(err) {
-					if err := PreloadDeadLetterLuaScript(dl.redis); err != nil {
+					if err := PreloadDeadLetterLuaScript(dl.redis, false); err != nil {
 						logger.WithField("err", err).Error("Failed to load deadletter lua script")
 					}
 					continue
@@ -198,16 +248,16 @@ func (dl *DeadLetter) Respawn(limit, ttlSecond int64) (count int64, err error) {
 		Queue:     dl.queue,
 	}).String()
 	poolPrefix := PoolJobKeyPrefix(dl.namespace, dl.queue)
-	if limit > 1 {
+	if limit > 0 {
 		var batchSize int64 = 100
 		if batchSize > limit {
 			batchSize = limit
 		}
 		for {
-			val, err := dl.redis.Conn.EvalSha(dl.lua_respawn_sha, []string{dl.Name(), queueName, poolPrefix}, batchSize, ttlSecond).Result() // Respawn `batchSize` jobs at a time
+			val, err := dl.redis.Conn.EvalSha(dl.luaRespawnSHA, []string{dl.Name(), queueName, poolPrefix}, batchSize, ttlSecond).Result() // Respawn `batchSize` jobs at a time
 			if err != nil {
 				if isLuaScriptGone(err) {
-					if err := PreloadDeadLetterLuaScript(dl.redis); err != nil {
+					if err := PreloadDeadLetterLuaScript(dl.redis, false); err != nil {
 						logger.WithField("err", err).Error("Failed to load deadletter lua script")
 					}
 					continue
@@ -227,25 +277,6 @@ func (dl *DeadLetter) Respawn(limit, ttlSecond int64) (count int64, err error) {
 			}
 		}
 		return count, nil
-	} else if limit == 1 {
-		data, err := dl.redis.Conn.RPopLPush(dl.Name(), queueName).Result()
-		if err != nil {
-			if err == go_redis.Nil {
-				return 0, nil
-			}
-			return 0, err
-		}
-		_, jobID, err := structUnpack(data)
-		if err != nil {
-			return 1, err
-		}
-		if ttlSecond > 0 {
-			err = dl.redis.Conn.Expire(PoolJobKey2(dl.namespace, dl.queue, jobID), time.Duration(ttlSecond)*time.Second).Err()
-		}
-		if err != nil {
-			return 1, fmt.Errorf("failed to set TTL on respawned job[%s]: %s", jobID, err)
-		}
-		return 1, nil
 	} else {
 		return 0, nil
 	}

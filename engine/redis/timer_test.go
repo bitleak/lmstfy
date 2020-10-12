@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bitleak/lmstfy/uuid"
+
 	"github.com/bitleak/lmstfy/engine"
 	"github.com/sirupsen/logrus"
 )
@@ -14,10 +16,56 @@ func TestTimer_Add(t *testing.T) {
 	if err != nil {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))
 	}
-	job := engine.NewJob("ns-timer", "q1", []byte("hello msg 1"), 10, 0, 1)
+	job := engine.NewJob("ns-timer", "q1", []byte("hello msg 1"), 10, 0, 1, 0)
 	if err = timer.Add(job.Namespace(), job.Queue(), job.ID(), 10, 1); err != nil {
 		t.Errorf("Failed to add job to timer: %s", err)
 	}
+}
+
+func TestPriorQueueTimer_Add(t *testing.T) {
+	timer, err := NewPriorQueueTimer("timer_set_prior_queue_1", R, time.Second)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to new timer: %s", err))
+	}
+	job := engine.NewJob("ns-prior-timer", "q1", []byte("hello prior msg 1"), 10, 0, 1, 0)
+	if err = timer.Add(job.Namespace(), job.Queue(), job.ID(), 10, 1); err != nil {
+		t.Errorf("Failed to add job to timer: %s", err)
+	}
+}
+
+func TestPriorQueueTimer_Tick(t *testing.T) {
+	timer, err := NewTimer("timer_set_prior_queue_2", R, time.Second)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to new timer: %s", err))
+	}
+	defer timer.Shutdown()
+	priority := uint8(2)
+	job := engine.NewJob("ns-prior-timer", "q2", []byte("hello msg 2"), 5, 0, 1, priority)
+	pool := NewPool(R)
+	pool.Add(job)
+	timer.Add(job.Namespace(), job.Queue(), job.ID(), 3, 1)
+	wait := make(chan struct{})
+	go func() {
+		defer func() {
+			wait <- struct{}{}
+		}()
+		val, err := R.Conn.BRPop(5*time.Second, join(QueuePrefix, "ns-prior-timer", "q2")).Result()
+		if err != nil || len(val) == 0 {
+			t.Fatal("Failed to pop the job from target queue")
+		}
+		tries, jobID, err := structUnpack(val[1])
+		if err != nil {
+			t.Fatalf("Failed to decode the job pop from queue")
+		}
+		if tries != 1 || jobID != job.ID() {
+			t.Fatal("Job data mismatched")
+		}
+		gotPriority, _ := uuid.ExtractPriorityFromUniqueID(jobID)
+		if priority != gotPriority {
+			t.Fatalf("Job data priority, %d was expected but got %d", priority, gotPriority)
+		}
+	}()
+	<-wait
 }
 
 func TestTimer_Tick(t *testing.T) {
@@ -26,7 +74,7 @@ func TestTimer_Tick(t *testing.T) {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))
 	}
 	defer timer.Shutdown()
-	job := engine.NewJob("ns-timer", "q2", []byte("hello msg 2"), 5, 0, 1)
+	job := engine.NewJob("ns-timer", "q2", []byte("hello msg 2"), 5, 0, 1, 0)
 	pool := NewPool(R)
 	pool.Add(job)
 	timer.Add(job.Namespace(), job.Queue(), job.ID(), 3, 1)
@@ -69,7 +117,7 @@ func benchmarkTimer_Add(timer *Timer) func(b *testing.B) {
 	pool := NewPool(R)
 	return func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			job := engine.NewJob("ns-timer", "q3", []byte("hello msg 1"), 100, 0, 1)
+			job := engine.NewJob("ns-timer", "q3", []byte("hello msg 1"), 100, 0, 1, 0)
 			pool.Add(job)
 			timer.Add(job.Namespace(), job.Queue(), job.ID(), 1, 1)
 		}
@@ -82,7 +130,7 @@ func benchmarkTimer_Pop(timer *Timer) func(b *testing.B) {
 		b.StopTimer()
 		pool := NewPool(R)
 		for i := 0; i < b.N; i++ {
-			job := engine.NewJob("ns-timer", "q3", []byte("hello msg 1"), 100, 0, 1)
+			job := engine.NewJob("ns-timer", "q3", []byte("hello msg 1"), 100, 0, 1, 0)
 			pool.Add(job)
 			timer.Add(job.Namespace(), job.Queue(), job.ID(), 1, 1)
 		}
@@ -108,7 +156,7 @@ func BenchmarkTimer_Pump(b *testing.B) {
 	}
 	timer.Shutdown()
 	for i := 0; i < 10000; i++ {
-		job := engine.NewJob("ns-timer", "q4", []byte("hello msg 1"), 100, 0, 1)
+		job := engine.NewJob("ns-timer", "q4", []byte("hello msg 1"), 100, 0, 1, 0)
 		pool.Add(job)
 		timer.Add(job.Namespace(), job.Queue(), job.ID(), 1, 1)
 	}

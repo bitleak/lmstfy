@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"time"
 
+	"github.com/bitleak/lmstfy/uuid"
+
 	"github.com/go-redis/redis"
 )
 
@@ -23,19 +25,18 @@ if #expiredMembers == 0 then
 end
 
 for _,v in ipairs(expiredMembers) do
-	local ns, q, tries, job_id = struct.unpack("Hc0Hc0HHc0", v)
+	local ns, q, tries, job_id, priority = struct.unpack("Hc0Hc0HHc0H", v)
 	if redis.call("EXISTS", table.concat({pool_prefix, ns, q, job_id}, "/")) > 0 then
 		-- only pump job to ready queue/dead letter if the job did not expire
 		if tries == 0 then
 			-- no more tries, move to dead letter
-			local val = struct.pack("HHc0", 1, #job_id, job_id)
+			local val = struct.pack("HHc0H", 1, #job_id, job_id, priority)
 			redis.call("PERSIST", table.concat({pool_prefix, ns, q, job_id}, "/"))  -- remove ttl
 			redis.call("LPUSH", table.concat({output_deadletter_prefix, ns, q}, "/"), val)
 		else
 			-- move to prior ready queue
-			local val = struct.pack("HHc0", tonumber(tries), #job_id, job_id)
+			local val = struct.pack("HHc0H", tonumber(tries), #job_id, job_id, priority)
 			-- last four bytes in job id was little endian, so the position of priority was third last
-			local priority = string.char(string.byte(job_id, -3))
 			redis.call("ZADD", table.concat({output_queue_prefix, ns, q}, "/"), priority, val)
 		end
 	end
@@ -131,13 +132,21 @@ func (t *Timer) Add(namespace, queue, jobID string, delaySecond uint32, tries ui
 	metrics.timerAddJobs.WithLabelValues(t.redis.Name).Inc()
 	timestamp := time.Now().Unix() + int64(delaySecond)
 
-	// struct-pack the data in the format `Hc0Hc0HHc0`:
-	//   {namespace len}{namespace}{queue len}{queue}{tries}{jobID len}{jobID}
-	// length are 2-byte uint16 in little-endian
 	namespaceLen := len(namespace)
 	queueLen := len(queue)
 	jobIDLen := len(jobID)
-	buf := make([]byte, 2+namespaceLen+2+queueLen+2+2+jobIDLen)
+	var buf []byte
+	if t.isPriorQueue {
+		// struct-pack the data in the format `Hc0Hc0HHc0H`:
+		//   {namespace len}{namespace}{queue len}{queue}{tries}{jobID len}{jobID}{priority}
+		// length are 2-byte uint16 in little-endian
+		buf = make([]byte, 2+namespaceLen+2+queueLen+2+2+jobIDLen+2)
+	} else {
+		// struct-pack the data in the format `Hc0Hc0HHc0`:
+		//   {namespace len}{namespace}{queue len}{queue}{tries}{jobID len}{jobID}
+		// length are 2-byte uint16 in little-endian
+		buf = make([]byte, 2+namespaceLen+2+queueLen+2+2+jobIDLen)
+	}
 	binary.LittleEndian.PutUint16(buf[0:], uint16(namespaceLen))
 	copy(buf[2:], namespace)
 	binary.LittleEndian.PutUint16(buf[2+namespaceLen:], uint16(queueLen))
@@ -145,6 +154,10 @@ func (t *Timer) Add(namespace, queue, jobID string, delaySecond uint32, tries ui
 	binary.LittleEndian.PutUint16(buf[2+namespaceLen+2+queueLen:], uint16(tries))
 	binary.LittleEndian.PutUint16(buf[2+namespaceLen+2+queueLen+2:], uint16(jobIDLen))
 	copy(buf[2+namespaceLen+2+queueLen+2+2:], jobID)
+	if t.isPriorQueue {
+		priority, _ := uuid.ExtractPriorityFromUniqueID(jobID)
+		binary.LittleEndian.PutUint16(buf[2+namespaceLen+2+queueLen+2+2+jobIDLen:], uint16(priority))
+	}
 
 	return t.redis.Conn.ZAdd(t.Name(), redis.Z{Score: float64(timestamp), Member: buf}).Err()
 }

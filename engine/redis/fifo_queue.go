@@ -190,7 +190,7 @@ func structUnpack(data string) (tries uint16, jobID string, err error) {
 	buf := []byte(data)
 	h1 := binary.LittleEndian.Uint16(buf[0:])
 	h2 := binary.LittleEndian.Uint16(buf[2:])
-	jobID = string(buf[4:])
+	jobID = string(buf[4 : 4+h2])
 	tries = h1
 	if len(jobID) != int(h2) {
 		err = errors.New("corrupted data")

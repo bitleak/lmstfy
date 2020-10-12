@@ -42,8 +42,7 @@ for i = 1, limit do
 		return i - 1  -- deadletter is empty
 	end
     -- unpack the jobID, and set the TTL
-    local _, jobID = struct.unpack("HHc0", data)
-	local priority = string.byte(jobID, -3)
+    local _, jobID, priority = struct.unpack("HHc0H", data)
 	redis.call("ZADD", queue, priority, data)
     if respawnTTL > 0 then
 		redis.call("EXPIRE", poolPrefix .. "/" .. jobID, respawnTTL)

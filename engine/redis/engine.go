@@ -2,6 +2,7 @@ package redis
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -21,24 +22,31 @@ type RedisInstance struct {
 // - deliver jobs to clients
 // - manage dead letters
 type Engine struct {
-	redis   *RedisInstance
-	pool    *Pool
-	timer   *Timer
-	meta    *MetaManager
-	monitor *SizeMonitor
+	redis             *RedisInstance
+	pool              *Pool
+	timer             *Timer
+	meta              *MetaManager
+	monitor           *SizeMonitor
+	enabledPriorQueue bool
 }
 
-func NewEngine(redisName string, conn *go_redis.Client) (engine.Engine, error) {
+func NewEngine(redisName string, conn *go_redis.Client, enabledPriorQueue bool) (engine.Engine, error) {
 	redis := &RedisInstance{
 		Name: redisName,
 		Conn: conn,
 	}
-	if err := PreloadDeadLetterLuaScript(redis, false); err != nil {
+	if err := PreloadDeadLetterLuaScript(redis, enabledPriorQueue); err != nil {
 		return nil, err
 	}
 	go RedisInstanceMonitor(redis)
 	meta := NewMetaManager(redis)
-	timer, err := NewTimer("timer_set", redis, time.Second)
+	var err error
+	var timer *Timer
+	if enabledPriorQueue {
+		timer, err = NewPriorQueueTimer("timer_set", redis, time.Second)
+	} else {
+		timer, err = NewTimer("timer_set", redis, time.Second)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -49,24 +57,28 @@ func NewEngine(redisName string, conn *go_redis.Client) (engine.Engine, error) {
 	monitor := NewSizeMonitor(redis, timer, metadata)
 	go monitor.Loop()
 	return &Engine{
-		redis:   redis,
-		pool:    NewPool(redis),
-		timer:   timer,
-		meta:    meta,
-		monitor: monitor,
+		redis:             redis,
+		pool:              NewPool(redis),
+		timer:             timer,
+		meta:              meta,
+		monitor:           monitor,
+		enabledPriorQueue: enabledPriorQueue,
 	}, nil
 }
 
-func (e *Engine) Publish(namespace, queue string, body []byte, ttlSecond, delaySecond uint32, tries uint16) (jobID string, err error) {
+func (e *Engine) Publish(namespace, queue string, body []byte, ttlSecond, delaySecond uint32, tries uint16, priority uint8) (jobID string, err error) {
 	defer func() {
 		if err == nil {
 			metrics.publishJobs.WithLabelValues(e.redis.Name).Inc()
 			metrics.publishQueueJobs.WithLabelValues(e.redis.Name, namespace, queue).Inc()
 		}
 	}()
+	if priority != 0 && !e.enabledPriorQueue {
+		return "", errors.New("priority was not supported")
+	}
 	e.meta.RecordIfNotExist(namespace, queue)
 	e.monitor.MonitorIfNotExist(namespace, queue)
-	job := engine.NewJob(namespace, queue, body, ttlSecond, delaySecond, tries, 0)
+	job := engine.NewJob(namespace, queue, body, ttlSecond, delaySecond, tries, priority)
 	if tries == 0 {
 		return job.ID(), nil
 	}
@@ -77,8 +89,13 @@ func (e *Engine) Publish(namespace, queue string, body []byte, ttlSecond, delayS
 	}
 
 	if delaySecond == 0 {
-		q := NewQueue(namespace, queue, e.redis, e.timer)
-		err = q.Push(job, tries)
+		if e.enabledPriorQueue {
+			q := NewPriorQueue(namespace, queue, e.redis, e.timer)
+			err = q.Push(job, tries)
+		} else {
+			q := NewFIFOQueue(namespace, queue, e.redis, e.timer)
+			err = q.Push(job, tries)
+		}
 		if err != nil {
 			err = fmt.Errorf("queue: %s", err)
 		}
@@ -131,7 +148,12 @@ func (e *Engine) consume(namespace, queue string, ttrSecond, timeoutSecond uint3
 			metrics.consumeQueueJobs.WithLabelValues(e.redis.Name, namespace, queue).Inc()
 		}
 	}()
-	q := NewQueue(namespace, queue, e.redis, e.timer)
+	var q Queue
+	if e.enabledPriorQueue {
+		q = NewPriorQueue(namespace, queue, e.redis, e.timer)
+	} else {
+		q = NewFIFOQueue(namespace, queue, e.redis, e.timer)
+	}
 	for {
 		startTime := time.Now().Unix()
 		var (
@@ -202,9 +224,17 @@ func (e *Engine) consumeMulti(namespace string, queues []string, ttrSecond, time
 		queueNames[i].Namespace = namespace
 		queueNames[i].Queue = q
 	}
+
+	var queueName *QueueName
+	var jobID string
+	var tries uint16
 	for {
 		startTime := time.Now().Unix()
-		queueName, jobID, tries, err := PollQueues(e.redis, e.timer, queueNames, timeoutSecond, ttrSecond, noConsume)
+		if e.enabledPriorQueue {
+			queueName, jobID, tries, err = PollPriorQueues(e.redis, e.timer, queueNames, timeoutSecond, ttrSecond, noConsume)
+		} else {
+			queueName, jobID, tries, err = PollQueues(e.redis, e.timer, queueNames, timeoutSecond, ttrSecond, noConsume)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("queue: %s", err)
 		}
@@ -252,7 +282,12 @@ func (e *Engine) Peek(namespace, queue, optionalJobID string) (job engine.Job, e
 	jobID := optionalJobID
 	var tries uint16
 	if optionalJobID == "" {
-		q := NewQueue(namespace, queue, e.redis, e.timer)
+		var q Queue
+		if e.enabledPriorQueue {
+			q = NewPriorQueue(namespace, queue, e.redis, e.timer)
+		} else {
+			q = NewFIFOQueue(namespace, queue, e.redis, e.timer)
+		}
 		jobID, tries, err = q.Peek()
 		switch err {
 		case nil:
@@ -275,14 +310,24 @@ func (e *Engine) Peek(namespace, queue, optionalJobID string) (job engine.Job, e
 }
 
 func (e *Engine) Size(namespace, queue string) (size int64, err error) {
-	q := NewQueue(namespace, queue, e.redis, e.timer)
+	var q Queue
+	if e.enabledPriorQueue {
+		q = NewPriorQueue(namespace, queue, e.redis, e.timer)
+	} else {
+		q = NewFIFOQueue(namespace, queue, e.redis, e.timer)
+	}
 	return q.Size()
 }
 
 func (e *Engine) Destroy(namespace, queue string) (count int64, err error) {
 	e.meta.Remove(namespace, queue)
 	e.monitor.Remove(namespace, queue)
-	q := NewQueue(namespace, queue, e.redis, e.timer)
+	var q Queue
+	if e.enabledPriorQueue {
+		q = NewPriorQueue(namespace, queue, e.redis, e.timer)
+	} else {
+		q = NewFIFOQueue(namespace, queue, e.redis, e.timer)
+	}
 	return q.Destroy()
 }
 

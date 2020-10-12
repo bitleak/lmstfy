@@ -12,7 +12,7 @@ import (
 
 const (
 	delaySecondMask = uint32(0xFFFF)
-	priorityMask = uint32(0xFF0000)
+	priorityMask    = uint32(0xFF0000)
 )
 
 // Use pool to avoid concurrent access for rand.Source
@@ -46,7 +46,7 @@ func GenUniqueJobID(delaySecond uint32, priority uint8) string {
 	defer entropyPool.Put(entropy)
 	id := ulid.MustNew(ulid.Now(), entropy)
 	// Encode the delay second and priority in littleEndian and store at the last four bytes
-	customBits := (uint32(priority)<<16) | (delaySecond & delaySecondMask)
+	customBits := (uint32(priority) << 16) | (delaySecond & delaySecondMask)
 	binary.LittleEndian.PutUint32(id[len(id)-4:], customBits)
 	return id.String()
 }
@@ -86,5 +86,5 @@ func ExtractPriorityFromUniqueID(s string) (uint8, error) {
 	if err != nil {
 		return 0, err
 	}
-	return uint8((binary.LittleEndian.Uint32(id[len(id)-4:]) & priorityMask)>>16), nil
+	return uint8((binary.LittleEndian.Uint32(id[len(id)-4:]) & priorityMask) >> 16), nil
 }

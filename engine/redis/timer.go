@@ -86,27 +86,29 @@ type Timer struct {
 	interval time.Duration
 	shutdown chan struct{}
 
+	isPriorQueue  bool
 	luaPumpSHA    string
 	luaPumpScript string
 }
 
 // NewTimer return an instance of fifo delay queue
 func NewTimer(name string, redis *RedisInstance, interval time.Duration) (*Timer, error) {
-	return newTimerWithLuaScript(name, LuaPumpToFIFO, redis, interval)
+	return newTimerWithLuaScript(name, LuaPumpToFIFO, redis, interval, false)
 }
 
 // NewPriorQueueTimer return an instance of priority delay queue
 func NewPriorQueueTimer(name string, redis *RedisInstance, interval time.Duration) (*Timer, error) {
-	return newTimerWithLuaScript(name, LuaPumpToPriorQueue, redis, interval)
+	return newTimerWithLuaScript(name, LuaPumpToPriorQueue, redis, interval, true)
 }
 
-func newTimerWithLuaScript(name string, luaPumpScript string, redis *RedisInstance, interval time.Duration) (*Timer, error) {
+func newTimerWithLuaScript(name string, luaPumpScript string, redis *RedisInstance, interval time.Duration, isPriorQueue bool) (*Timer, error) {
 	timer := &Timer{
 		name:          name,
 		redis:         redis,
 		interval:      interval,
 		shutdown:      make(chan struct{}),
 		luaPumpScript: luaPumpScript,
+		isPriorQueue:  isPriorQueue,
 	}
 
 	// Preload the lua scripts

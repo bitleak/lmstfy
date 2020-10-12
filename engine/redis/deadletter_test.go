@@ -84,7 +84,7 @@ func TestDeadLetter_Respawn(t *testing.T) {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))
 	}
 	defer timer.Shutdown()
-	q := NewQueue("ns-dead", "q3", R, timer)
+	q := NewFIFOQueue("ns-dead", "q3", R, timer)
 
 	count, err := dl.Respawn(2, 10)
 	if err != nil || count != 2 {

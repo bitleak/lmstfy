@@ -15,7 +15,7 @@ func TestQueue_Push(t *testing.T) {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))
 	}
 	defer timer.Shutdown()
-	q := NewQueue("ns-queue", "q1", R, timer)
+	q := NewFIFOQueue("ns-queue", "q1", R, timer)
 	job := engine.NewJob("ns-queue", "q1", []byte("hello msg 1"), 10, 0, 1, 0)
 	if err := q.Push(job, 5); err != nil {
 		t.Fatalf("Failed to push job into queue: %s", err)
@@ -33,7 +33,7 @@ func TestQueue_Poll(t *testing.T) {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))
 	}
 	defer timer.Shutdown()
-	q := NewQueue("ns-queue", "q2", R, timer)
+	q := NewFIFOQueue("ns-queue", "q2", R, timer)
 	job := engine.NewJob("ns-queue", "q2", []byte("hello msg 2"), 10, 0, 1, 0)
 	go func() {
 		time.Sleep(time.Second)
@@ -54,7 +54,7 @@ func TestQueue_Peek(t *testing.T) {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))
 	}
 	defer timer.Shutdown()
-	q := NewQueue("ns-queue", "q3", R, timer)
+	q := NewFIFOQueue("ns-queue", "q3", R, timer)
 	job := engine.NewJob("ns-queue", "q3", []byte("hello msg 3"), 10, 0, 1, 0)
 	q.Push(job, 2)
 	jobID, tries, err := q.Peek()
@@ -72,7 +72,7 @@ func TestQueue_Destroy(t *testing.T) {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))
 	}
 	defer timer.Shutdown()
-	q := NewQueue("ns-queue", "q4", R, timer)
+	q := NewFIFOQueue("ns-queue", "q4", R, timer)
 	job := engine.NewJob("ns-queue", "q4", []byte("hello msg 4"), 10, 0, 1, 0)
 	q.Push(job, 2)
 	count, err := q.Destroy()
@@ -96,7 +96,7 @@ func TestQueue_Tries(t *testing.T) {
 	defer timer.Shutdown()
 	namespace := "ns-queue"
 	queue := "q5"
-	q := NewQueue(namespace, queue, R, timer)
+	q := NewFIFOQueue(namespace, queue, R, timer)
 	var maxTries uint16 = 2
 	job := engine.NewJob(namespace, queue, []byte("hello msg 5"), 30, 0, maxTries, 0)
 	q.Push(job, maxTries)

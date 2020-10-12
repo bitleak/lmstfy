@@ -45,11 +45,12 @@ type Config struct {
 type RedisPool map[string]RedisConf
 
 type RedisConf struct {
-	Addr      string
-	Password  string
-	DB        int
-	PoolSize  int
-	MigrateTo string // If this is not empty, all the PUBLISH will go to that pool
+	Addr             string
+	Password         string
+	DB               int
+	PoolSize         int
+	MigrateTo        string // If this is not empty, all the PUBLISH will go to that pool
+	EnablePriorQueue bool   // If this is true, producer was allowed to add priority, but Redis >= 5.0 required
 
 	mode       int
 	MasterName string

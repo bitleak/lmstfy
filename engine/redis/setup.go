@@ -33,7 +33,8 @@ func Setup(conf *config.Config, l *logrus.Logger) error {
 		if cli.Ping().Err() != nil {
 			return fmt.Errorf("redis server %s was not alive", poolConf.Addr)
 		}
-		e, err := NewEngine(name, cli)
+		// TODO: check Redis version when enable prior queue, assigned @git-hulk
+		e, err := NewEngine(name, cli, poolConf.EnablePriorQueue)
 		if err != nil {
 			return fmt.Errorf("setup engine error: %s", err)
 		}

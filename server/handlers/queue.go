@@ -84,7 +84,7 @@ func Publish(c *gin.Context) {
 		return
 	}
 
-	jobID, err = e.Publish(namespace, queue, body, uint32(ttlSecond), uint32(delaySecond), uint16(tries))
+	jobID, err = e.Publish(namespace, queue, body, uint32(ttlSecond), uint32(delaySecond), uint16(tries), 0)
 	if err != nil {
 		logger.WithFields(logrus.Fields{
 			"err":       err,
@@ -179,7 +179,7 @@ func PublishBulk(c *gin.Context) {
 
 	jobIDs := make([]string, 0)
 	for _, job := range jobs {
-		jobID, err := e.Publish(namespace, queue, job, uint32(ttlSecond), uint32(delaySecond), uint16(tries))
+		jobID, err := e.Publish(namespace, queue, job, uint32(ttlSecond), uint32(delaySecond), uint16(tries), 0)
 		if err != nil {
 			logger.WithFields(logrus.Fields{
 				"err":       err,

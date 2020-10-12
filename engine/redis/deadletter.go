@@ -94,7 +94,7 @@ var (
 )
 
 // Because the DeadLetter is not like Timer which is a singleton,
-// DeadLetters are transient objects like Queue. So we have to preload
+// DeadLetters are transient objects like FIFOQueue. So we have to preload
 // the lua scripts separately.
 func PreloadDeadLetterLuaScript(redis *RedisInstance, isPriorQueue bool) error {
 	luaRespawnScript := luaDLRespawnToFIFO

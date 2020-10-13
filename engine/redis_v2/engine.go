@@ -1,4 +1,4 @@
-package redis
+package redis_v2
 
 import (
 	"encoding/json"
@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/bitleak/lmstfy/engine"
+	redis_v1 "github.com/bitleak/lmstfy/engine/redis"
 	"github.com/bitleak/lmstfy/uuid"
 	go_redis "github.com/go-redis/redis"
 )
@@ -21,7 +22,7 @@ type RedisInstance struct {
 // - deliver jobs to clients
 // - manage dead letters
 type Engine struct {
-	redis   *RedisInstance
+	redis   *redis_v1.RedisInstance
 	pool    *Pool
 	timer   *Timer
 	meta    *MetaManager
@@ -29,16 +30,19 @@ type Engine struct {
 }
 
 func NewEngine(redisName string, conn *go_redis.Client) (engine.Engine, error) {
-	redis := &RedisInstance{
+	redis := &redis_v1.RedisInstance{
 		Name: redisName,
 		Conn: conn,
 	}
 	if err := PreloadDeadLetterLuaScript(redis); err != nil {
 		return nil, err
 	}
-	go RedisInstanceMonitor(redis)
+	if err := PreloadQueueLuaScript(redis); err != nil {
+		return nil, err
+	}
+	go redis_v1.RedisInstanceMonitor(redis)
 	meta := NewMetaManager(redis)
-	timer, err := NewTimer("timer_set", redis, time.Second)
+	timer, err := NewTimer("timer_set_v2", redis, time.Second)
 	if err != nil {
 		return nil, err
 	}

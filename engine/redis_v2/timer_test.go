@@ -1,9 +1,11 @@
-package redis
+package redis_v2
 
 import (
 	"fmt"
 	"testing"
 	"time"
+
+	"github.com/go-redis/redis"
 
 	"github.com/bitleak/lmstfy/engine"
 	"github.com/sirupsen/logrus"
@@ -26,7 +28,8 @@ func TestTimer_Tick(t *testing.T) {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))
 	}
 	defer timer.Shutdown()
-	job := engine.NewJob("ns-timer", "q2", []byte("hello msg 2"), 5, 0, 1, 0)
+	priority := uint8(7)
+	job := engine.NewJob("ns-timer", "q2", []byte("hello msg 2"), 5, 0, 1, priority)
 	pool := NewPool(R)
 	pool.Add(job)
 	timer.Add(job.Namespace(), job.Queue(), job.ID(), 3, 1)
@@ -35,13 +38,19 @@ func TestTimer_Tick(t *testing.T) {
 		defer func() {
 			wait <- struct{}{}
 		}()
-		val, err := R.Conn.BRPop(5*time.Second, join(QueuePrefix, "ns-timer", "q2")).Result()
-		if err != nil || len(val) == 0 {
-			t.Fatal("Failed to pop the job from target queue")
+		val, err := R.Conn.BZPopMax(3*time.Second, join(QueuePrefix, "ns-timer", "q2")).Result()
+		if err != nil && err != redis.Nil {
+			t.Fatalf("Failed to pop the job from target queue, err: %s", err.Error())
 		}
-		tries, jobID, err := structUnpack(val[1])
+		if err == redis.Nil {
+			t.Fatal("Got non-empty job was expected, but got nothing")
+		}
+		tries, jobID, err := structUnpack(val.Member.(string))
 		if err != nil {
 			t.Fatalf("Failed to decode the job pop from queue")
+		}
+		if uint8(val.Score) != priority {
+			t.Fatalf("Mismatch job priority, %d was expected but got %d", int(val.Score), priority)
 		}
 		if tries != 1 || jobID != job.ID() {
 			t.Fatal("Job data mismatched")

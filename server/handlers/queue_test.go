@@ -476,7 +476,6 @@ func TestPublishBulk(t *testing.T) {
 	e.PUT("/api/:namespace/:queue/bulk", handlers.PublishBulk)
 	e.HandleContext(c)
 	if resp.Code != http.StatusCreated {
-		fmt.Println(string(resp.Body.Bytes()))
 		t.Fatal("Failed to publish")
 	}
 	var data struct {

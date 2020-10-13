@@ -1,4 +1,4 @@
-package redis
+package redis_v2
 
 import (
 	"fmt"
@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/bitleak/lmstfy/engine"
+	"github.com/bitleak/lmstfy/uuid"
 )
 
 func TestQueue_Push(t *testing.T) {
@@ -98,7 +99,8 @@ func TestQueue_Tries(t *testing.T) {
 	queue := "q5"
 	q := NewQueue(namespace, queue, R, timer)
 	var maxTries uint16 = 2
-	job := engine.NewJob(namespace, queue, []byte("hello msg 5"), 30, 0, maxTries, 0)
+	priority := uint8(2)
+	job := engine.NewJob(namespace, queue, []byte("hello msg 5"), 30, 0, maxTries, priority)
 	q.Push(job, maxTries)
 	pool := NewPool(R)
 	pool.Add(job)
@@ -122,6 +124,9 @@ func TestQueue_Tries(t *testing.T) {
 	if job.ID() != jobID {
 		t.Fatal("Mismatched job")
 	}
+	if job.Priority() != priority {
+		t.Fatalf("Mismatched job priority, %d was expected but got %d", priority, job.Priority())
+	}
 }
 
 func TestStructPacking(t *testing.T) {
@@ -136,3 +141,90 @@ func TestStructPacking(t *testing.T) {
 		t.Fatal("Mismatched unpack data")
 	}
 }
+
+func TestPriorQueue_PollFromTimer(t *testing.T) {
+	namespace := "ns-queue"
+	timer, err := NewTimer("timer_set_q", R, 200*time.Millisecond)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to new timer: %s", err))
+	}
+	defer timer.Shutdown()
+	pool := NewPool(R)
+	q := NewQueue(namespace, "q6", R, timer)
+	for i := 1; i <= 10; i++ {
+		priority := uint8(i)
+		job := engine.NewJob(namespace, "q6", []byte("hello msg 2"), 10, 0, 1, priority)
+		timer.Add(namespace, "q6", job.ID(), job.Delay(), job.Tries())
+		pool.Add(job)
+	}
+	// make sure that all tasks were pump out by timer
+	time.Sleep(time.Second)
+	members, err := R.Conn.ZRangeWithScores(q.Name(), 0, -1).Result()
+	if err != nil {
+		t.Fatal("Failed to zrange the ready queue")
+	}
+	if len(members) != 10 {
+		t.Fatalf("Ready queue size 10 was expected but got %d", len(members))
+	}
+	for i, member := range members { // this case was used to make sure that score in ready queue was right
+		if i+1 != int(member.Score) {
+			t.Fatalf("Invalid ready queue priority, %d was expected but got %d", i+1, int(member.Score))
+		}
+	}
+	for i := 10; i > 0; i-- {
+		jobID, _, err := q.Poll(2, 1)
+		if err != nil {
+			t.Fatalf("Failed to poll job from queue: %s", err.Error())
+		}
+		if jobID == "" {
+			t.Fatalf("Got nil job")
+		}
+		priority, _ := uuid.ExtractPriorityFromUniqueID(jobID)
+		if priority != uint8(i) {
+			t.Fatalf("Mismatched job priority, %d was expected but got %d", uint8(i), priority)
+		}
+	}
+}
+
+func TestPriorQueue_PollWithPriority(t *testing.T) {
+	timer, err := NewTimer("timer_set_q", R, time.Second)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to new timer: %s", err))
+	}
+	defer timer.Shutdown()
+	namespace := "ns-queue"
+	q := NewQueue(namespace, "q7", R, timer)
+	jobIDs := make([]string, 10)
+	for i := 0; i < 10; i++ {
+		job := engine.NewJob(namespace, "q7", []byte("hello msg 7"), 10, 0, 1, uint8(i))
+		q.Push(job, job.Tries())
+		jobIDs[i] = job.ID()
+	}
+	members, err := R.Conn.ZRangeWithScores(q.Name(), 0, -1).Result()
+	if err != nil {
+		t.Fatal("Failed to zrange the ready queue")
+	}
+	for i, member := range members { // this case was used to make sure that score in ready queue was right
+		if i != int(member.Score) {
+			t.Fatalf("Invalid ready queue priority, %d was expected but got %d", i, int(member.Score))
+		}
+	}
+	for i := 0; i < 10; i++ {
+		jobID, _, err := q.Poll(2, 1)
+		if err != nil {
+			t.Fatalf("Failed to poll job from queue: %s", err.Error())
+		}
+		if jobID == "" {
+			t.Fatalf("Got nil job")
+		}
+		if jobIDs[9-i] != jobID {
+			t.Fatal("Mismatched job")
+		}
+		gotPriority, _ := uuid.ExtractPriorityFromUniqueID(jobID)
+		if gotPriority != uint8(9-i) {
+			t.Fatal("Mismatched job priority")
+		}
+	}
+}
+
+// TODO: add test case for the same priority

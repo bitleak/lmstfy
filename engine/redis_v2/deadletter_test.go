@@ -1,4 +1,4 @@
-package redis
+package redis_v2
 
 import (
 	"fmt"
@@ -8,14 +8,14 @@ import (
 	"github.com/bitleak/lmstfy/engine"
 )
 
-func TestDeadLetter_Add(t *testing.T) {
+func TestDeadLetterV2_Add(t *testing.T) {
 	dl, _ := NewDeadLetter("ns-dead", "q0", R)
 	if err := dl.Add("x"); err != nil {
 
 	}
 }
 
-func TestDeadLetter_Peek(t *testing.T) {
+func TestDeadLetterV2_Peek(t *testing.T) {
 	dl, _ := NewDeadLetter("ns-dead", "q1", R)
 	dl.Add("x")
 	dl.Add("y")
@@ -30,7 +30,7 @@ func TestDeadLetter_Peek(t *testing.T) {
 	}
 }
 
-func TestDeadLetter_Delete(t *testing.T) {
+func TestDeadLetterV2_Delete(t *testing.T) {
 	dl, _ := NewDeadLetter("ns-dead", "q2", R)
 	dl.Add("x")
 	dl.Add("y")
@@ -55,11 +55,11 @@ func TestDeadLetter_Delete(t *testing.T) {
 	}
 }
 
-func TestDeadLetter_Respawn(t *testing.T) {
+func TestDeadLetterV2_Respawn(t *testing.T) {
 	p := NewPool(R)
-	job1 := engine.NewJob("ns-dead", "q3", []byte("1"), 60, 0, 1, 0)
-	job2 := engine.NewJob("ns-dead", "q3", []byte("2"), 60, 0, 1, 0)
-	job3 := engine.NewJob("ns-dead", "q3", []byte("3"), 60, 0, 1, 0)
+	job1 := engine.NewJob("ns-dead", "q3", []byte("1"), 60, 0, 1, 3)
+	job2 := engine.NewJob("ns-dead", "q3", []byte("2"), 60, 0, 1, 2)
+	job3 := engine.NewJob("ns-dead", "q3", []byte("3"), 60, 0, 1, 1)
 	p.Add(job1)
 	p.Add(job2)
 	p.Add(job3)
@@ -115,7 +115,7 @@ func TestDeadLetter_Respawn(t *testing.T) {
 	}
 }
 
-func TestDeadLetter_Size(t *testing.T) {
+func TestDeadLetterV2_Size(t *testing.T) {
 	p := NewPool(R)
 	dl, _ := NewDeadLetter("ns-dead", "q3", R)
 	cnt := 3
@@ -132,5 +132,82 @@ func TestDeadLetter_Size(t *testing.T) {
 	size, _ = dl.Size()
 	if size != 0 {
 		t.Fatalf("Expected the deadletter queue size is: %d, but got %d\n", 0, size)
+	}
+}
+
+func TestDeadLetterWithPriorQueueV2_Respawn(t *testing.T) {
+	p := NewPool(R)
+	namespace := "ns-deadletter-prior-queue"
+	queue := "q1"
+	dl, _ := NewDeadLetter(namespace, queue, R)
+	jobIDs := make([]string, 3)
+	for i := 0; i < 3; i++ {
+		job := engine.NewJob(namespace, queue, []byte("1"), 60, 0, 1, uint8(i))
+		jobIDs[i] = job.ID()
+		p.Add(job)
+		dl.Add(job.ID())
+		// Ensure TTL is removed when put into deadletter
+		jobKey := PoolJobKey(job)
+		jobTTL := R.Conn.TTL(jobKey).Val()
+		if jobTTL.Seconds() > 0 {
+			t.Fatalf("Respawned job's TTL should be removed")
+		}
+	}
+
+	timer, err := NewTimer("ns-dead-prior-queue-timer", R, time.Second)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to new timer: %s", err))
+	}
+	defer timer.Shutdown()
+	q := NewQueue(namespace, queue, R, timer)
+
+	count, err := dl.Respawn(3, 10)
+	if err != nil || count != 3 {
+		t.Fatalf("Failed to respawn two jobs: %s", err)
+	}
+
+	members, err := R.Conn.ZRangeWithScores(q.Name(), 0, -1).Result()
+	if err != nil {
+		t.Fatal("Failed to zrange the ready queue")
+	}
+	if len(members) != 3 {
+		t.Fatalf("Ready queue size 10 was expected but got %d", len(members))
+	}
+	for i, member := range members { // this case was used to make sure that score in ready queue was right
+		if i != int(member.Score) {
+			t.Fatalf("Invalid ready queue priority, %d was expected but got %d", i, int(member.Score))
+		}
+	}
+
+	for i := 0; i < 3; i++ {
+		jobID, _, err := q.Poll(1, 1)
+		if err != nil || jobID != jobIDs[2-i] {
+			t.Fatalf("Mismatch job id, %s was expected but got %s", jobIDs[2-i], jobID)
+		}
+		// Ensure TTL is set
+		jobKey := join(PoolPrefix, namespace, queue, jobID)
+		jobTTL := R.Conn.TTL(jobKey).Val()
+		if 10-jobTTL.Seconds() > 2 { // 2 seconds passed? no way.
+			t.Fatal("Deadletter job's TTL is not correct")
+		}
+	}
+
+	job := engine.NewJob(namespace, queue, []byte("1"), 60, 0, 1, uint8(2))
+	p.Add(job)
+	dl.Add(job.ID())
+	count, err = dl.Respawn(1, 10)
+	if err != nil || count != 1 {
+		t.Fatalf("Failed to respawn one jobs: %s", err)
+	}
+	jobID, _, err := q.Poll(1, 1)
+	if err != nil || jobID != job.ID() {
+		t.Fatalf("Mismatch job id, %s was expected but got %s", job.ID(), jobID)
+	}
+
+	// Ensure TTL is set
+	jobKey := join(PoolPrefix, namespace, queue, jobID)
+	jobTTL := R.Conn.TTL(jobKey).Val()
+	if 10-jobTTL.Seconds() > 2 {
+		t.Fatal("Deadletter job's TTL is not correct")
 	}
 }

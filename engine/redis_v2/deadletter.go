@@ -16,6 +16,7 @@ local queue = KEYS[2]
 local poolPrefix = KEYS[3]
 local limit = tonumber(ARGV[1])
 local respawnTTL = tonumber(ARGV[2])
+local score = tonumber(ARGV[2])
 for i = 1, limit do
     local data = redis.call("RPOP", deadletter)
 	if data == false then
@@ -23,6 +24,10 @@ for i = 1, limit do
 	end
     -- unpack the jobID, and set the TTL
     local _, jobID, priority = struct.unpack("HHc0H", data)
+    -- decrease score to make tasks FIFO in queue when score was the same
+	score = score -1
+	-- 2199023255552 was 1<<41(avoid to use bit left shift)
+	priority = 2199023255552 * priority + score
 	redis.call("ZADD", queue, priority, data)
     if respawnTTL > 0 then
 		redis.call("EXPIRE", poolPrefix .. "/" .. jobID, respawnTTL)
@@ -206,7 +211,7 @@ func (dl *DeadLetter) Respawn(limit, ttlSecond int64) (count int64, err error) {
 			batchSize = limit
 		}
 		for {
-			val, err := dl.redis.Conn.EvalSha(dl.lua_respawn_sha, []string{dl.Name(), queueName, poolPrefix}, batchSize, ttlSecond).Result() // Respawn `batchSize` jobs at a time
+			val, err := dl.redis.Conn.EvalSha(dl.lua_respawn_sha, []string{dl.Name(), queueName, poolPrefix}, batchSize, ttlSecond, timeScore()).Result() // Respawn `batchSize` jobs at a time
 			if err != nil {
 				if isLuaScriptGone(err) {
 					if err := PreloadDeadLetterLuaScript(dl.redis); err != nil {

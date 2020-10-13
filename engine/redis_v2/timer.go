@@ -17,6 +17,7 @@ local pool_prefix = KEYS[3]
 local output_deadletter_prefix = KEYS[4]
 local now = ARGV[1]
 local limit = ARGV[2]
+local score = ARGV[3]
 local expiredMembers = redis.call("ZRANGEBYSCORE", zset_key, 0, now, "LIMIT", 0, limit)
 if #expiredMembers == 0 then
 	return 0
@@ -33,7 +34,9 @@ for _,v in ipairs(expiredMembers) do
 		else
 			-- move to prior ready queue
 			local val = struct.pack("HHc0H", tonumber(tries), #job_id, job_id, priority)
-			-- last four bytes in job id was little endian, so the position of priority was third last
+			score = score -1
+			-- 2199023255552 was 1<<41(avoid to use bit left shift)
+			priority = 2199023255552 * priority + score
 			redis.call("ZADD", table.concat({output_queue_prefix, ns, q}, "/"), priority, val)
 		end
 	end
@@ -119,7 +122,11 @@ func (t *Timer) tick() {
 
 func (t *Timer) pump(currentSecond int64) {
 	for {
-		val, err := t.redis.Conn.EvalSha(t.lua_pump_sha, []string{t.Name(), QueuePrefix, PoolPrefix, DeadLetterPrefix}, currentSecond, BATCH_SIZE).Result()
+		val, err := t.redis.Conn.EvalSha(
+			t.lua_pump_sha,
+			[]string{t.Name(), QueuePrefix, PoolPrefix, DeadLetterPrefix},
+			currentSecond, batchSize, timeScore(),
+		).Result()
 		if err != nil {
 			if isLuaScriptGone(err) { // when redis restart, the script needs to be uploaded again
 				sha, err := t.redis.Conn.ScriptLoad(LUA_T_PUMP).Result()
@@ -137,7 +144,7 @@ func (t *Timer) pump(currentSecond int64) {
 		n, _ := val.(int64)
 		logger.WithField("count", n).Debug("Due jobs")
 		metrics.timerDueJobs.WithLabelValues(t.redis.Name).Add(float64(n))
-		if n == BATCH_SIZE {
+		if n == batchSize {
 			// There might have more expired jobs to pump
 			metrics.timerFullBatches.WithLabelValues(t.redis.Name).Inc()
 			time.Sleep(10 * time.Millisecond) // Hurry up! accelerate pumping the due jobs

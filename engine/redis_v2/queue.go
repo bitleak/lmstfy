@@ -90,7 +90,12 @@ func (q *Queue) Push(j engine.Job, tries uint16) error {
 	}
 	metrics.queueDirectPushJobs.WithLabelValues(q.redis.Name).Inc()
 	val := structPack(tries, j.ID())
-	return q.redis.Conn.ZAdd(q.Name(), go_redis.Z{Score: float64(j.Priority()), Member: val}).Err()
+	// tricky: because Redis zset ranked with member when score was the same
+	// which can't promise FIFO guarantee after using zset, so we need to append
+	// extra parameter to realize the FIFO.  math.MaxInt64 - time.Now().UnixNano()
+	// which means the score would be smaller if the task comes later.
+	score := int64(j.Priority())<<priorityShift + timeScore()
+	return q.redis.Conn.ZAdd(q.Name(), go_redis.Z{Score: float64(score), Member: val}).Err()
 }
 
 // Pop a job. If the tries > 0, add job to the "in-flight" timer with timestamp

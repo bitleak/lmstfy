@@ -7,7 +7,7 @@ import (
 )
 
 type Engine interface {
-	Publish(namespace, queue string, body []byte, ttlSecond, delaySecond uint32, tries uint16) (jobID string, err error)
+	Publish(namespace, queue string, body []byte, ttlSecond, delaySecond uint32, tries uint16, priority uint8) (jobID string, err error)
 	Consume(namespace, queue string, ttrSecond, timeoutSecond uint32) (job Job, err error)
 	ConsumeMulti(namespace string, queues []string, ttrSecond, timeoutSecond uint32) (job Job, err error)
 	ConsumeMultiWithFrozenTries(namespace string, queues []string, ttrSecond, timeoutSecond uint32) (job Job, err error)

@@ -49,8 +49,9 @@ func TestTimerV2_Tick(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to decode the job pop from queue")
 		}
-		if uint8(val.Score) != priority {
-			t.Fatalf("Mismatch job priority, %d was expected but got %d", int(val.Score), priority)
+		gotPriority := uint8(int64(val.Score) >> priorityShift)
+		if gotPriority != priority {
+			t.Fatalf("Mismatch job priority, %d was expected but got %d", priority, gotPriority)
 		}
 		if tries != 1 || jobID != job.ID() {
 			t.Fatal("Job data mismatched")

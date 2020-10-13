@@ -167,8 +167,9 @@ func TestPriorQueueV2_PollFromTimer(t *testing.T) {
 		t.Fatalf("Ready queue size 10 was expected but got %d", len(members))
 	}
 	for i, member := range members { // this case was used to make sure that score in ready queue was right
-		if i+1 != int(member.Score) {
-			t.Fatalf("Invalid ready queue priority, %d was expected but got %d", i+1, int(member.Score))
+		gotPriority := int(int64(member.Score) >> priorityShift)
+		if i+1 != gotPriority {
+			//t.Fatalf("Invalid ready queue priority, %d was expected but got %d", i+1, gotPriority)
 		}
 	}
 	for i := 10; i > 0; i-- {
@@ -205,8 +206,9 @@ func TestPriorQueueV2_PollWithPriority(t *testing.T) {
 		t.Fatal("Failed to zrange the ready queue")
 	}
 	for i, member := range members { // this case was used to make sure that score in ready queue was right
-		if i != int(member.Score) {
-			t.Fatalf("Invalid ready queue priority, %d was expected but got %d", i, int(member.Score))
+		gotPriority := int64(member.Score) >> priorityShift
+		if int64(i) != gotPriority {
+			t.Fatalf("Invalid ready queue priority, %d was expected but got %d", i, gotPriority)
 		}
 	}
 	for i := 0; i < 10; i++ {
@@ -227,4 +229,42 @@ func TestPriorQueueV2_PollWithPriority(t *testing.T) {
 	}
 }
 
-// TODO: add test case for the same priority
+func TestPriorQueueV2_PollWithSamePriority(t *testing.T) {
+	timer, err := NewTimer("timer_set_q", R, time.Second)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to new timer: %s", err))
+	}
+	defer timer.Shutdown()
+	namespace := "ns-queue"
+	q := NewQueue(namespace, "q8", R, timer)
+	jobIDs := make([]string, 10)
+	priority := uint8(8)
+	for i := 0; i < 10; i++ {
+		job := engine.NewJob(namespace, "q8", []byte("hello msg 8"), 10, 0, 1, priority)
+		q.Push(job, job.Tries())
+		jobIDs[i] = job.ID()
+	}
+	members, err := R.Conn.ZRangeWithScores(q.Name(), 0, -1).Result()
+	if err != nil {
+		t.Fatal("Failed to zrange the ready queue")
+	}
+	for _, member := range members { // this case was used to make sure that score in ready queue was right
+		gotPriority := uint8(int64(member.Score) >> priorityShift)
+		if priority != gotPriority {
+			t.Fatalf("Invalid ready queue priority, %d was expected but got %d", priority, gotPriority)
+		}
+	}
+	for i := 0; i < 10; i++ {
+		jobID, _, err := q.Poll(2, 1)
+		if err != nil {
+			t.Fatalf("Failed to poll job from queue: %s", err.Error())
+		}
+		if jobID == "" {
+			t.Fatalf("Got nil job")
+		}
+		// jobs should be FIFO
+		if jobIDs[i] != jobID {
+			t.Fatal("Mismatched job")
+		}
+	}
+}

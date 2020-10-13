@@ -7,4 +7,7 @@ const (
 	MetaPrefix       = "m"
 )
 
-const BATCH_SIZE = 100
+const (
+	batchSize     = 100
+	priorityShift = 41
+)

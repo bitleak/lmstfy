@@ -41,7 +41,7 @@ func TestPusher(t *testing.T) {
 	stopServer := make(chan struct{})
 	sentJobs := make(map[string]bool)
 	for i := 0; i < 10; i++ {
-		jobID, err := engine.GetEngine(defaultPool).Publish(namespace, queue, []byte("test-body"), 60, 1, 1)
+		jobID, err := engine.GetEngine(defaultPool).Publish(namespace, queue, []byte("test-body"), 60, 1, 1, 0)
 		if err != nil {
 			t.Fatal("Pusher publish error", err)
 		}
@@ -52,7 +52,7 @@ func TestPusher(t *testing.T) {
 		for {
 			select {
 			case <-tick.C:
-				jobID, err := engine.GetEngine(defaultPool).Publish(namespace, queue, []byte("test-body"), 60, 1, 1)
+				jobID, err := engine.GetEngine(defaultPool).Publish(namespace, queue, []byte("test-body"), 60, 1, 1, 0)
 				if err != nil {
 					t.Fatal("Pusher publish error", err)
 				}

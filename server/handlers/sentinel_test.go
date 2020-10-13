@@ -49,7 +49,7 @@ func publishSentinelTestJob(ns, q string, delay uint32) (body []byte, jobID stri
 	if _, err := rand.Read(body); err != nil {
 		panic(err)
 	}
-	jobID, _ = e.Publish(ns, q, body, 60, delay, 1)
+	jobID, _ = e.Publish(ns, q, body, 60, delay, 1, 0)
 	return body, jobID
 }
 

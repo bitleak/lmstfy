@@ -174,8 +174,9 @@ func TestDeadLetterWithPriorQueueV2_Respawn(t *testing.T) {
 		t.Fatalf("Ready queue size 10 was expected but got %d", len(members))
 	}
 	for i, member := range members { // this case was used to make sure that score in ready queue was right
-		if i != int(member.Score) {
-			t.Fatalf("Invalid ready queue priority, %d was expected but got %d", i, int(member.Score))
+		gotPriority := int(int64(member.Score) >> priorityShift)
+		if i != gotPriority {
+			t.Fatalf("Invalid ready queue priority, %d was expected but got %d", i, gotPriority)
 		}
 	}
 

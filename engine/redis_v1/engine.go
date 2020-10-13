@@ -2,6 +2,7 @@ package redis_v1
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -57,13 +58,16 @@ func NewEngine(redisName string, conn *go_redis.Client) (engine.Engine, error) {
 	}, nil
 }
 
-func (e *Engine) Publish(namespace, queue string, body []byte, ttlSecond, delaySecond uint32, tries uint16) (jobID string, err error) {
+func (e *Engine) Publish(namespace, queue string, body []byte, ttlSecond, delaySecond uint32, tries uint16, priority uint8) (jobID string, err error) {
 	defer func() {
 		if err == nil {
 			metrics.publishJobs.WithLabelValues(e.redis.Name).Inc()
 			metrics.publishQueueJobs.WithLabelValues(e.redis.Name, namespace, queue).Inc()
 		}
 	}()
+	if priority > 0 {
+		return "", errors.New("priority was not supported in redis engine")
+	}
 	e.meta.RecordIfNotExist(namespace, queue)
 	e.monitor.MonitorIfNotExist(namespace, queue)
 	job := engine.NewJob(namespace, queue, body, ttlSecond, delaySecond, tries, 0)

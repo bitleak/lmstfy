@@ -243,6 +243,7 @@ func TestPriorQueueV2_PollWithSamePriority(t *testing.T) {
 		job := engine.NewJob(namespace, "q8", []byte("hello msg 8"), 10, 0, 1, priority)
 		q.Push(job, job.Tries())
 		jobIDs[i] = job.ID()
+		time.Sleep(time.Millisecond)
 	}
 	members, err := R.Conn.ZRangeWithScores(q.Name(), 0, -1).Result()
 	if err != nil {

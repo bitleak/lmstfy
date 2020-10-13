@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	redis_v1 "github.com/bitleak/lmstfy/engine/redis"
+	"github.com/bitleak/lmstfy/engine/redis_v1"
 	"github.com/bitleak/lmstfy/uuid"
 
 	"github.com/bitleak/lmstfy/engine"
@@ -174,7 +174,12 @@ func PollQueues(redis *redis_v1.RedisInstance, timer *Timer, queueNames []QueueN
 		}
 		var result []go_redis.Z
 		result, err = redis.Conn.ZPopMax(queueNames[0].String()).Result()
-		if len(result) > 0 {
+		if err == nil && len(result) == 0 {
+			// Redis ZPOPMAX would return the 0 length array instead of nil,
+			// so we should rewrite the err here
+			err = go_redis.Nil
+		} else if len(result) > 0 {
+			val.Key = queueNames[0].String()
 			val.Z = result[0]
 		}
 	}

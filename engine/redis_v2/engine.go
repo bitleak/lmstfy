@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/bitleak/lmstfy/engine"
-	redis_v1 "github.com/bitleak/lmstfy/engine/redis"
+	"github.com/bitleak/lmstfy/engine/redis_v1"
 	"github.com/bitleak/lmstfy/uuid"
 	go_redis "github.com/go-redis/redis"
 )

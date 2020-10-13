@@ -4,9 +4,8 @@ import (
 	"errors"
 	"time"
 
-	redis_v1 "github.com/bitleak/lmstfy/engine/redis"
-
 	"github.com/bitleak/lmstfy/engine"
+	"github.com/bitleak/lmstfy/engine/redis_v1"
 	go_redis "github.com/go-redis/redis"
 )
 

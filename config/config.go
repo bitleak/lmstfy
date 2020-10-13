@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -53,6 +54,7 @@ type RedisConf struct {
 
 	mode       int
 	MasterName string
+	Kind       string
 }
 
 func detectRedisMode(rc *RedisConf) (int, error) {
@@ -71,6 +73,17 @@ func detectRedisMode(rc *RedisConf) (int, error) {
 	lines := strings.Split(infoStr, "\r\n")
 	for _, line := range lines {
 		fields := strings.Split(line, ":")
+		if rc.Kind == "redis_v2" {
+			// because redis v2 engine use BZPOPMAX/ZPOPMAX command,
+			// so requires Redis version should be greater than 5.0.x.
+			if len(fields) == 2 && fields[0] == "redis_version" {
+				versionField := strings.Split(fields[1], ".")
+				major, err := strconv.ParseInt(versionField[0], 10, 64)
+				if err != nil || major < 5 {
+					return unsupportedMode, errors.New("redis version should be >= 5.x.x")
+				}
+			}
+		}
 		if len(fields) == 2 && fields[0] == "redis_mode" {
 			switch fields[1] {
 			case "standalone":
@@ -108,7 +121,7 @@ func (rc *RedisConf) IsSentinel() bool {
 func MustLoad(path string) (*Config, error) {
 	_, err := os.Stat(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to stat config file: %s", err)
+		return nil, err
 	}
 	conf := new(Config)
 	conf.LogLevel = "info"
@@ -133,9 +146,13 @@ func MustLoad(path string) (*Config, error) {
 	if _, ok := conf.Pool[DefaultPoolName]; !ok {
 		return nil, errors.New("default redis pool not found")
 	}
+	poolNames := make(map[string]bool, 0)
 	for name, poolConf := range conf.Pool {
 		if poolConf.mode, err = detectRedisMode(&poolConf); err != nil {
-			return nil, fmt.Errorf("failed to get redis mode in pool(%s): %s", name, err)
+			return nil, fmt.Errorf("pool '%s' %s", name, err.Error())
+		}
+		if _, exists := poolNames[name]; exists {
+			return nil, fmt.Errorf("pool '%s' was conflicts", name)
 		}
 		conf.Pool[name] = poolConf
 		if err := poolConf.validate(); err != nil {

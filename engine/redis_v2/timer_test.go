@@ -11,7 +11,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func TestTimer_Add(t *testing.T) {
+func TestTimerV2_Add(t *testing.T) {
 	timer, err := NewTimer("timer_set_1", R, time.Second)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))
@@ -22,7 +22,7 @@ func TestTimer_Add(t *testing.T) {
 	}
 }
 
-func TestTimer_Tick(t *testing.T) {
+func TestTimerV2_Tick(t *testing.T) {
 	timer, err := NewTimer("timer_set_2", R, time.Second)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))
@@ -59,7 +59,7 @@ func TestTimer_Tick(t *testing.T) {
 	<-wait
 }
 
-func BenchmarkTimer(b *testing.B) {
+func BenchmarkTimerV2(b *testing.B) {
 	// Disable logging temporarily
 	logger.SetLevel(logrus.ErrorLevel)
 	defer logger.SetLevel(logrus.DebugLevel)
@@ -69,12 +69,12 @@ func BenchmarkTimer(b *testing.B) {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))
 	}
 	defer t.Shutdown()
-	b.Run("Add", benchmarkTimer_Add(t))
+	b.Run("Add", benchmarkTimerV2_Add(t))
 
-	b.Run("Pop", benchmarkTimer_Pop(t))
+	b.Run("Pop", benchmarkTimerV2_Pop(t))
 }
 
-func benchmarkTimer_Add(timer *Timer) func(b *testing.B) {
+func benchmarkTimerV2_Add(timer *Timer) func(b *testing.B) {
 	pool := NewPool(R)
 	return func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
@@ -85,7 +85,7 @@ func benchmarkTimer_Add(timer *Timer) func(b *testing.B) {
 	}
 }
 
-func benchmarkTimer_Pop(timer *Timer) func(b *testing.B) {
+func benchmarkTimerV2_Pop(timer *Timer) func(b *testing.B) {
 	return func(b *testing.B) {
 		key := join(QueuePrefix, "ns-timer", "q3")
 		b.StopTimer()
@@ -103,7 +103,7 @@ func benchmarkTimer_Pop(timer *Timer) func(b *testing.B) {
 }
 
 // How long did it take to fire 10000 due jobs
-func BenchmarkTimer_Pump(b *testing.B) {
+func BenchmarkTimerV2_Pump(b *testing.B) {
 	// Disable logging temporarily
 	logger.SetLevel(logrus.ErrorLevel)
 	defer logger.SetLevel(logrus.DebugLevel)

@@ -26,7 +26,12 @@ func PrometheusMetrics(c *gin.Context) {
 
 // GET /pools/
 func ListPools(c *gin.Context) {
-	c.IndentedJSON(http.StatusOK, engine.GetPools())
+	kinds := engine.ListKinds()
+	pools := make(map[string][]string, 0)
+	for _, kind := range kinds {
+		pools[kind] = engine.GetPoolsByKind(kind)
+	}
+	c.IndentedJSON(http.StatusOK, pools)
 }
 
 // GET /token/:namespace

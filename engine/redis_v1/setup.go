@@ -1,7 +1,6 @@
-package redis
+package redis_v1
 
 import (
-	"errors"
 	"fmt"
 	"time"
 
@@ -16,10 +15,17 @@ const MaxRedisConnections = 5000
 
 var logger *logrus.Logger
 
+func Kind() string {
+	return "redis"
+}
+
 // Setup set the essential config of redis engine
 func Setup(conf *config.Config, l *logrus.Logger) error {
 	logger = l
 	for name, poolConf := range conf.Pool {
+		if poolConf.Kind != "" && poolConf.Kind != Kind() {
+			continue
+		}
 		if poolConf.PoolSize == 0 {
 			poolConf.PoolSize = MaxRedisConnections
 		}
@@ -37,10 +43,7 @@ func Setup(conf *config.Config, l *logrus.Logger) error {
 		if err != nil {
 			return fmt.Errorf("setup engine error: %s", err)
 		}
-		engine.Register("redis", name, e)
-	}
-	if engine.GetEngineByKind("redis", "") == nil {
-		return errors.New("default redis engine not found")
+		engine.Register(Kind(), name, e)
 	}
 	return nil
 }

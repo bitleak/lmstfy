@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestEngine_Publish(t *testing.T) {
+func TestEngineV2_Publish(t *testing.T) {
 	e, err := NewEngine(R.Name, R.Conn)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
@@ -27,7 +27,7 @@ func TestEngine_Publish(t *testing.T) {
 	}
 }
 
-func TestEngine_Consume(t *testing.T) {
+func TestEngineV2_Consume(t *testing.T) {
 	e, err := NewEngine(R.Name, R.Conn)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
@@ -66,7 +66,7 @@ func TestEngine_Consume(t *testing.T) {
 }
 
 // Consume the first one from multi publish
-func TestEngine_Consume2(t *testing.T) {
+func TestEngineV2_Consume2(t *testing.T) {
 	e, err := NewEngine(R.Name, R.Conn)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
@@ -90,7 +90,7 @@ func TestEngine_Consume2(t *testing.T) {
 	}
 }
 
-func TestEngine_ConsumeMulti(t *testing.T) {
+func TestEngineV2_ConsumeMulti(t *testing.T) {
 	e, err := NewEngine(R.Name, R.Conn)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
@@ -129,7 +129,7 @@ func TestEngine_ConsumeMulti(t *testing.T) {
 	}
 }
 
-func TestEngine_ConsumeMultiWithFrozenTries(t *testing.T) {
+func TestEngineV2_ConsumeMultiWithFrozenTries(t *testing.T) {
 	e, err := NewEngine(R.Name, R.Conn)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
@@ -168,7 +168,7 @@ func TestEngine_ConsumeMultiWithFrozenTries(t *testing.T) {
 	}
 }
 
-func TestEngine_Peek(t *testing.T) {
+func TestEngineV2_Peek(t *testing.T) {
 	e, err := NewEngine(R.Name, R.Conn)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
@@ -188,7 +188,7 @@ func TestEngine_Peek(t *testing.T) {
 	}
 }
 
-func TestEngine_BatchConsume(t *testing.T) {
+func TestEngineV2_BatchConsume(t *testing.T) {
 	e, err := NewEngine(R.Name, R.Conn)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))

@@ -9,7 +9,7 @@ import (
 	go_redis "github.com/go-redis/redis"
 )
 
-func TestPool_Add(t *testing.T) {
+func TestPoolV2_Add(t *testing.T) {
 	p := NewPool(R)
 	job := engine.NewJob("ns-pool", "q1", []byte("hello msg 1"), 10, 0, 1, 0)
 	if err := p.Add(job); err != nil {
@@ -18,7 +18,7 @@ func TestPool_Add(t *testing.T) {
 }
 
 // Test TTL
-func TestPool_Add2(t *testing.T) {
+func TestPoolV2_Add2(t *testing.T) {
 	p := NewPool(R)
 	job := engine.NewJob("ns-pool", "q2", []byte("hello msg 2"), 1, 0, 1, 0)
 	p.Add(job)
@@ -30,7 +30,7 @@ func TestPool_Add2(t *testing.T) {
 
 }
 
-func TestPool_Delete(t *testing.T) {
+func TestPoolV2_Delete(t *testing.T) {
 	p := NewPool(R)
 	job := engine.NewJob("ns-pool", "q3", []byte("hello msg 3"), 10, 0, 1, 0)
 	p.Add(job)
@@ -39,7 +39,7 @@ func TestPool_Delete(t *testing.T) {
 	}
 }
 
-func TestPool_Get(t *testing.T) {
+func TestPoolV2_Get(t *testing.T) {
 	p := NewPool(R)
 	job := engine.NewJob("ns-pool", "q4", []byte("hello msg 4"), 50, 0, 1, 0)
 	p.Add(job)

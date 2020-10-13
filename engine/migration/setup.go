@@ -10,6 +10,10 @@ import (
 
 var logger *logrus.Logger
 
+func Kind() string {
+	return "migration"
+}
+
 func Setup(conf *config.Config, l *logrus.Logger) error {
 	logger = l
 	for redisPool, poolConf := range conf.Pool {
@@ -19,7 +23,7 @@ func Setup(conf *config.Config, l *logrus.Logger) error {
 			if newEngine == nil {
 				return fmt.Errorf("invalid pool [%s] to migrate to", poolConf.MigrateTo)
 			}
-			engine.Register("migration", redisPool, NewEngine(oldEngine, newEngine))
+			engine.Register(Kind(), redisPool, NewEngine(oldEngine, newEngine))
 		}
 	}
 	return nil

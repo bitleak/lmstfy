@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/bitleak/lmstfy/config"
-	redis_v1 "github.com/bitleak/lmstfy/engine/redis"
+	"github.com/bitleak/lmstfy/engine/redis_v1"
 	"github.com/bitleak/lmstfy/helper"
 	"github.com/sirupsen/logrus"
 )

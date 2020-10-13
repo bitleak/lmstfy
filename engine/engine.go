@@ -66,15 +66,25 @@ func ExistsPool(pool string) bool {
 	return GetEngine(pool) != nil
 }
 
+func ListKinds() []string {
+	kinds := make([]string, 0)
+	for name := range engines {
+		kinds = append(kinds, name)
+	}
+	return kinds
+}
+
 func GetEngine(pool string) Engine {
 	if pool == "" {
 		pool = config.DefaultPoolName
 	}
-	e := GetEngineByKind("migration", pool)
-	if e != nil {
-		return e
+	allowKinds := ListKinds()
+	for _, kind := range allowKinds {
+		if e := GetEngineByKind(kind, pool); e != nil {
+			return e
+		}
 	}
-	return GetEngineByKind("redis", pool)
+	return nil
 }
 
 func Register(kind, pool string, e Engine) {

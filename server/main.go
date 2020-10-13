@@ -11,10 +11,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/bitleak/lmstfy/engine/redis_v2"
+
 	"github.com/bitleak/lmstfy/auth"
 	"github.com/bitleak/lmstfy/config"
 	"github.com/bitleak/lmstfy/engine/migration"
-	redis_engine "github.com/bitleak/lmstfy/engine/redis"
+	"github.com/bitleak/lmstfy/engine/redis_v1"
 	"github.com/bitleak/lmstfy/log"
 	"github.com/bitleak/lmstfy/push"
 	"github.com/bitleak/lmstfy/server/handlers"
@@ -172,6 +174,23 @@ func removePidFile() {
 	os.Remove(Flags.PidFile)
 }
 
+func setupEngines(conf *config.Config, logger *logrus.Logger) error {
+	if err := redis_v1.Setup(conf, logger); err != nil {
+		return fmt.Errorf("Failed to setup redis engine v1: %s", err.Error())
+	}
+	if err := redis_v2.Setup(conf, logger); err != nil {
+		return fmt.Errorf("Failed to setup redis engine v2: %s", err.Error())
+	}
+	if err := migration.Setup(conf, logger); err != nil {
+		return fmt.Errorf("Failed to setup migration engine: %s", err.Error())
+	}
+	return nil
+}
+func fatalf(format string, args ...interface{}) {
+	fmt.Printf(format, args...)
+	os.Exit(1)
+}
+
 func main() {
 	parseFlags()
 	if Flags.ShowVersion {
@@ -180,27 +199,24 @@ func main() {
 	}
 	conf, err := config.MustLoad(Flags.ConfFile)
 	if err != nil {
-		panic(fmt.Sprintf("Failed to load config file: %s", err))
+		fatalf("Load config, err: %s\n", err.Error())
 	}
 	shutdown := make(chan struct{})
 	accessLogger, errorLogger, err := log.SetupLogger(conf.LogFormat, conf.LogDir, conf.LogLevel, Flags.BackTrackLevel)
 	if err != nil {
-		panic(fmt.Sprintf("Failed to setup logger: %s", err))
+		fatalf("Setup logger, err: %s\n", err.Error())
 	}
 	registerSignal(shutdown, func() {
 		log.ReopenLogs(conf.LogDir, accessLogger, errorLogger)
 	})
-	if err := redis_engine.Setup(conf, errorLogger); err != nil {
-		panic(fmt.Sprintf("Failed to setup redis engine: %s", err))
-	}
-	if err := migration.Setup(conf, errorLogger); err != nil {
-		panic(fmt.Sprintf("Failed to setup migration engine: %s", err))
+	if err := setupEngines(conf, errorLogger); err != nil {
+		panic(err)
 	}
 	if err := auth.Setup(conf); err != nil {
-		panic(fmt.Sprintf("Failed to setup auth module: %s", err))
+		panic(fmt.Sprintf("Setup auth module, err: %s", err))
 	}
 	if err := push.Setup(conf, 3*time.Second, errorLogger); err != nil {
-		panic(fmt.Sprintf("Failed to setup push module: %s", err))
+		fatalf("Setup push module, err: %s\n", err.Error())
 	}
 	if conf.EnableAccessLog {
 		middleware.EnableAccessLog()

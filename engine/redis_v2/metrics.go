@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	redis_v1 "github.com/bitleak/lmstfy/engine/redis"
+	"github.com/bitleak/lmstfy/engine/redis_v1"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -49,7 +49,7 @@ var (
 
 const (
 	Namespace = "infra"
-	Subsystem = "lmstfy_redis"
+	Subsystem = "lmstfy_redis_v2"
 )
 
 func setupMetrics() {

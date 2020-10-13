@@ -10,7 +10,7 @@ import (
 	"github.com/bitleak/lmstfy/uuid"
 )
 
-func TestQueue_Push(t *testing.T) {
+func TestQueueV2_Push(t *testing.T) {
 	timer, err := NewTimer("timer_set_q", R, time.Second)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))
@@ -28,7 +28,7 @@ func TestQueue_Push(t *testing.T) {
 	}
 }
 
-func TestQueue_Poll(t *testing.T) {
+func TestQueueV2_Poll(t *testing.T) {
 	timer, err := NewTimer("timer_set_q", R, time.Second)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))
@@ -49,7 +49,7 @@ func TestQueue_Poll(t *testing.T) {
 	}
 }
 
-func TestQueue_Peek(t *testing.T) {
+func TestQueueV2_Peek(t *testing.T) {
 	timer, err := NewTimer("timer_set_q", R, time.Second)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))
@@ -67,7 +67,7 @@ func TestQueue_Peek(t *testing.T) {
 	}
 }
 
-func TestQueue_Destroy(t *testing.T) {
+func TestQueueV2_Destroy(t *testing.T) {
 	timer, err := NewTimer("timer_set_q", R, time.Second)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))
@@ -89,7 +89,7 @@ func TestQueue_Destroy(t *testing.T) {
 	}
 }
 
-func TestQueue_Tries(t *testing.T) {
+func TestQueueV2_Tries(t *testing.T) {
 	timer, err := NewTimer("timer_set_q", R, time.Second)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))
@@ -129,7 +129,7 @@ func TestQueue_Tries(t *testing.T) {
 	}
 }
 
-func TestStructPacking(t *testing.T) {
+func TestStructPackingV2(t *testing.T) {
 	var tries uint16 = 23
 	jobID := " a test ID#"
 	data := structPack(tries, jobID)
@@ -142,7 +142,7 @@ func TestStructPacking(t *testing.T) {
 	}
 }
 
-func TestPriorQueue_PollFromTimer(t *testing.T) {
+func TestPriorQueueV2_PollFromTimer(t *testing.T) {
 	namespace := "ns-queue"
 	timer, err := NewTimer("timer_set_q", R, 200*time.Millisecond)
 	if err != nil {
@@ -186,7 +186,7 @@ func TestPriorQueue_PollFromTimer(t *testing.T) {
 	}
 }
 
-func TestPriorQueue_PollWithPriority(t *testing.T) {
+func TestPriorQueueV2_PollWithPriority(t *testing.T) {
 	timer, err := NewTimer("timer_set_q", R, time.Second)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))

@@ -55,10 +55,6 @@ func GetPoolsByKind(kind string) []string {
 	return pools
 }
 
-func GetPools() []string {
-	return GetPoolsByKind("redis")
-}
-
 func ExistsPool(pool string) bool {
 	if pool == "" {
 		pool = config.DefaultPoolName

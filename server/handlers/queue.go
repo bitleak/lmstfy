@@ -157,6 +157,13 @@ func PublishBulk(c *gin.Context) {
 		return
 	}
 
+	priorityStr := c.DefaultQuery("priority", "0")
+	priority, err := strconv.ParseUint(priorityStr, 10, 8)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid priority"})
+		return
+	}
+
 	body, err := c.GetRawData()
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read body"})
@@ -185,7 +192,7 @@ func PublishBulk(c *gin.Context) {
 
 	jobIDs := make([]string, 0)
 	for _, job := range jobs {
-		jobID, err := e.Publish(namespace, queue, job, uint32(ttlSecond), uint32(delaySecond), uint16(tries), 0)
+		jobID, err := e.Publish(namespace, queue, job, uint32(ttlSecond), uint32(delaySecond), uint16(tries), uint8(priority))
 		if err != nil {
 			logger.WithFields(logrus.Fields{
 				"err":       err,

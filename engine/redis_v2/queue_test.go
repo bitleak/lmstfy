@@ -205,10 +205,16 @@ func TestPriorQueueV2_PollWithPriority(t *testing.T) {
 	if err != nil {
 		t.Fatal("Failed to zrange the ready queue")
 	}
+	nowMillisecond := time.Now().UnixNano() / 1e6
 	for i, member := range members { // this case was used to make sure that score in ready queue was right
 		gotPriority := int64(member.Score) >> priorityShift
 		if int64(i) != gotPriority {
 			t.Fatalf("Invalid ready queue priority, %d was expected but got %d", i, gotPriority)
+		}
+		gotTimeScore := (1 << priorityShift) - int64(member.Score)&(1<<priorityShift-1)
+		if nowMillisecond-gotTimeScore > time.Second.Milliseconds() {
+			t.Fatalf("the gap of the time score should be smaller than %d, but got %d",
+				time.Second.Milliseconds(), gotTimeScore)
 		}
 	}
 	for i := 0; i < 10; i++ {

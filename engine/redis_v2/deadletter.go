@@ -16,7 +16,7 @@ local queue = KEYS[2]
 local poolPrefix = KEYS[3]
 local limit = tonumber(ARGV[1])
 local respawnTTL = tonumber(ARGV[2])
-local score = tonumber(ARGV[2])
+local score = tonumber(ARGV[3])
 for i = 1, limit do
     local data = redis.call("RPOP", deadletter)
 	if data == false then

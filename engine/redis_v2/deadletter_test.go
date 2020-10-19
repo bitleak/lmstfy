@@ -173,10 +173,16 @@ func TestDeadLetterWithPriorQueueV2_Respawn(t *testing.T) {
 	if len(members) != 3 {
 		t.Fatalf("Ready queue size 10 was expected but got %d", len(members))
 	}
+	nowMillisecond := time.Now().UnixNano() / 1e6
 	for i, member := range members { // this case was used to make sure that score in ready queue was right
 		gotPriority := int(int64(member.Score) >> priorityShift)
 		if i != gotPriority {
 			t.Fatalf("Invalid ready queue priority, %d was expected but got %d", i, gotPriority)
+		}
+		gotTimeScore := (1 << priorityShift) - int64(member.Score)&(1<<priorityShift-1)
+		if nowMillisecond-gotTimeScore > time.Second.Milliseconds() {
+			t.Fatalf("the gap of the time score should be smaller than %d, but got %d",
+				time.Second.Milliseconds(), gotTimeScore)
 		}
 	}
 

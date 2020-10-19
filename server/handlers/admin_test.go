@@ -69,16 +69,24 @@ func TestDeleteToken(t *testing.T) {
 	}
 }
 
-func getLimiter(namespace, token string) (*throttler.Limiter, error) {
+func getLimiter(namespace, queue, token string) (*throttler.Limiter, error) {
 	// force update limiters
 	throttler.GetThrottler().GetAll(true)
-	targetUrl := fmt.Sprintf("http://localhost/token/%s/%s/limit", namespace, token)
+	targetUrl := fmt.Sprintf("http://localhost/token/%s/%s/limit/%s", namespace, token, queue)
+	if queue == "" {
+		targetUrl = fmt.Sprintf("http://localhost/token/%s/%s/limit", namespace, token)
+	}
 	req, err := http.NewRequest("GET", targetUrl, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create the request, err: %s", err.Error())
 	}
 	c, e, resp := ginTest(req)
-	e.GET("/token/:namespace/:token/limit", handlers.GetLimiter)
+	if queue == "" {
+		e.GET("/token/:namespace/:token/limit", handlers.GetLimiter)
+	} else {
+		e.GET("/token/:namespace/:token/limit/:queue", handlers.GetLimiter)
+	}
+
 	e.HandleContext(c)
 	if resp.Code != http.StatusOK && resp.Code != http.StatusNotFound {
 		return nil, fmt.Errorf("http code expected  %d, but got %d", http.StatusOK, resp.Code)
@@ -91,14 +99,23 @@ func getLimiter(namespace, token string) (*throttler.Limiter, error) {
 	return nil, nil
 }
 
-func addTokenLimit(namespace, token, limitStr string) error {
-	targetUrl := fmt.Sprintf("http://localhost/token/%s/%s/limit", namespace, token)
+func addTokenLimit(namespace, queue, token, limitStr string) error {
+	targetUrl := fmt.Sprintf("http://localhost/token/%s/%s/limit/%s", namespace, token, queue)
+	if queue == "" {
+		targetUrl = fmt.Sprintf("http://localhost/token/%s/%s/limit", namespace, token)
+	}
+
 	req, err := http.NewRequest("POST", targetUrl, bytes.NewReader([]byte(limitStr)))
 	if err != nil {
 		return fmt.Errorf("failed to create the request, err: %s", err.Error())
 	}
 	c, e, resp := ginTest(req)
-	e.POST("/token/:namespace/:token/limit", handlers.AddLimiter)
+	if queue == "" {
+		e.POST("/token/:namespace/:token/limit", handlers.AddLimiter)
+	} else {
+		e.POST("/token/:namespace/:token/limit/:queue", handlers.AddLimiter)
+	}
+
 	e.HandleContext(c)
 	if resp.Code != http.StatusCreated {
 		return fmt.Errorf("http code expected  %d, but got %d", http.StatusOK, resp.Code)
@@ -111,17 +128,38 @@ func TestAddTokenLimiter(t *testing.T) {
 	namespace := "ns-token"
 	tk := auth.GetTokenManager()
 	token, _ := tk.New("", "ns-token", uuid.GenUniqueID(), "token limiter")
-	if err := addTokenLimit(namespace, token, limitStr); err != nil {
+	if err := addTokenLimit(namespace, "", token, limitStr); err != nil {
 		t.Fatal(err)
 	}
-	limiter, err := getLimiter(namespace, token)
+	limiter, err := getLimiter(namespace, "", token)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 	if limiter.Read != 100 && limiter.Write != 100 && limiter.Interval != 100 {
 		t.Fatalf("Invaild limiter's value, %v", limiter)
 	}
-	if err := addTokenLimit(namespace, token, limitStr); err == nil {
+	if err := addTokenLimit(namespace, "", token, limitStr); err == nil {
+		t.Fatal("duplicate token error was expected")
+	}
+}
+
+func TestAddQueueTokenLimiter(t *testing.T) {
+	limitStr := "{\"read\": 100, \"write\": 100, \"interval\":100}"
+	namespace := "ns-token"
+	queue := "queue-token"
+	tk := auth.GetTokenManager()
+	token, _ := tk.New("", "ns-token", uuid.GenUniqueID(), "token limiter")
+	if err := addTokenLimit(namespace, queue, token, limitStr); err != nil {
+		t.Fatal(err)
+	}
+	limiter, err := getLimiter(namespace, queue, token)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if limiter.Read != 100 && limiter.Write != 100 && limiter.Interval != 100 {
+		t.Fatalf("Invaild limiter's value, %v", limiter)
+	}
+	if err := addTokenLimit(namespace, queue, token, limitStr); err == nil {
 		t.Fatal("duplicate token error was expected")
 	}
 }
@@ -144,12 +182,30 @@ func TestSetTokenLimiter(t *testing.T) {
 	}
 }
 
+func TestSetQueueTokenLimiter(t *testing.T) {
+	tk := auth.GetTokenManager()
+	token, _ := tk.New("", "ns-token", uuid.GenUniqueID(), "token limiter")
+	targetUrl := fmt.Sprintf("http://localhost/token/ns-token/%s/limit/queue-token", token)
+	limitStr := "{\"read\": 100, \"write\": 100, \"interval\":100}"
+	req, err := http.NewRequest("PUT", targetUrl, bytes.NewReader([]byte(limitStr)))
+	if err != nil {
+		t.Fatalf("Failed to create the request, err: %s", err.Error())
+	}
+	c, e, resp := ginTest(req)
+	e.PUT("/token/:namespace/:token/limit/:queue", handlers.SetLimiter)
+	e.HandleContext(c)
+	if resp.Code != http.StatusOK {
+		t.Logf(resp.Body.String())
+		t.Fatalf("Failed to add the limit to the token, err: %v", err)
+	}
+}
+
 func TestDeleteTokenLimiter(t *testing.T) {
 	limitStr := "{\"read\": 100, \"write\": 100, \"interval\":100}"
 	namespace := "ns-token"
 	tk := auth.GetTokenManager()
 	token, _ := tk.New("", "ns-token", uuid.GenUniqueID(), "token limiter")
-	if err := addTokenLimit(namespace, token, limitStr); err != nil {
+	if err := addTokenLimit(namespace, "", token, limitStr); err != nil {
 		t.Fatal(err)
 	}
 
@@ -166,7 +222,39 @@ func TestDeleteTokenLimiter(t *testing.T) {
 		t.Fatalf("Failed to add the limit to the token, err: %v", err)
 	}
 
-	limiter, err := getLimiter("ns-token", token)
+	limiter, err := getLimiter("ns-token", "", token)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if limiter != nil {
+		t.Fatal("the token's limiter was expected to be deleted")
+	}
+}
+
+func TestDeleteQueueTokenLimiter(t *testing.T) {
+	limitStr := "{\"read\": 100, \"write\": 100, \"interval\":100}"
+	namespace := "ns-token"
+	queue := "queue-token"
+	tk := auth.GetTokenManager()
+	token, _ := tk.New("", "ns-token", uuid.GenUniqueID(), "token limiter")
+	if err := addTokenLimit(namespace, queue, token, limitStr); err != nil {
+		t.Fatal(err)
+	}
+
+	targetUrl := fmt.Sprintf("http://localhost/token/%s/%s/limit/%s", namespace, token, queue)
+	req, err := http.NewRequest("DELETE", targetUrl, nil)
+	if err != nil {
+		t.Fatalf("Failed to create the request, err: %s", err.Error())
+	}
+	c, e, resp := ginTest(req)
+	e.DELETE("/token/:namespace/:token/limit/:queue", handlers.DeleteLimiter)
+	e.HandleContext(c)
+	if resp.Code != http.StatusOK {
+		t.Logf(resp.Body.String())
+		t.Fatalf("Failed to add the limit to the token, err: %v", err)
+	}
+
+	limiter, err := getLimiter("ns-token", queue, token)
 	if err != nil {
 		t.Fatal(err.Error())
 	}

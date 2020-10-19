@@ -64,7 +64,7 @@ func TestThrottlePublish(t *testing.T) {
 	queue := "q1"
 	token, _ := tk.New("", namespace, uuid.GenUniqueID(), "test publish throttler")
 	limitStr := "{\"read\": 0, \"write\": 3, \"interval\":1}"
-	if err := addTokenLimit(namespace, token, limitStr); err != nil {
+	if err := addTokenLimit(namespace, "", token, limitStr); err != nil {
 		t.Fatal(err)
 	}
 	for i := 0; i < 4; i++ {
@@ -93,7 +93,7 @@ func TestThrottleConsume(t *testing.T) {
 	queue := "q2"
 	token, _ := tk.New("", namespace, uuid.GenUniqueID(), "test publish throttler")
 	limitStr := "{\"read\": 3, \"write\": 100, \"interval\":1}"
-	if err := addTokenLimit(namespace, token, limitStr); err != nil {
+	if err := addTokenLimit(namespace, "", token, limitStr); err != nil {
 		t.Fatal(err)
 	}
 	for i := 0; i < 10; i++ {
@@ -119,5 +119,111 @@ func TestThrottleConsume(t *testing.T) {
 	err := consumeWithThrottler(namespace, queue, token)
 	if err != nil {
 		t.Fatalf("Consume the test job, err: %s", err.Error())
+	}
+}
+
+func TestThrottleForbid(t *testing.T) {
+	tk := auth.GetTokenManager()
+	namespace := "ns-throttler"
+	queue := "q3"
+	token, _ := tk.New("", namespace, uuid.GenUniqueID(), "test forbid throttler")
+	limitStr := "{\"read\": 0, \"write\": 3, \"interval\":1, \"forbid_read\": true, \"forbid_write\": true}"
+	if err := addTokenLimit(namespace, "", token, limitStr); err != nil {
+		t.Fatal(err)
+	}
+	err := publishWithThrottler(namespace, queue, token)
+
+	if err == nil {
+		t.Fatalf("Publish test job forbid publish error was expected")
+
+	}
+	err = consumeWithThrottler(namespace, queue, token)
+	if err == nil {
+		t.Fatalf("Consume test job forbid consume error was expected")
+	}
+}
+
+func TestThrottleQueuePublish(t *testing.T) {
+	tk := auth.GetTokenManager()
+	namespace := "ns-throttler"
+	queue := "q4"
+	token, _ := tk.New("", namespace, uuid.GenUniqueID(), "test publish throttler")
+	limitStr := "{\"read\": 0, \"write\": 3, \"interval\":1}"
+	if err := addTokenLimit(namespace, queue, token, limitStr); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 4; i++ {
+		err := publishWithThrottler(namespace, queue, token)
+		if i != 3 {
+			if err != nil {
+				t.Fatalf("Publish the test job, err: %s", err.Error())
+			}
+		} else {
+			if err == nil {
+				t.Fatalf("Publish test job reached limit error was expected")
+			}
+		}
+	}
+	time.Sleep(2 * time.Second)
+	// retry after interval
+	err := publishWithThrottler(namespace, queue, token)
+	if err != nil {
+		t.Fatalf("Publish the test job, err: %s", err.Error())
+	}
+}
+
+func TestThrottleQueueConsume(t *testing.T) {
+	tk := auth.GetTokenManager()
+	namespace := "ns-throttler"
+	queue := "q5"
+	token, _ := tk.New("", namespace, uuid.GenUniqueID(), "test publish throttler")
+	limitStr := "{\"read\": 3, \"write\": 100, \"interval\":1}"
+	if err := addTokenLimit(namespace, queue, token, limitStr); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 10; i++ {
+		err := publishWithThrottler(namespace, queue, token)
+		if err != nil {
+			t.Fatalf("Publish test job, err: %s", err.Error())
+		}
+	}
+	for i := 0; i < 4; i++ {
+		err := consumeWithThrottler(namespace, queue, token)
+		if i != 3 {
+			if err != nil {
+				t.Fatalf("Consume the test job, err: %s", err.Error())
+			}
+		} else {
+			if err == nil {
+				t.Fatalf("Consume test job reached limit error was expected")
+			}
+		}
+	}
+	// retry after interval
+	time.Sleep(2 * time.Second)
+	err := consumeWithThrottler(namespace, queue, token)
+	if err != nil {
+		t.Fatalf("Consume the test job, err: %s", err.Error())
+	}
+}
+
+func TestThrottleQueueForbid(t *testing.T) {
+	tk := auth.GetTokenManager()
+	namespace := "ns-throttler"
+	queue := "q6"
+	token, _ := tk.New("", namespace, uuid.GenUniqueID(), "test forbid throttler")
+	limitStr := "{\"read\": 0, \"write\": 3, \"interval\":1, \"forbid_read\": true, \"forbid_write\": true}"
+	if err := addTokenLimit(namespace, queue, token, limitStr); err != nil {
+		t.Fatal(err)
+	}
+	err := publishWithThrottler(namespace, queue, token)
+
+	if err == nil {
+		t.Fatalf("Publish test job forbid publish error was expected")
+
+	}
+	err = consumeWithThrottler(namespace, queue, token)
+	if err == nil {
+		t.Fatalf("Consume test job forbid consume error was expected")
 	}
 }

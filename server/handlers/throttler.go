@@ -14,13 +14,14 @@ func Throttle(throttler *throttler.Throttler, action string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		pool := c.GetString("pool")
 		namespace := c.Param("namespace")
+		queue := c.Param("queue")
 		token := c.GetString("token")
 		if action != "consume" && action != "produce" {
 			c.Next()
 			return
 		}
 		isRead := action == "consume"
-		isReachRateLimited, err := throttler.IsReachRateLimit(pool, namespace, token, isRead)
+		isReachRateLimited, err := throttler.IsReachRateLimit(pool, namespace, queue, token, isRead)
 		if err != nil {
 			logger := GetHTTPLogger(c)
 			logger.WithFields(logrus.Fields{
@@ -42,7 +43,7 @@ func Throttle(throttler *throttler.Throttler, action string) gin.HandlerFunc {
 		c.Next()
 		statusCode := c.Writer.Status()
 		if (isRead && statusCode != http.StatusOK) || (!isRead && statusCode != http.StatusCreated) {
-			throttler.RemedyLimiter(pool, namespace, token, isRead)
+			throttler.RemedyLimiter(pool, namespace, queue, token, isRead)
 		}
 	}
 }

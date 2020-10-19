@@ -126,6 +126,10 @@ func adminServer(conf *config.Config, accessLogger *logrus.Logger, errorLogger *
 	engine.POST("/token/:namespace/:token/limit", handlers.AddLimiter)
 	engine.PUT("/token/:namespace/:token/limit", handlers.SetLimiter)
 	engine.DELETE("/token/:namespace/:token/limit", handlers.DeleteLimiter)
+	engine.GET("/token/:namespace/:token/limit/:queue", handlers.GetLimiter)
+	engine.POST("/token/:namespace/:token/limit/:queue", handlers.AddLimiter)
+	engine.PUT("/token/:namespace/:token/limit/:queue", handlers.SetLimiter)
+	engine.DELETE("/token/:namespace/:token/limit/:queue", handlers.DeleteLimiter)
 
 	// pusher's URI
 	engine.GET("/pushers", handlers.ListPushGroups)

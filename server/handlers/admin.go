@@ -125,13 +125,27 @@ func DeleteToken(c *gin.Context) {
 		}
 		return
 	}
-	if err := throttler.GetThrottler().Delete(pool, namespace, token); err != nil {
+	if err := throttler.GetThrottler().Delete(pool, namespace, "", token); err != nil {
 		logger.WithFields(logrus.Fields{
 			"pool":      pool,
 			"namespace": namespace,
 			"token":     token,
 			"err":       err,
 		}).Error("Failed to delete the token's limiter")
+	}
+	limiters := throttler.GetThrottler().GetAll(true)
+	for _, limiter := range limiters {
+		limiterPool, limiterToken := parseToken(limiter.Token)
+		if limiterPool == pool && limiter.Namespace == namespace && limiterToken == token {
+			if err := throttler.GetThrottler().Delete(pool, namespace, limiter.Queue, token); err != nil {
+				logger.WithFields(logrus.Fields{
+					"pool":      pool,
+					"namespace": namespace,
+					"token":     token,
+					"err":       err,
+				}).Error("Failed to delete the token's queue limiter")
+			}
+		}
 	}
 	c.Status(http.StatusNoContent)
 }
@@ -143,6 +157,7 @@ func ListLimiters(c *gin.Context) {
 }
 
 // POST /token/:namespace/:token/limit
+// POST /token/:namespace/:queue/:token/limit
 func AddLimiter(c *gin.Context) {
 	logger := GetHTTPLogger(c)
 	var limiter throttler.Limiter
@@ -160,7 +175,8 @@ func AddLimiter(c *gin.Context) {
 	}
 	pool, token := parseToken(c.Param("token"))
 	namespace := c.Param("namespace")
-	err := throttler.GetThrottler().Add(pool, namespace, token, &limiter)
+	queue := c.Param("queue")
+	err := throttler.GetThrottler().Add(pool, namespace, queue, token, &limiter)
 	if err != nil {
 		logger.WithFields(logrus.Fields{
 			"token":   c.Param("token"),
@@ -175,11 +191,13 @@ func AddLimiter(c *gin.Context) {
 }
 
 // DELETE /token/:namespace/:token/limit
+// DELETE /token/:namespace/:queue/:token/limit
 func DeleteLimiter(c *gin.Context) {
 	logger := GetHTTPLogger(c)
 	pool, token := parseToken(c.Param("token"))
 	namespace := c.Param("namespace")
-	err := throttler.GetThrottler().Delete(pool, namespace, token)
+	queue := c.Param("queue")
+	err := throttler.GetThrottler().Delete(pool, namespace, queue, token)
 	if err != nil {
 		logger.WithFields(logrus.Fields{
 			"token": c.Param("token"),
@@ -192,10 +210,12 @@ func DeleteLimiter(c *gin.Context) {
 }
 
 // GET /token/:namespace/:token/limit
+// GET /token/:namespace/:queue/:token/limit
 func GetLimiter(c *gin.Context) {
 	pool, token := parseToken(c.Param("token"))
 	namespace := c.Param("namespace")
-	limiter := throttler.GetThrottler().Get(pool, namespace, token)
+	queue := c.Param("queue")
+	limiter := throttler.GetThrottler().Get(pool, namespace, queue, token)
 	if limiter == nil {
 		c.JSON(http.StatusNotFound, nil)
 	} else {
@@ -204,6 +224,7 @@ func GetLimiter(c *gin.Context) {
 }
 
 // PUT /token/:namespace/:token/limit
+// PUT /token/:namespace/:queue/:token/limit
 func SetLimiter(c *gin.Context) {
 	logger := GetHTTPLogger(c)
 	var limiter throttler.Limiter
@@ -222,7 +243,8 @@ func SetLimiter(c *gin.Context) {
 
 	pool, token := parseToken(c.Param("token"))
 	namespace := c.Param("namespace")
-	err := throttler.GetThrottler().Set(pool, namespace, token, &limiter)
+	queue := c.Param("queue")
+	err := throttler.GetThrottler().Set(pool, namespace, queue, token, &limiter)
 	if err != nil {
 		logger.WithFields(logrus.Fields{
 			"token":   c.Param("token"),

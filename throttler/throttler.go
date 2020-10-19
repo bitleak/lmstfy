@@ -38,14 +38,17 @@ end
 
 // Limit is the detail limit of the token
 type Limiter struct {
-	Read     int64 `json:"read"`
-	Write    int64 `json:"write"`
-	Interval int64 `json:"interval"`
+	Read        int64 `json:"read"`
+	Write       int64 `json:"write"`
+	ForbidRead  bool  `json:"forbid_read"`
+	ForbidWrite bool  `json:"forbid_write"`
+	Interval    int64 `json:"interval"`
 }
 
 // TokenLimit is limit of the token
 type TokenLimiter struct {
 	Namespace string  `json:"namespace"`
+	Queue     string  `json:"queue"`
 	Token     string  `json:"token"`
 	Limiter   Limiter `json:"limiter"`
 }
@@ -63,28 +66,40 @@ type Throttler struct {
 
 var _throttler *Throttler
 
-func (t *Throttler) buildLimitKey(pool, namespace, token string) string {
-	return fmt.Sprintf("%s/%s/%s", pool, namespace, token)
+func (t *Throttler) buildLimitKey(pool, namespace, queue, token string) string {
+	if queue == "" {
+		return fmt.Sprintf("%s/%s/%s", pool, namespace, token)
+	}
+	return fmt.Sprintf("%s/%s/%s/%s", pool, namespace, queue, token)
 }
 
-func (t *Throttler) buildCounterKey(pool, namespace, token string, isRead bool) string {
+func (t *Throttler) buildCounterKey(pool, namespace, queue, token string, isRead bool) string {
 	if isRead {
-		return fmt.Sprintf("l/%s/%s", t.buildLimitKey(pool, namespace, token), "r")
+		return fmt.Sprintf("l/%s/%s", t.buildLimitKey(pool, namespace, queue, token), "r")
 	}
-	return fmt.Sprintf("l/%s/%s", t.buildLimitKey(pool, namespace, token), "w")
+	return fmt.Sprintf("l/%s/%s", t.buildLimitKey(pool, namespace, queue, token), "w")
 }
 
 // RemedyLimiter would remedy the limiter when consume/produce go wrong
-func (t *Throttler) RemedyLimiter(pool, namespace, token string, isRead bool) error {
-	limiter := t.Get(pool, namespace, token)
+func (t *Throttler) RemedyLimiter(pool, namespace, queue, token string, isRead bool) error {
+	limiter := t.Get(pool, namespace, queue, token)
 	if limiter == nil {
+		queue = ""
+		limiter = t.Get(pool, namespace, queue, token)
+		{
+			if limiter == nil {
+				return nil
+			}
+		}
+	}
+	if (isRead && limiter.ForbidRead) || (!isRead && limiter.ForbidWrite) {
 		return nil
 	}
 	if (isRead && limiter.Read <= 0) || (!isRead && limiter.Write <= 0) {
 		return nil
 	}
 
-	tokenCounterKey := t.buildCounterKey(pool, namespace, token, isRead)
+	tokenCounterKey := t.buildCounterKey(pool, namespace, token, queue, isRead)
 	_, err := t.redisCli.EvalSha(t.decrSHA, []string{tokenCounterKey}).Result()
 	if err != nil && strings.HasPrefix(err.Error(), "NOSCRIPT") {
 		sha, err := t.redisCli.ScriptLoad(throttleDecrLuaScript).Result()
@@ -107,34 +122,55 @@ func (t *Throttler) GetAll(forceUpdate bool) []TokenLimiter {
 	t.mu.RLock()
 	for name, limiter := range t.cache {
 		fields := strings.Split(name, "/")
-		if len(fields) != 3 {
-			continue
+		if len(fields) == 3 {
+			token = fields[2]
+			if fields[0] != config.DefaultPoolName {
+				token = fields[0] + ":" + fields[2]
+			}
+			limiters = append(limiters, TokenLimiter{
+				Namespace: fields[1],
+				Queue:     "",
+				Token:     token,
+				Limiter:   *limiter,
+			})
+		} else if len(fields) == 4 {
+			token = fields[3]
+			if fields[0] != config.DefaultPoolName {
+				token = fields[0] + ":" + fields[2]
+			}
+			limiters = append(limiters, TokenLimiter{
+				Namespace: fields[1],
+				Queue:     fields[2],
+				Token:     token,
+				Limiter:   *limiter,
+			})
 		}
-		token = fields[2]
-		if fields[0] != config.DefaultPoolName {
-			token = fields[0] + ":" + fields[2]
-		}
-		limiters = append(limiters, TokenLimiter{
-			Namespace: fields[1],
-			Token:     token,
-			Limiter:   *limiter,
-		})
 	}
 	t.mu.RUnlock()
 	return limiters
 }
 
 // IsReachLimit check whether the read or write op was reached limit
-func (t *Throttler) IsReachRateLimit(pool, namespace, token string, isRead bool) (bool, error) {
-	limiter := t.Get(pool, namespace, token)
+func (t *Throttler) IsReachRateLimit(pool, namespace, queue, token string, isRead bool) (bool, error) {
+	limiter := t.Get(pool, namespace, queue, token)
 	if limiter == nil {
-		return false, nil
+		// use namespace limiter
+		queue = ""
+		limiter = t.Get(pool, namespace, queue, token)
+		{
+			if limiter == nil {
+				return false, nil
+			}
+		}
+	}
+	if (isRead && limiter.ForbidRead) || (!isRead && limiter.ForbidWrite) {
+		return true, nil
 	}
 	if (isRead && limiter.Read <= 0) || (!isRead && limiter.Write <= 0) {
 		return false, nil
 	}
 
-	tokenCounterKey := t.buildCounterKey(pool, namespace, token, isRead)
+	tokenCounterKey := t.buildCounterKey(pool, namespace, queue, token, isRead)
 	val, err := t.redisCli.EvalSha(t.incrSHA, []string{tokenCounterKey}, limiter.Interval).Result()
 	if err != nil && strings.HasPrefix(err.Error(), "NOSCRIPT") {
 		sha, err := t.redisCli.ScriptLoad(throttleIncrLuaScript).Result()
@@ -155,7 +191,7 @@ func (t *Throttler) IsReachRateLimit(pool, namespace, token string, isRead bool)
 
 // Add would add the token into the throttler,
 // return error if the token has already exists
-func (t *Throttler) Add(pool, namespace, token string, limiter *Limiter) error {
+func (t *Throttler) Add(pool, namespace, queue, token string, limiter *Limiter) error {
 	if err := limiter.validate(); err != nil {
 		return err
 	}
@@ -163,7 +199,7 @@ func (t *Throttler) Add(pool, namespace, token string, limiter *Limiter) error {
 	if err != nil {
 		return err
 	}
-	tokenLimitKey := t.buildLimitKey(pool, namespace, token)
+	tokenLimitKey := t.buildLimitKey(pool, namespace, queue, token)
 	ok, err := t.redisCli.HSetNX(throttlerRedisKey, tokenLimitKey, string(bytes)).Result()
 	if err != nil {
 		return fmt.Errorf("throttler add token, %s", err.Error())
@@ -177,8 +213,8 @@ func (t *Throttler) Add(pool, namespace, token string, limiter *Limiter) error {
 }
 
 // Get the token's limiter if exists
-func (t *Throttler) Get(pool, namespace, token string) *Limiter {
-	tokenLimitKey := t.buildLimitKey(pool, namespace, token)
+func (t *Throttler) Get(pool, namespace, queue, token string) *Limiter {
+	tokenLimitKey := t.buildLimitKey(pool, namespace, queue, token)
 	t.mu.RLock()
 	if limiter, ok := t.cache[tokenLimitKey]; ok {
 		t.mu.RUnlock()
@@ -189,7 +225,7 @@ func (t *Throttler) Get(pool, namespace, token string) *Limiter {
 }
 
 // Set would set the token into the throttler
-func (t *Throttler) Set(pool, namespace, token string, limiter *Limiter) error {
+func (t *Throttler) Set(pool, namespace, queue, token string, limiter *Limiter) error {
 	if err := limiter.validate(); err != nil {
 		return err
 	}
@@ -198,7 +234,7 @@ func (t *Throttler) Set(pool, namespace, token string, limiter *Limiter) error {
 		return err
 	}
 
-	tokenLimitKey := t.buildLimitKey(pool, namespace, token)
+	tokenLimitKey := t.buildLimitKey(pool, namespace, queue, token)
 	_, err = t.redisCli.HSet(throttlerRedisKey, tokenLimitKey, string(bytes)).Result()
 	if err != nil {
 		return fmt.Errorf("throttler set token(%s), %s", token, err.Error())
@@ -210,8 +246,8 @@ func (t *Throttler) Set(pool, namespace, token string, limiter *Limiter) error {
 }
 
 // Delete would the token from the throttler
-func (t *Throttler) Delete(pool, namespace, token string) error {
-	tokenLimitKey := t.buildLimitKey(pool, namespace, token)
+func (t *Throttler) Delete(pool, namespace, queue, token string) error {
+	tokenLimitKey := t.buildLimitKey(pool, namespace, queue, token)
 	_, err := t.redisCli.HDel(throttlerRedisKey, tokenLimitKey).Result()
 	if err != nil {
 		return fmt.Errorf("throttler delete token(%s), %s", token, err.Error())

@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/bitleak/lmstfy/engine"
-	"github.com/bitleak/lmstfy/engine/redis_v1"
 	go_redis "github.com/go-redis/redis"
 )
 
@@ -60,7 +59,7 @@ var (
 // Because the DeadLetter is not like Timer which is a singleton,
 // DeadLetters are transient objects like Queue. So we have to preload
 // the lua scripts separately.
-func PreloadDeadLetterLuaScript(redis *redis_v1.RedisInstance) error {
+func PreloadDeadLetterLuaScript(redis *RedisInstance) error {
 	sha, err := redis.Conn.ScriptLoad(LUA_D_RESPAWN).Result()
 	if err != nil {
 		return fmt.Errorf("failed to preload lua script: %s", err)
@@ -77,7 +76,7 @@ func PreloadDeadLetterLuaScript(redis *redis_v1.RedisInstance) error {
 
 // DeadLetter is where dead job will be buried, the job can be respawned into ready queue
 type DeadLetter struct {
-	redis           *redis_v1.RedisInstance
+	redis           *RedisInstance
 	namespace       string
 	queue           string
 	lua_respawn_sha string
@@ -85,7 +84,7 @@ type DeadLetter struct {
 }
 
 // NewDeadLetter return an instance of DeadLetter storage
-func NewDeadLetter(namespace, queue string, redis *redis_v1.RedisInstance) (*DeadLetter, error) {
+func NewDeadLetter(namespace, queue string, redis *RedisInstance) (*DeadLetter, error) {
 	dl := &DeadLetter{
 		redis:           redis,
 		namespace:       namespace,

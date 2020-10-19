@@ -6,14 +6,13 @@ import (
 	"testing"
 
 	"github.com/bitleak/lmstfy/config"
-	"github.com/bitleak/lmstfy/engine/redis_v1"
 	"github.com/bitleak/lmstfy/helper"
 	"github.com/sirupsen/logrus"
 )
 
 var (
 	CONF *config.Config
-	R    *redis_v1.RedisInstance
+	R    *RedisInstance
 )
 
 func init() {
@@ -46,7 +45,7 @@ func setup() {
 		panic(fmt.Sprintf("Failed to flush db: %s", err))
 	}
 
-	R = &redis_v1.RedisInstance{
+	R = &RedisInstance{
 		Name: "unittest",
 		Conn: conn,
 	}

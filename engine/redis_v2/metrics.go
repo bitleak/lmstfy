@@ -6,8 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bitleak/lmstfy/engine/redis_v1"
-
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -142,14 +140,14 @@ type SizeProvider interface {
 }
 
 type SizeMonitor struct {
-	redis     *redis_v1.RedisInstance
+	redis     *RedisInstance
 	timer     *Timer
 	providers map[string]SizeProvider
 
 	rwmu sync.RWMutex
 }
 
-func NewSizeMonitor(redis *redis_v1.RedisInstance, timer *Timer, preloadData map[string][]string) *SizeMonitor {
+func NewSizeMonitor(redis *RedisInstance, timer *Timer, preloadData map[string][]string) *SizeMonitor {
 	m := &SizeMonitor{
 		redis:     redis,
 		timer:     timer,

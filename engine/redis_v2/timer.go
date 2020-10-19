@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"time"
 
-	"github.com/bitleak/lmstfy/engine/redis_v1"
 	"github.com/bitleak/lmstfy/uuid"
 	"github.com/go-redis/redis"
 )
@@ -50,7 +49,7 @@ return #expiredMembers
 // it's ready.
 type Timer struct {
 	name     string
-	redis    *redis_v1.RedisInstance
+	redis    *RedisInstance
 	interval time.Duration
 	shutdown chan struct{}
 
@@ -58,7 +57,7 @@ type Timer struct {
 }
 
 // NewTimer return an instance of delay queue
-func NewTimer(name string, redis *redis_v1.RedisInstance, interval time.Duration) (*Timer, error) {
+func NewTimer(name string, redis *RedisInstance, interval time.Duration) (*Timer, error) {
 	timer := &Timer{
 		name:     name,
 		redis:    redis,

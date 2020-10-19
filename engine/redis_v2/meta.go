@@ -3,8 +3,6 @@ package redis_v2
 import (
 	"sync"
 
-	"github.com/bitleak/lmstfy/engine/redis_v1"
-
 	"github.com/sirupsen/logrus"
 )
 
@@ -15,13 +13,13 @@ Record meta info passively. meta info includes:
 */
 
 type MetaManager struct {
-	redis   *redis_v1.RedisInstance
+	redis   *RedisInstance
 	nsCache map[string]bool // namespace => bool
 	qCache  map[string]bool // {namespace}+{queue} => bool
 	rwmu    sync.RWMutex
 }
 
-func NewMetaManager(redis *redis_v1.RedisInstance) *MetaManager {
+func NewMetaManager(redis *RedisInstance) *MetaManager {
 	m := &MetaManager{
 		redis:   redis,
 		nsCache: make(map[string]bool),

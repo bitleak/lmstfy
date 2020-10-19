@@ -6,10 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/bitleak/lmstfy/engine/redis_v1"
-	"github.com/bitleak/lmstfy/uuid"
-
 	"github.com/bitleak/lmstfy/engine"
+	"github.com/bitleak/lmstfy/uuid"
 	go_redis "github.com/go-redis/redis"
 	"github.com/sirupsen/logrus"
 )
@@ -56,13 +54,13 @@ func (k *QueueName) Decode(str string) error {
 // Queue is the "ready queue" that has all the jobs that can be consumed right now
 type Queue struct {
 	name  QueueName
-	redis *redis_v1.RedisInstance
+	redis *RedisInstance
 	timer *Timer
 
 	lua_destroy_sha string
 }
 
-func NewQueue(namespace, queue string, redis *redis_v1.RedisInstance, timer *Timer) *Queue {
+func NewQueue(namespace, queue string, redis *RedisInstance, timer *Timer) *Queue {
 	return &Queue{
 		name:  QueueName{Namespace: namespace, Queue: queue},
 		redis: redis,
@@ -160,7 +158,7 @@ func (q *Queue) Destroy() (count int64, err error) {
 }
 
 // Poll from multiple queues using blocking method; OR pop a job from one queue using non-blocking method
-func PollQueues(redis *redis_v1.RedisInstance, timer *Timer, queueNames []QueueName, timeoutSecond, ttrSecond uint32, freezeTries bool) (queueName *QueueName, jobID string, retries uint16, err error) {
+func PollQueues(redis *RedisInstance, timer *Timer, queueNames []QueueName, timeoutSecond, ttrSecond uint32, freezeTries bool) (queueName *QueueName, jobID string, retries uint16, err error) {
 	defer func() {
 		if jobID != "" {
 			metrics.queuePopJobs.WithLabelValues(redis.Name).Inc()
@@ -262,7 +260,7 @@ func structUnpack(data string) (tries uint16, jobID string, err error) {
 	return
 }
 
-func PreloadQueueLuaScript(redis *redis_v1.RedisInstance) error {
+func PreloadQueueLuaScript(redis *RedisInstance) error {
 	sha, err := redis.Conn.ScriptLoad(LUA_Q_DELETE).Result()
 	if err != nil {
 		return fmt.Errorf("failed to preload luascript: %s", err)

@@ -5,17 +5,16 @@ import (
 	"time"
 
 	"github.com/bitleak/lmstfy/engine"
-	"github.com/bitleak/lmstfy/engine/redis_v1"
 	go_redis "github.com/go-redis/redis"
 )
 
 // Pool stores all the jobs' data. this is a global singleton per engine
 // note: this `Pool` is NOT the same terminology as the EnginePool
 type Pool struct {
-	redis *redis_v1.RedisInstance
+	redis *RedisInstance
 }
 
-func NewPool(redis *redis_v1.RedisInstance) *Pool {
+func NewPool(redis *RedisInstance) *Pool {
 	return &Pool{
 		redis: redis,
 	}

@@ -8,6 +8,7 @@ Consume/Produce API would return the status code `429`(too many requests) when t
 
 ```
 POST /token/:namespace/:token/limit
+POST /token/:namespace/:token/limit/:queue
 ```
 #### Request Body 
 
@@ -15,17 +16,21 @@ POST /token/:namespace/:token/limit
 {
 "read": 100,
 "write": 200,
-"interval": 10
+"interval": 10,
+"forbid_read":false,
+"forbid_write":false
 }
 ```
 
 The unit of the `interval` is second and `read`/`write` is counter, which means this token can consume 100 times
 and publish 200 times at 10 seconds.
+`forbid_read` set true to pause consume，`forbid_write` set true to pause publish
 
 ### Get the limit
 
 ```
 GET /token/:namespace/:token/limit
+GET /token/:namespace/:token/limit/:queue
 ```
 
 #### Request Query
@@ -36,6 +41,7 @@ no parameter
 
 ```
 PUT /token/:namespace/:token/limit
+PUT /token/:namespace/:token/limit/:queue
 ```
 #### Request Body 
 
@@ -43,7 +49,9 @@ PUT /token/:namespace/:token/limit
 {
 "read": 200,
 "write": 400,
-"interval": 10
+"interval": 10,
+"forbid_read":false,
+"forbid_write":false,
 }
 ```
 
@@ -51,6 +59,7 @@ PUT /token/:namespace/:token/limit
 
 ```
 DELETE /token/:namespace/:token/limit
+DELETE /token/:namespace/:token/limit/:queue
 ```
 
 #### Request Query

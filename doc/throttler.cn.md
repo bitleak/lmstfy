@@ -8,6 +8,7 @@
 
 ```
 POST /token/:namespace/:token/limit
+POST /token/:namespace/:token/limit/:queue
 ```
 
 #### Request Body 
@@ -16,16 +17,20 @@ POST /token/:namespace/:token/limit
 {
 "read": 100,
 "write": 200,
-"interval": 10
+"interval": 10,
+"forbid_read":false,
+"forbid_write":false
 }
 ```
 
 `interval` 的单位是 秒，`read/write` 的单位是次数，上面的意思是这个 token 在 10s 之内最多可以消费 100 次以及写入 200 次。
+`forbid_read` 是否禁止consume，`forbid_write` 是否禁止publish
 
 ### 查看限制器 
 
 ```
 GET /token/:namespace/:token/limit
+GET /token/:namespace/:token/limit/:queue
 ```
 
 #### Request Query
@@ -36,6 +41,7 @@ no parameter
 
 ```
 PUT /token/:namespace/:token/limit
+PUT /token/:namespace/:token/limit/:queue
 ```
 #### Request Body 
 
@@ -43,7 +49,9 @@ PUT /token/:namespace/:token/limit
 {
 "read": 200,
 "write": 400,
-"interval": 10
+"interval": 10,
+"forbid_read":false,
+"forbid_write":false,
 }
 ```
 
@@ -51,6 +59,7 @@ PUT /token/:namespace/:token/limit
 
 ```
 DELETE /token/:namespace/:token/limit
+DELETE /token/:namespace/:token/limit/:queue
 ```
 
 #### Request Query

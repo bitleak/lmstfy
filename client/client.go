@@ -464,10 +464,10 @@ func (c *LmstfyClient) ConsumeFromQueues(ttrSecond, timeoutSecond uint32, queues
 			Reason: "TTR should be > 0",
 		}
 	}
-	if timeoutSecond <= 0 || timeoutSecond >= maxReadTimeout {
+	if timeoutSecond < 0 || timeoutSecond >= maxReadTimeout {
 		return nil, &APIError{
 			Type:   RequestErr,
-			Reason: fmt.Sprintf("timeout must be > 0 && < %d when fetch from multiple queues", maxReadTimeout),
+			Reason: fmt.Sprintf("timeout must be >= 0 && < %d when fetch from multiple queues", maxReadTimeout),
 		}
 	}
 	query := url.Values{}

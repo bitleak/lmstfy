@@ -292,10 +292,6 @@ func Consume(c *gin.Context) {
 			return
 		}
 	default:
-		if timeoutSecond == 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "timeout must be provided to consume multiple queues"})
-			return
-		}
 		job, err = e.ConsumeMulti(namespace, queueList, uint32(ttrSecond), uint32(timeoutSecond))
 		if err != nil {
 			logger.WithField("err", err).Error("Failed to consume")

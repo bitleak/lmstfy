@@ -195,9 +195,6 @@ func PollQueues(redis *RedisInstance, timer *Timer, queueNames []QueueName, time
 	if timeoutSecond > 0 { // Blocking poll
 		val, err = redis.Conn.BRPop(time.Duration(timeoutSecond)*time.Second, keys...).Result()
 	} else { // Non-Blocking fetch
-		if len(queueNames) != 1 {
-			return nil, "", 0, errors.New("non-blocking pop can NOT support multiple keys")
-		}
 		val = make([]string, 2) // Just to be coherent with BRPop return values
 		val[0], val[1], err = popMultiQueues(redis, keys)
 	}

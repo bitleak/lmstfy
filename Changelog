@@ -1,3 +1,7 @@
+VERSION 1.0.5  
+	* FIX: allow to use consume multi queues with timeout = 0
+	* MOD: allow using user defined http client to setup the lmstfy clien
+
 VERSION 1.0.3
 	* add publish bulk api testcase 
 	* print some logs while initialize meta and setup error 

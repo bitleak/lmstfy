@@ -45,11 +45,17 @@ func NewLmstfyClient(host string, port int, namespace, token string) *LmstfyClie
 	cli := &http.Client{
 		Transport: &http.Transport{
 			DialContext: (&net.Dialer{
-				Timeout: 5 * time.Second,
+				Timeout:   5 * time.Second,
+				KeepAlive: time.Minute,
 			}).DialContext,
 		},
 		Timeout: maxReadTimeout * time.Second,
 	}
+	return NewLmstfyWithClient(cli, host, port, namespace, token)
+}
+
+// NewLmstfyWithClient allow using user defined http client to setup the lmstfy client
+func NewLmstfyWithClient(cli *http.Client, host string, port int, namespace, token string) *LmstfyClient {
 	return &LmstfyClient{
 		Namespace: namespace,
 		Token:     token,

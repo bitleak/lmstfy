@@ -11,6 +11,20 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const (
+	LUA_Q_RPOPMULTI = `
+	for _, queue in ipairs(KEYS) do
+		local v = redis.call("RPOP", queue)
+		if v ~= false then
+			return {queue, v}
+		end
+	end
+	return {"", ""}
+`
+)
+
+var _lua_rpop_multi_queues string
+
 type QueueName struct {
 	Namespace string
 	Queue     string
@@ -126,6 +140,45 @@ func (q *Queue) Destroy() (count int64, err error) {
 	return count, nil
 }
 
+func PreloadQueueLuaScript(redis *RedisInstance) error {
+	sha, err := redis.Conn.ScriptLoad(LUA_Q_RPOPMULTI).Result()
+	if err != nil {
+		return fmt.Errorf("preload rpop multi lua script err: %s", err)
+	}
+	_lua_rpop_multi_queues = sha
+	return nil
+}
+
+func popMultiQueues(redis *RedisInstance, queueNames []string) (string, string, error) {
+	if len(queueNames) == 1 {
+		val, err := redis.Conn.RPop(queueNames[0]).Result()
+		return queueNames[0], val, err
+	}
+	vals, err := redis.Conn.EvalSha(_lua_rpop_multi_queues, queueNames).Result()
+	if err != nil && isLuaScriptGone(err) {
+		if err = PreloadQueueLuaScript(redis); err != nil {
+			return "", "", err
+		}
+		vals, err = redis.Conn.EvalSha(_lua_rpop_multi_queues, queueNames).Result()
+	}
+	if err != nil {
+		return "", "", err
+	}
+	fields, ok := vals.([]interface{})
+	if !ok || len(fields) != 2 {
+		return "", "", errors.New("lua return value should be two elements array")
+	}
+	queueName, ok1 := fields[0].(string)
+	value, ok2 := fields[1].(string)
+	if !ok1 || !ok2 {
+		return "", "", errors.New("invalid lua value type")
+	}
+	if queueName == "" && value == "" { // queueName and value is empty means rpop without any values
+		return "", "", go_redis.Nil
+	}
+	return queueName, value, nil
+}
+
 // Poll from multiple queues using blocking method; OR pop a job from one queue using non-blocking method
 func PollQueues(redis *RedisInstance, timer *Timer, queueNames []QueueName, timeoutSecond, ttrSecond uint32, freezeTries bool) (queueName *QueueName, jobID string, retries uint16, err error) {
 	defer func() {
@@ -133,20 +186,17 @@ func PollQueues(redis *RedisInstance, timer *Timer, queueNames []QueueName, time
 			metrics.queuePopJobs.WithLabelValues(redis.Name).Inc()
 		}
 	}()
+
 	var val []string
+	keys := make([]string, len(queueNames))
+	for i, k := range queueNames {
+		keys[i] = k.String()
+	}
 	if timeoutSecond > 0 { // Blocking poll
-		keys := make([]string, len(queueNames))
-		for i, k := range queueNames {
-			keys[i] = k.String()
-		}
 		val, err = redis.Conn.BRPop(time.Duration(timeoutSecond)*time.Second, keys...).Result()
 	} else { // Non-Blocking fetch
-		if len(queueNames) != 1 {
-			return nil, "", 0, errors.New("non-blocking pop can NOT support multiple keys")
-		}
-		val = make([]string, 2)
-		val[0] = queueNames[0].String() // Just to be coherent with BRPop return values
-		val[1], err = redis.Conn.RPop(val[0]).Result()
+		val = make([]string, 2) // Just to be coherent with BRPop return values
+		val[0], val[1], err = popMultiQueues(redis, keys)
 	}
 	switch err {
 	case nil:

@@ -36,6 +36,9 @@ func NewEngine(redisName string, conn *go_redis.Client) (engine.Engine, error) {
 	if err := PreloadDeadLetterLuaScript(redis); err != nil {
 		return nil, err
 	}
+	if err := PreloadQueueLuaScript(redis); err != nil {
+		return nil, err
+	}
 	go RedisInstanceMonitor(redis)
 	meta := NewMetaManager(redis)
 	timer, err := NewTimer("timer_set", redis, time.Second)

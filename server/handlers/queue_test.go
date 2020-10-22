@@ -69,9 +69,41 @@ func TestConsume(t *testing.T) {
 	}
 }
 
+func TestNoBlockingConsumeMulti(t *testing.T) {
+	body, jobID := publishTestJob("ns", "q4", 0)
+	query := url.Values{}
+	query.Add("ttr", "10")
+	query.Add("timeout", "0")
+	targetUrl := fmt.Sprintf("http://localhost/api/ns/q3,q4,q5?%s", query.Encode())
+	req, err := http.NewRequest("GET", targetUrl, nil)
+	if err != nil {
+		t.Fatalf("Failed to create request")
+	}
+	c, e, resp := ginTest(req)
+	e.Use(handlers.ValidateMultiConsume, handlers.SetupQueueEngine)
+	e.GET("/api/:namespace/:queue", handlers.Consume)
+	e.HandleContext(c)
+	if resp.Code != http.StatusOK {
+		t.Fatal("Failed to consume")
+	}
+	var data struct {
+		Msg       string
+		Namespace string
+		Queue     string
+		JobID     string `json:"job_id"`
+		Data      []byte
+	}
+	err = json.Unmarshal(resp.Body.Bytes(), &data)
+	if err != nil {
+		t.Fatalf("Failed to decode response: %s", err)
+	}
+	if data.JobID != jobID || !bytes.Equal(data.Data, body) || data.Queue != "q4" {
+		t.Fatalf("Mismatched job data")
+	}
+}
+
 func TestConsumeMulti(t *testing.T) {
 	body, jobID := publishTestJob("ns", "q4", 2)
-
 	query := url.Values{}
 	query.Add("ttr", "10")
 	query.Add("timeout", "3")

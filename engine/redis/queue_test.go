@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-redis/redis"
+
 	"github.com/bitleak/lmstfy/engine"
 )
 
@@ -134,5 +136,48 @@ func TestStructPacking(t *testing.T) {
 	}
 	if tries != tries2 || jobID != jobID2 {
 		t.Fatal("Mismatched unpack data")
+	}
+}
+
+func TestPopMultiQueues(t *testing.T) {
+	namespace := "ns-queueName"
+	queues := make([]QueueName, 3)
+	queueNames := make([]string, 3)
+	for i, queueName := range []string{"q6", "q7", "q8"} {
+		queues[i] = QueueName{Namespace: namespace, Queue: queueName}
+		queueNames[i] = queues[i].String()
+	}
+	gotQueueName, gotVal, err := popMultiQueues(R, queueNames)
+	if err != redis.Nil {
+		t.Fatalf("redis nil err was expected, but got %s", err.Error())
+	}
+	if gotQueueName != "" || gotVal != "" || err != redis.Nil {
+		t.Fatal("queueName name and value should be empty")
+	}
+
+	queueName := "q7"
+	q := NewQueue(namespace, queueName, R, nil)
+	msg := "hello msg 7"
+	job := engine.NewJob(namespace, queueName, []byte(msg), 30, 0, 2)
+	q.Push(job, 2)
+	gotQueueName, gotVal, err = popMultiQueues(R, queueNames)
+	if err != nil {
+		t.Fatalf("redis nil err was expected, but got %s", err.Error())
+	}
+	if gotQueueName != q.Name() {
+		t.Fatalf("invalid queueName name, %s was expected but got %s", q.Name(), gotQueueName)
+	}
+
+	// single queue condition
+	queueName = "q8"
+	job = engine.NewJob(namespace, queueName, []byte(msg), 30, 0, 2)
+	q = NewQueue(namespace, queueName, R, nil)
+	q.Push(job, 2)
+	gotQueueName, gotVal, err = popMultiQueues(R, []string{queueNames[2]})
+	if err != nil {
+		t.Fatalf("redis nil err was expected, but got %s", err.Error())
+	}
+	if gotQueueName != q.Name() {
+		t.Fatalf("invalid queueName name, %s was expected but got %s", q.Name(), gotQueueName)
 	}
 }

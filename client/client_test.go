@@ -249,3 +249,18 @@ func TestLmstfyClient_RespawnDeadLetter(t *testing.T) {
 		t.Fatal("Mismatched data")
 	}
 }
+
+func TestLmstfyClient_DeleteDeadLetter(t *testing.T) {
+	cli := NewLmstfyClient(Host, Port, Namespace, Token)
+	jobID, _ := cli.Publish("test-delete-deadletter", []byte("hello1"), 0, 1, 0)
+	cli.Consume("test-delete-deadletter", 1, 0)
+	time.Sleep(2 * time.Second) // wait til TTR expires
+	err := cli.DeleteDeadLetter("test-delete-deadletter", 2)
+	if err != nil {
+		t.Fatalf("Failed to delete deadletter: %s", err)
+	}
+	job, err := cli.PeekJob("test-delete-deadletter", jobID)
+	if err != nil || (job != nil && job.Data != nil) {
+		t.Fatal("delete deadletter failed")
+	}
+}

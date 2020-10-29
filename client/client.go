@@ -805,6 +805,40 @@ func (c *LmstfyClient) RespawnDeadLetter(queue string, limit, ttlSecond int64) (
 	return respData.Count, nil
 }
 
+func (c *LmstfyClient) DeleteDeadLetter(queue string, limit int64) *APIError {
+	if limit <= 0 {
+		return &APIError{
+			Type:   RequestErr,
+			Reason: "limit should be > 0",
+		}
+	}
+	query := url.Values{}
+	query.Add("limit", strconv.FormatInt(limit, 10))
+	req, err := c.getReq(http.MethodDelete, path.Join(queue, "deadletter"), query, nil)
+	if err != nil {
+		return &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+	resp, err := c.httpCli.Do(req)
+	if err != nil {
+		return &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return &APIError{
+			Type:      ResponseErr,
+			Reason:    parseResponseError(resp),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	return nil
+}
+
 func discardResponseBody(resp io.ReadCloser) {
 	// discard response body, to make this connection reusable in the http connection pool
 	ioutil.ReadAll(resp)

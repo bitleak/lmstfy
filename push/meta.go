@@ -163,9 +163,11 @@ func (mm *MetaManager) asyncLoop() {
 		case <-ticker.C:
 			latestMetasVersion, err := mm.redisCli.Get(redisMetasVersionKey).Int64()
 			if err != nil {
-				mm.logger.WithFields(logrus.Fields{
-					"err": err,
-				}).Warn("Failed to fetch the metas version key")
+				if err != redis.Nil {
+					mm.logger.WithFields(logrus.Fields{
+						"err": err,
+					}).Warn("Failed to fetch the metas version key")
+				}
 				continue
 			}
 			if latestMetasVersion != mm.latestMetasVersion {

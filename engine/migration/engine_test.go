@@ -140,7 +140,8 @@ func TestEngine_BatchConsume(t *testing.T) {
 		t.Fatalf("Failed to publish: %s", err)
 	}
 
-	jobs, err := e.BatchConsume("ns-engine", "q8", 2, 5, 0)
+	queues := []string{"q8"}
+	jobs, err := e.BatchConsume("ns-engine", queues, 2, 5, 0)
 	if err != nil {
 		t.Fatalf("Failed to Batch consume: %s", err)
 	}
@@ -148,7 +149,7 @@ func TestEngine_BatchConsume(t *testing.T) {
 		t.Fatalf("Wrong job consumed")
 	}
 
-	jobs, err = e.BatchConsume("ns-engine", "q8", 2, 5, 3)
+	jobs, err = e.BatchConsume("ns-engine", queues, 2, 5, 3)
 	if err != nil {
 		t.Fatalf("Failed to Batch consume: %s", err)
 	}
@@ -168,7 +169,7 @@ func TestEngine_BatchConsume(t *testing.T) {
 	}
 
 	// First time batch consume three jobs
-	jobs, err = e.BatchConsume("ns-engine", "q8", 3, 3, 3)
+	jobs, err = e.BatchConsume("ns-engine", queues, 3, 3, 3)
 	if err != nil {
 		t.Fatalf("Failed to consume: %s", err)
 	}
@@ -182,7 +183,7 @@ func TestEngine_BatchConsume(t *testing.T) {
 	}
 
 	// Second time batch consume can only get a single job
-	jobs, err = e.BatchConsume("ns-engine", "q8", 3, 3, 3)
+	jobs, err = e.BatchConsume("ns-engine", queues, 3, 3, 3)
 	if err != nil {
 		t.Fatalf("Failed to consume: %s", err)
 	}
@@ -193,7 +194,7 @@ func TestEngine_BatchConsume(t *testing.T) {
 		t.Fatalf("Mistmatched job data")
 	}
 
-	jobs, err = e.BatchConsume("ns-engine", "q8", 3, 3, 3)
+	jobs, err = e.BatchConsume("ns-engine", queues, 3, 3, 3)
 	if err != nil {
 		t.Fatalf("Failed to consume: %s", err)
 	}

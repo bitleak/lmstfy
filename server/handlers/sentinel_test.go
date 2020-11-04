@@ -55,7 +55,7 @@ func publishSentinelTestJob(ns, q string, delay uint32) (body []byte, jobID stri
 
 func consumeSentinelTestJob(ns, q string, ttr, timeout uint32) (body []byte, jobID string) {
 	e := engine.GetEngineByKind("redis", testSentinelPool)
-	job, _ := e.ConsumeMulti(ns, []string{q}, ttr, timeout)
+	job, _ := e.ConsumeMulti(ns, []string{q}, ttr, timeout, false)
 	if job == nil {
 		return nil, ""
 	}

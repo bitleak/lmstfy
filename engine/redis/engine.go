@@ -100,7 +100,7 @@ func (e *Engine) BatchConsume(namespace string, queues []string, count, ttrSecon
 	// timeout is 0 to fast check whether there is any job in the ready queue,
 	// if any, we wouldn't be blocked until the new job was published.
 	for i := uint32(0); i < count; i++ {
-		job, err := e.ConsumeMulti(namespace, queues, ttrSecond, 0)
+		job, err := e.ConsumeMulti(namespace, queues, ttrSecond, 0, false)
 		if err != nil {
 			return jobs, err
 		}
@@ -111,7 +111,7 @@ func (e *Engine) BatchConsume(namespace string, queues []string, count, ttrSecon
 	}
 	// If there is no job and consumed in block mode, wait for a single job and return
 	if timeoutSecond > 0 && len(jobs) == 0 {
-		job, err := e.ConsumeMulti(namespace, queues, ttrSecond, timeoutSecond)
+		job, err := e.ConsumeMulti(namespace, queues, ttrSecond, timeoutSecond, false)
 		if err != nil {
 			return jobs, err
 		}
@@ -127,15 +127,11 @@ func (e *Engine) BatchConsume(namespace string, queues []string, count, ttrSecon
 // the first queue in the list is of the highest priority when that queue has job ready to
 // be consumed. if none of the queues has any job, then consume wait for any queue that
 // has job first.
-func (e *Engine) ConsumeMulti(namespace string, queues []string, ttrSecond, timeoutSecond uint32) (job engine.Job, err error) {
-	return e.consumeMulti(namespace, queues, ttrSecond, timeoutSecond, false)
+func (e *Engine) ConsumeMulti(namespace string, queues []string, ttrSecond, timeoutSecond uint32, freezeTries bool) (job engine.Job, err error) {
+	return e.consumeMulti(namespace, queues, ttrSecond, timeoutSecond, freezeTries)
 }
 
-func (e *Engine) ConsumeMultiWithFrozenTries(namespace string, queues []string, ttrSecond, timeoutSecond uint32) (job engine.Job, err error) {
-	return e.consumeMulti(namespace, queues, ttrSecond, timeoutSecond, true)
-}
-
-func (e *Engine) consumeMulti(namespace string, queues []string, ttrSecond, timeoutSecond uint32, noConsume bool) (job engine.Job, err error) {
+func (e *Engine) consumeMulti(namespace string, queues []string, ttrSecond, timeoutSecond uint32, freezeTries bool) (job engine.Job, err error) {
 	defer func() {
 		if job != nil {
 			metrics.consumeMultiJobs.WithLabelValues(e.redis.Name).Inc()
@@ -149,7 +145,7 @@ func (e *Engine) consumeMulti(namespace string, queues []string, ttrSecond, time
 	}
 	for {
 		startTime := time.Now().Unix()
-		queueName, jobID, tries, err := PollQueues(e.redis, e.timer, queueNames, timeoutSecond, ttrSecond, noConsume)
+		queueName, jobID, tries, err := PollQueues(e.redis, e.timer, queueNames, timeoutSecond, ttrSecond, freezeTries)
 		if err != nil {
 			return nil, fmt.Errorf("queue: %s", err)
 		}

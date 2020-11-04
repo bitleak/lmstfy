@@ -78,7 +78,7 @@ func (p *Pusher) pollQueues() {
 	engine := engine.GetEngine(p.Pool)
 	for {
 		now := time.Now()
-		job, err := engine.ConsumeMultiWithFrozenTries(p.Namespace, p.Meta.Queues, p.Timeout, 3)
+		job, err := engine.ConsumeMulti(p.Namespace, p.Meta.Queues, p.Timeout, 3, true)
 		if err != nil {
 			p.logger.WithFields(logrus.Fields{
 				"pool":  p.Pool,

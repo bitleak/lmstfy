@@ -123,64 +123,6 @@ func (e *Engine) BatchConsume(namespace string, queues []string, count, ttrSecon
 	return jobs, nil
 }
 
-func (e *Engine) Consume(namespace, queue string, ttrSecond, timeoutSecond uint32) (job engine.Job, err error) {
-	return e.consume(namespace, queue, ttrSecond, timeoutSecond, false)
-}
-
-func (e *Engine) consume(namespace, queue string, ttrSecond, timeoutSecond uint32, freezeTries bool) (job engine.Job, err error) {
-	defer func() {
-		if job != nil {
-			metrics.consumeJobs.WithLabelValues(e.redis.Name).Inc()
-			metrics.consumeQueueJobs.WithLabelValues(e.redis.Name, namespace, queue).Inc()
-		}
-	}()
-	q := NewQueue(namespace, queue, e.redis, e.timer)
-	for {
-		startTime := time.Now().Unix()
-		var (
-			jobID string
-			tries uint16
-		)
-		if freezeTries {
-			jobID, tries, err = q.PollWithFrozenTries(timeoutSecond, ttrSecond)
-		} else {
-			jobID, tries, err = q.Poll(timeoutSecond, ttrSecond)
-		}
-
-		if err != nil {
-			return nil, fmt.Errorf("queue: %s", err)
-		}
-		if jobID == "" { // No job available
-			return nil, nil
-		}
-		endTime := time.Now().Unix()
-		body, ttl, err := e.pool.Get(namespace, queue, jobID)
-		switch err {
-		case nil:
-			// no-op
-		case engine.ErrNotFound:
-			timeoutSecond = timeoutSecond - uint32(endTime-startTime)
-			if timeoutSecond > 0 {
-				// This can happen if the job's delay time is larger than job's ttl,
-				// so when the timer fires the job ID, the actual job data is long gone.
-				// When so, we should use what's left in the timeoutSecond to keep on polling.
-				//
-				// Other scene is: A consumer DELETE the job _after_ TTR, and B consumer is
-				// polling on the queue, and get notified to retry the job, but only to find that
-				// job was deleted by A.
-				continue
-			} else {
-				return nil, nil
-			}
-		default:
-			return nil, fmt.Errorf("pool: %s", err)
-		}
-		job = engine.NewJobWithID(namespace, queue, body, ttl, tries, jobID)
-		metrics.jobElapsedMS.WithLabelValues(e.redis.Name, namespace, queue).Observe(float64(job.ElapsedMS()))
-		return job, err
-	}
-}
-
 // Consume multiple queues under the same namespace. the queue order implies priority:
 // the first queue in the list is of the highest priority when that queue has job ready to
 // be consumed. if none of the queues has any job, then consume wait for any queue that

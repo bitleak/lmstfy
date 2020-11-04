@@ -39,7 +39,7 @@ func TestEngine_Consume(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to publish: %s", err)
 	}
-	job, err := e.Consume("ns-engine", "q2", 3, 3)
+	job, err := e.ConsumeMulti("ns-engine", []string{"q2"}, 3, 3)
 	if err != nil {
 		t.Fatalf("Failed to consume: %s", err)
 	}
@@ -56,7 +56,7 @@ func TestEngine_Consume(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to publish: %s", err)
 	}
-	job, err = e.Consume("ns-engine", "q2", 3, 0)
+	job, err = e.ConsumeMulti("ns-engine", []string{"q2"}, 3, 0)
 	if err != nil {
 		t.Fatalf("Failed to consume: %s", err)
 	}
@@ -78,7 +78,7 @@ func TestEngine_Consume2(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to publish: %s", err)
 	}
-	job, err := e.Consume("ns-engine", "q3", 3, 3)
+	job, err := e.ConsumeMulti("ns-engine", []string{"q3"}, 3, 3)
 	if err != nil {
 		t.Fatalf("Failed to consume: %s", err)
 	}

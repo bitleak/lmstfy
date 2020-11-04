@@ -285,7 +285,7 @@ func Consume(c *gin.Context) {
 			c.JSON(http.StatusOK, data)
 			return
 		}
-		job, err = e.Consume(namespace, queueList[0], uint32(ttrSecond), uint32(timeoutSecond))
+		job, err = e.ConsumeMulti(namespace, queueList, uint32(ttrSecond), uint32(timeoutSecond))
 		if err != nil {
 			logger.WithField("err", err).Error("Failed to consume")
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})

@@ -275,9 +275,27 @@ RETRY:
 //     the job will be released for consuming again if the `(tries - 1) > 0`.
 //   - timeoutSecond is the long-polling wait time. If it's zero, this method will return immediately
 //     with or without a job; if it's positive, this method would polling for new job until timeout.
+func (c *LmstfyClient) Consume(queue string, ttrSecond, timeoutSecond uint32) (job *Job, e error) {
+	return c.consume(queue, ttrSecond, timeoutSecond, false)
+}
+
+// ConsumeWithFreezeTries a job. Consuming with retries will not decrease the job's tries.
+//   - ttrSecond is the time-to-run of the job. If the job is not finished before the TTR expires,
+//     the job will be released for consuming again if the `(tries - 1) > 0`.
+//   - timeoutSecond is the long-polling wait time. If it's zero, this method will return immediately
+//     with or without a job; if it's positive, this method would polling for new job until timeout.
+func (c *LmstfyClient) ConsumeWithFreezeTries(queue string, ttrSecond, timeoutSecond uint32) (job *Job, e error) {
+	return c.consume(queue, ttrSecond, timeoutSecond, true)
+}
+
+// consume a job. Consuming will decrease the job's tries by 1 first.
+//   - ttrSecond is the time-to-run of the job. If the job is not finished before the TTR expires,
+//     the job will be released for consuming again if the `(tries - 1) > 0`.
+//   - timeoutSecond is the long-polling wait time. If it's zero, this method will return immediately
+//     with or without a job; if it's positive, this method would polling for new job until timeout.
 //   - free_tries was used to determine whether to decrease the tries or not when consuming, if the tries
 //     decreases to 0, the job would move into dead letter. Default was false.
-func (c *LmstfyClient) Consume(queue string, ttrSecond, timeoutSecond uint32, freezeTries bool) (job *Job, e error) {
+func (c *LmstfyClient) consume(queue string, ttrSecond, timeoutSecond uint32, freezeTries bool) (job *Job, e error) {
 	if strings.TrimSpace(queue) == "" {
 		return nil, &APIError{
 			Type:   RequestErr,
@@ -360,9 +378,27 @@ func (c *LmstfyClient) Consume(queue string, ttrSecond, timeoutSecond uint32, fr
 //     these job will be released for consuming again if the `(tries - 1) > 0`.
 //   - count is the job count of this consume. If it's zero or over 100, this method will return an error.
 //     If it's positive, this method would return some jobs, and it's count is between 0 and count.
+func (c *LmstfyClient) BatchConsume(queues []string, count, ttrSecond, timeoutSecond uint32) (jobs []*Job, e error) {
+	return c.batchConsume(queues, count, ttrSecond, timeoutSecond, false)
+}
+
+// BatchConsume consume some jobs. Consuming with freeze tries will not decrease these jobs tries.
+//   - ttrSecond is the time-to-run of these jobs. If these jobs are not finished before the TTR expires,
+//     these job will be released for consuming again if the `(tries - 1) > 0`.
+//   - count is the job count of this consume. If it's zero or over 100, this method will return an error.
+//     If it's positive, this method would return some jobs, and it's count is between 0 and count.
+func (c *LmstfyClient) BatchConsumeWithFreezeTries(queues []string, count, ttrSecond, timeoutSecond uint32) (jobs []*Job, e error) {
+	return c.batchConsume(queues, count, ttrSecond, timeoutSecond, true)
+}
+
+// batchConsume consume some jobs. Consuming will decrease these jobs tries by 1 first.
+//   - ttrSecond is the time-to-run of these jobs. If these jobs are not finished before the TTR expires,
+//     these job will be released for consuming again if the `(tries - 1) > 0`.
+//   - count is the job count of this consume. If it's zero or over 100, this method will return an error.
+//     If it's positive, this method would return some jobs, and it's count is between 0 and count.
 //   - free_tries was used to determine whether to decrease the tries or not when consuming, if the tries
 //     decreases to 0, the job would move into dead letter. Default was false.
-func (c *LmstfyClient) BatchConsume(queues []string, count, ttrSecond, timeoutSecond uint32, freezeTries bool) (jobs []*Job, e error) {
+func (c *LmstfyClient) batchConsume(queues []string, count, ttrSecond, timeoutSecond uint32, freezeTries bool) (jobs []*Job, e error) {
 	if len(queues) == 0 {
 		return nil, &APIError{
 			Type:   RequestErr,

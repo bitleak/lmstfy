@@ -112,7 +112,8 @@ func TestLmstfyClient_BatchConsume(t *testing.T) {
 		jobMap[jobID] = true
 	}
 
-	jobs, err := cli.BatchConsume("test-batchconsume", 3, 3, 3)
+	queues := []string{"test-batchconsume"}
+	jobs, err := cli.BatchConsume(queues, 3, 3, 3)
 	if err != nil {
 		t.Fatalf("Failed to fetch job: %s", err)
 	}
@@ -125,7 +126,7 @@ func TestLmstfyClient_BatchConsume(t *testing.T) {
 		}
 	}
 
-	jobs, err = cli.BatchConsume("test-batchconsume", 3, 3, 3)
+	jobs, err = cli.BatchConsume(queues, 3, 3, 3)
 	if err != nil {
 		t.Fatalf("Failed to fetch job: %s", err)
 	}
@@ -139,7 +140,7 @@ func TestLmstfyClient_BatchConsume(t *testing.T) {
 	}
 
 	now := time.Now()
-	jobs, err = cli.BatchConsume("test-batchconsume", 3, 3, 3)
+	jobs, err = cli.BatchConsume(queues, 3, 3, 3)
 	if err != nil {
 		t.Fatalf("Failed to fetch job: %s", err)
 	}

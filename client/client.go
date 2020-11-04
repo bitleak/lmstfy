@@ -357,11 +357,11 @@ func (c *LmstfyClient) Consume(queue string, ttrSecond, timeoutSecond uint32) (j
 //     these job will be released for consuming again if the `(tries - 1) > 0`.
 //   - count is the job count of this consume. If it's zero or over 100, this method will return an error.
 //     If it's positive, this method would return some jobs, and it's count is between 0 and count.
-func (c *LmstfyClient) BatchConsume(queue string, count, ttrSecond, timeoutSecond uint32) (jobs []*Job, e error) {
-	if strings.TrimSpace(queue) == "" {
+func (c *LmstfyClient) BatchConsume(queues []string, count, ttrSecond, timeoutSecond uint32) (jobs []*Job, e error) {
+	if len(queues) == 0 {
 		return nil, &APIError{
 			Type:   RequestErr,
-			Reason: "Queue name shouldn't be empty",
+			Reason: "At least one queue was required",
 		}
 	}
 	if ttrSecond <= 0 {
@@ -387,7 +387,7 @@ func (c *LmstfyClient) BatchConsume(queue string, count, ttrSecond, timeoutSecon
 	query.Add("ttr", strconv.FormatUint(uint64(ttrSecond), 10))
 	query.Add("count", strconv.FormatUint(uint64(count), 10))
 	query.Add("timeout", strconv.FormatUint(uint64(timeoutSecond), 10))
-	req, err := c.getReq(http.MethodGet, queue, query, nil)
+	req, err := c.getReq(http.MethodGet, strings.Join(queues, ","), query, nil)
 	if err != nil {
 		return nil, &APIError{
 			Type:   RequestErr,

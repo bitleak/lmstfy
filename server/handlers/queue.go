@@ -247,57 +247,54 @@ func Consume(c *gin.Context) {
 		return
 	}
 
-	var job engine.Job
-	switch len(queueList) {
-	case 0:
+	freezeTries, err := strconv.ParseBool(c.DefaultQuery("freeze_tries", "false"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid freeze_tries value"})
+		return
+	}
+
+	if len(queueList) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid queue name(s)"})
 		return
-	case 1:
-		if count > 1 {
-			jobs, err := e.BatchConsume(namespace, queueList, uint32(count), uint32(ttrSecond), uint32(timeoutSecond), false)
-			if err != nil {
-				logger.WithField("err", err).Error("Failed to batch consume")
-			}
-			if len(jobs) == 0 {
-				c.JSON(http.StatusNotFound, gin.H{"msg": "no job available"})
-				return
-			}
-			data := make([]map[string]interface{}, 0)
-			for _, job := range jobs {
-				logger.WithFields(logrus.Fields{
-					"namespace": namespace,
-					"queue":     job.Queue(),
-					"job_id":    job.ID(),
-					"ttl":       job.TTL(),
-					"ttr":       ttrSecond,
-				}).Debug("Job consumed")
-				data = append(data, gin.H{
-					"msg":          "new job",
-					"namespace":    namespace,
-					"queue":        job.Queue(),
-					"job_id":       job.ID(),
-					"data":         job.Body(), // NOTE: the body will be encoded in base64
-					"ttl":          job.TTL(),
-					"elapsed_ms":   job.ElapsedMS(),
-					"remain_tries": job.Tries(),
-				})
-			}
-			c.JSON(http.StatusOK, data)
-			return
-		}
-		job, err = e.ConsumeMulti(namespace, queueList, uint32(ttrSecond), uint32(timeoutSecond), false)
+	}
+
+	if count > 1 {
+		jobs, err := e.BatchConsume(namespace, queueList, uint32(count), uint32(ttrSecond), uint32(timeoutSecond), freezeTries)
 		if err != nil {
-			logger.WithField("err", err).Error("Failed to consume")
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+			logger.WithField("err", err).Error("Failed to batch consume")
+		}
+		if len(jobs) == 0 {
+			c.JSON(http.StatusNotFound, gin.H{"msg": "no job available"})
 			return
 		}
-	default:
-		job, err = e.ConsumeMulti(namespace, queueList, uint32(ttrSecond), uint32(timeoutSecond), false)
-		if err != nil {
-			logger.WithField("err", err).Error("Failed to consume")
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
-			return
+		data := make([]map[string]interface{}, 0)
+		for _, job := range jobs {
+			logger.WithFields(logrus.Fields{
+				"namespace": namespace,
+				"queue":     job.Queue(),
+				"job_id":    job.ID(),
+				"ttl":       job.TTL(),
+				"ttr":       ttrSecond,
+			}).Debug("Job consumed")
+			data = append(data, gin.H{
+				"msg":          "new job",
+				"namespace":    namespace,
+				"queue":        job.Queue(),
+				"job_id":       job.ID(),
+				"data":         job.Body(), // NOTE: the body will be encoded in base64
+				"ttl":          job.TTL(),
+				"elapsed_ms":   job.ElapsedMS(),
+				"remain_tries": job.Tries(),
+			})
 		}
+		c.JSON(http.StatusOK, data)
+		return
+	}
+	job, err := e.Consume(namespace, queueList, uint32(ttrSecond), uint32(timeoutSecond), freezeTries)
+	if err != nil {
+		logger.WithField("err", err).Error("Failed to consume")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
 	}
 	if job == nil { // No job available
 		c.JSON(http.StatusNotFound, gin.H{"msg": "no job available"})

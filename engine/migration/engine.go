@@ -31,12 +31,12 @@ func (e *Engine) BatchConsume(namespace string, queues []string, count, ttrSecon
 	return e.newEngine.BatchConsume(namespace, queues, count, ttrSecond, timeoutSecond, freezeTries)
 }
 
-func (e *Engine) ConsumeMulti(namespace string, queues []string, ttrSecond, timeoutSecond uint32, freezeTries bool) (job engine.Job, err error) {
-	job, err = e.oldEngine.ConsumeMulti(namespace, queues, ttrSecond, 1, freezeTries)
+func (e *Engine) Consume(namespace string, queues []string, ttrSecond, timeoutSecond uint32, freezeTries bool) (job engine.Job, err error) {
+	job, err = e.oldEngine.Consume(namespace, queues, ttrSecond, 1, freezeTries)
 	if job != nil {
 		return // During migration, we always prefer the old engine's data as we need to drain it
 	}
-	return e.newEngine.ConsumeMulti(namespace, queues, ttrSecond, timeoutSecond, freezeTries)
+	return e.newEngine.Consume(namespace, queues, ttrSecond, timeoutSecond, freezeTries)
 }
 
 func (e *Engine) Delete(namespace, queue, jobID string) error {

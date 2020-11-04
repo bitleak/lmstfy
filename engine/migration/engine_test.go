@@ -22,7 +22,7 @@ func TestEngine_Publish(t *testing.T) {
 		t.Fatalf("Failed to publish: %s", err)
 	}
 	// Make sure the new engine received the job
-	job, err := NewRedisEngine.ConsumeMulti("ns-engine", []string{"q1"}, 3, 0, false)
+	job, err := NewRedisEngine.Consume("ns-engine", []string{"q1"}, 3, 0, false)
 	if job.ID() != jobID {
 		t.Fatal("NewRedisEngine should received the job")
 	}
@@ -37,7 +37,7 @@ func TestEngine_Consume(t *testing.T) {
 		t.Fatalf("Failed to publish: %s", err)
 	}
 	queues := []string{"q2"}
-	job, err := e.ConsumeMulti("ns-engine", queues, 3, 3, false)
+	job, err := e.Consume("ns-engine", queues, 3, 3, false)
 	if err != nil {
 		t.Fatalf("Failed to consume: %s", err)
 	}
@@ -51,7 +51,7 @@ func TestEngine_Consume(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to publish: %s", err)
 	}
-	job, err = e.ConsumeMulti("ns-engine", queues, 3, 0, false)
+	job, err = e.Consume("ns-engine", queues, 3, 0, false)
 	if err != nil {
 		t.Fatalf("Failed to consume: %s", err)
 	}
@@ -69,7 +69,7 @@ func TestEngine_Consume2(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to publish: %s", err)
 	}
-	job, err := e.ConsumeMulti("ns-engine", []string{"q3"}, 3, 3, false)
+	job, err := e.Consume("ns-engine", []string{"q3"}, 3, 3, false)
 	if err != nil {
 		t.Fatalf("Failed to consume: %s", err)
 	}
@@ -90,7 +90,7 @@ func TestEngine_ConsumeMulti(t *testing.T) {
 		t.Fatalf("Failed to publish: %s", err)
 	}
 
-	job2, err := e.ConsumeMulti("ns-engine", []string{"q4", "q5"}, 5, 5, false)
+	job2, err := e.Consume("ns-engine", []string{"q4", "q5"}, 5, 5, false)
 	if err != nil {
 		t.Fatalf("Failed to consume from multiple queues: %s", err)
 	}
@@ -98,7 +98,7 @@ func TestEngine_ConsumeMulti(t *testing.T) {
 		t.Error("Mismatched job data")
 	}
 
-	job1, err := e.ConsumeMulti("ns-engine", []string{"q4", "q5"}, 5, 5, false)
+	job1, err := e.Consume("ns-engine", []string{"q4", "q5"}, 5, 5, false)
 	if err != nil {
 		t.Fatalf("Failed to consume from multiple queues: %s", err)
 	}
@@ -124,7 +124,7 @@ func TestEngine_DrainOld(t *testing.T) {
 	e := NewEngine(OldRedisEngine, NewRedisEngine)
 	body := []byte("hello msg 7")
 	jobID, err := OldRedisEngine.Publish("ns-engine", "q7", body, 10, 0, 1)
-	job, err := e.ConsumeMulti("ns-engine", []string{"q7"}, 5, 0, false)
+	job, err := e.Consume("ns-engine", []string{"q7"}, 5, 0, false)
 	if err != nil {
 		t.Fatal("Failed to drain the old engine's data")
 	}
@@ -208,7 +208,7 @@ func TestEngine_DeadLetter_Size(t *testing.T) {
 	body := []byte("hello msg 9")
 	queues := []string{"q9"}
 	jobID, err := OldRedisEngine.Publish("ns-engine", "q9", body, 10, 0, 1)
-	job, err := OldRedisEngine.ConsumeMulti("ns-engine", queues, 0, 0, false)
+	job, err := OldRedisEngine.Consume("ns-engine", queues, 0, 0, false)
 	if err != nil {
 		t.Fatal("Failed to drain the old engine's data")
 	}
@@ -216,7 +216,7 @@ func TestEngine_DeadLetter_Size(t *testing.T) {
 		t.Fatal("Mismatched job")
 	}
 	jobID, err = NewRedisEngine.Publish("ns-engine", "q9", body, 10, 0, 1)
-	job, err = NewRedisEngine.ConsumeMulti("ns-engine", queues, 0, 0, false)
+	job, err = NewRedisEngine.Consume("ns-engine", queues, 0, 0, false)
 	if job.ID() != jobID {
 		t.Fatal("Mismatched job")
 	}

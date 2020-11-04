@@ -275,7 +275,9 @@ RETRY:
 //     the job will be released for consuming again if the `(tries - 1) > 0`.
 //   - timeoutSecond is the long-polling wait time. If it's zero, this method will return immediately
 //     with or without a job; if it's positive, this method would polling for new job until timeout.
-func (c *LmstfyClient) Consume(queue string, ttrSecond, timeoutSecond uint32) (job *Job, e error) {
+//   - free_tries was used to determine whether to decrease the tries or not when consuming, if the tries
+//     decreases to 0, the job would move into dead letter. Default was false.
+func (c *LmstfyClient) Consume(queue string, ttrSecond, timeoutSecond uint32, freezeTries bool) (job *Job, e error) {
 	if strings.TrimSpace(queue) == "" {
 		return nil, &APIError{
 			Type:   RequestErr,
@@ -297,6 +299,7 @@ func (c *LmstfyClient) Consume(queue string, ttrSecond, timeoutSecond uint32) (j
 	query := url.Values{}
 	query.Add("ttr", strconv.FormatUint(uint64(ttrSecond), 10))
 	query.Add("timeout", strconv.FormatUint(uint64(timeoutSecond), 10))
+	query.Add("freeze_tries", strconv.FormatBool(freezeTries))
 	req, err := c.getReq(http.MethodGet, queue, query, nil)
 	if err != nil {
 		return nil, &APIError{
@@ -357,7 +360,9 @@ func (c *LmstfyClient) Consume(queue string, ttrSecond, timeoutSecond uint32) (j
 //     these job will be released for consuming again if the `(tries - 1) > 0`.
 //   - count is the job count of this consume. If it's zero or over 100, this method will return an error.
 //     If it's positive, this method would return some jobs, and it's count is between 0 and count.
-func (c *LmstfyClient) BatchConsume(queues []string, count, ttrSecond, timeoutSecond uint32) (jobs []*Job, e error) {
+//   - free_tries was used to determine whether to decrease the tries or not when consuming, if the tries
+//     decreases to 0, the job would move into dead letter. Default was false.
+func (c *LmstfyClient) BatchConsume(queues []string, count, ttrSecond, timeoutSecond uint32, freezeTries bool) (jobs []*Job, e error) {
 	if len(queues) == 0 {
 		return nil, &APIError{
 			Type:   RequestErr,
@@ -387,6 +392,7 @@ func (c *LmstfyClient) BatchConsume(queues []string, count, ttrSecond, timeoutSe
 	query.Add("ttr", strconv.FormatUint(uint64(ttrSecond), 10))
 	query.Add("count", strconv.FormatUint(uint64(count), 10))
 	query.Add("timeout", strconv.FormatUint(uint64(timeoutSecond), 10))
+	query.Add("freeze_tries", strconv.FormatBool(freezeTries))
 	req, err := c.getReq(http.MethodGet, strings.Join(queues, ","), query, nil)
 	if err != nil {
 		return nil, &APIError{

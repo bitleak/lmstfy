@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/magiconair/properties/assert"
+
 	"github.com/bitleak/lmstfy/engine"
 	"github.com/bitleak/lmstfy/server/handlers"
 )
@@ -59,11 +61,13 @@ func TestConsume(t *testing.T) {
 		Queue     string
 		JobID     string `json:"job_id"`
 		Data      []byte
+		Tries     int `json:"remain_tries"`
 	}
 	err = json.Unmarshal(resp.Body.Bytes(), &data)
 	if err != nil {
 		t.Fatalf("Failed to decode response: %s", err)
 	}
+	assert.Equal(t, 0, data.Tries)
 	if !bytes.Equal(data.Data, body) {
 		t.Fatalf("Mismatched job data")
 	}
@@ -379,6 +383,7 @@ func TestBatchConsume(t *testing.T) {
 		Queue     string
 		JobID     string `json:"job_id"`
 		Data      []byte
+		Tries     int `json:"remain_tries"`
 	}
 	err = json.Unmarshal(resp.Body.Bytes(), &data)
 	if err != nil {
@@ -391,6 +396,7 @@ func TestBatchConsume(t *testing.T) {
 		if body, ok := jobMap[job.JobID]; !ok || !bytes.Equal(job.Data, body) {
 			t.Fatalf("Mismatched job data")
 		}
+		assert.Equal(t, 0, job.Tries)
 	}
 
 	c, e, resp = ginTest(req)
@@ -475,7 +481,7 @@ func TestRePublish(t *testing.T) {
 	if resp.Code != http.StatusCreated {
 		t.Fatal("Failed to publish")
 	}
-	job, err := engine.GetEngineByKind("redis", "").ConsumeMulti("ns", []string{"q16"}, 5, 2, false)
+	job, err := engine.GetEngineByKind("redis", "").Consume("ns", []string{"q16"}, 5, 2, false)
 	if err != nil || string(job.Body()) != string(data) || job.TTL() != 10 || job.ID() == jobID {
 		t.Fatal("Failed to republish", job, err)
 	}
@@ -508,7 +514,6 @@ func TestPublishBulk(t *testing.T) {
 	e.PUT("/api/:namespace/:queue/bulk", handlers.PublishBulk)
 	e.HandleContext(c)
 	if resp.Code != http.StatusCreated {
-		fmt.Println(string(resp.Body.Bytes()))
 		t.Fatal("Failed to publish")
 	}
 	var data struct {
@@ -539,6 +544,43 @@ func TestPublishBulk(t *testing.T) {
 	}
 }
 
+func TestConsumeWithFreezeTries(t *testing.T) {
+	body, _ := publishTestJob("ns", "q18", 0)
+
+	query := url.Values{}
+	query.Add("ttr", "10")
+	query.Add("timeout", "2")
+	query.Add("freeze_tries", "true")
+	targetUrl := fmt.Sprintf("http://localhost/api/ns/q18?%s", query.Encode())
+	req, err := http.NewRequest("GET", targetUrl, nil)
+	if err != nil {
+		t.Fatalf("Failed to create request")
+	}
+	c, e, resp := ginTest(req)
+	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
+	e.GET("/api/:namespace/:queue", handlers.Consume)
+	e.HandleContext(c)
+	if resp.Code != http.StatusOK {
+		t.Fatal("Failed to consume")
+	}
+	var data struct {
+		Msg       string
+		Namespace string
+		Queue     string
+		JobID     string `json:"job_id"`
+		Data      []byte
+		Tries     int `json:"remain_tries"`
+	}
+	err = json.Unmarshal(resp.Body.Bytes(), &data)
+	if err != nil {
+		t.Fatalf("Failed to decode response: %s", err)
+	}
+	assert.Equal(t, data.Tries, 1)
+	if !bytes.Equal(data.Data, body) {
+		t.Fatalf("Mismatched job data")
+	}
+}
+
 func publishTestJob(ns, q string, delay uint32) (body []byte, jobID string) {
 	e := engine.GetEngineByKind("redis", "")
 	body = make([]byte, 10)
@@ -551,7 +593,7 @@ func publishTestJob(ns, q string, delay uint32) (body []byte, jobID string) {
 
 func consumeTestJob(ns, q string, ttr, timeout uint32) (body []byte, jobID string) {
 	e := engine.GetEngineByKind("redis", "")
-	job, _ := e.ConsumeMulti(ns, []string{q}, ttr, timeout, false)
+	job, _ := e.Consume(ns, []string{q}, ttr, timeout, false)
 	if job == nil {
 		return nil, ""
 	}

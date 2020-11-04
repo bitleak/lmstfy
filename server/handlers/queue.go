@@ -254,7 +254,7 @@ func Consume(c *gin.Context) {
 		return
 	case 1:
 		if count > 1 {
-			jobs, err := e.BatchConsume(namespace, queueList, uint32(count), uint32(ttrSecond), uint32(timeoutSecond))
+			jobs, err := e.BatchConsume(namespace, queueList, uint32(count), uint32(ttrSecond), uint32(timeoutSecond), false)
 			if err != nil {
 				logger.WithField("err", err).Error("Failed to batch consume")
 			}

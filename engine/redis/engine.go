@@ -95,12 +95,12 @@ func (e *Engine) Publish(namespace, queue string, body []byte, ttlSecond, delayS
 }
 
 // BatchConsume consume some jobs of a queue
-func (e *Engine) BatchConsume(namespace string, queues []string, count, ttrSecond, timeoutSecond uint32) (jobs []engine.Job, err error) {
+func (e *Engine) BatchConsume(namespace string, queues []string, count, ttrSecond, timeoutSecond uint32, freezeTries bool) (jobs []engine.Job, err error) {
 	jobs = make([]engine.Job, 0)
 	// timeout is 0 to fast check whether there is any job in the ready queue,
 	// if any, we wouldn't be blocked until the new job was published.
 	for i := uint32(0); i < count; i++ {
-		job, err := e.ConsumeMulti(namespace, queues, ttrSecond, 0, false)
+		job, err := e.ConsumeMulti(namespace, queues, ttrSecond, 0, freezeTries)
 		if err != nil {
 			return jobs, err
 		}
@@ -111,7 +111,7 @@ func (e *Engine) BatchConsume(namespace string, queues []string, count, ttrSecon
 	}
 	// If there is no job and consumed in block mode, wait for a single job and return
 	if timeoutSecond > 0 && len(jobs) == 0 {
-		job, err := e.ConsumeMulti(namespace, queues, ttrSecond, timeoutSecond, false)
+		job, err := e.ConsumeMulti(namespace, queues, ttrSecond, timeoutSecond, freezeTries)
 		if err != nil {
 			return jobs, err
 		}

@@ -32,7 +32,7 @@ func (e *Engine) BatchConsume(namespace string, queues []string, count, ttrSecon
 }
 
 func (e *Engine) Consume(namespace string, queues []string, ttrSecond, timeoutSecond uint32, freezeTries bool) (job engine.Job, err error) {
-	job, err = e.oldEngine.Consume(namespace, queues, ttrSecond, 1, freezeTries)
+	job, err = e.oldEngine.Consume(namespace, queues, ttrSecond, 0, freezeTries)
 	if job != nil {
 		return // During migration, we always prefer the old engine's data as we need to drain it
 	}

@@ -6,7 +6,7 @@ AdminPort = 7778
 LogLevel = "info"
 #LogFormat = "text" # Use LogFormat="json" if wants to print the log with json format
 EnableAccessLog = true
-
+AuthList = { test = "test" } # set up basic authorization list for Admin API
 # default params
 #TTLSecond = 24 * 60 * 60 // 1 day
 #DelaySecond = 0

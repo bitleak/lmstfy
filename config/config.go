@@ -29,6 +29,7 @@ type Config struct {
 	LogLevel        string
 	LogDir          string
 	LogFormat       string
+	AuthList        map[string]string
 	EnableAccessLog bool
 	AdminRedis      RedisConf
 	Pool            RedisPool

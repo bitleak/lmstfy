@@ -494,6 +494,14 @@ func (c *LmstfyClient) batchConsume(queues []string, count, ttrSecond, timeoutSe
 //   ConsumeFromQueues(120, 5, "queue-a", "queue-b", "queue-c")
 // if all the queues have jobs to be fetched, the job in `queue-a` will be return.
 func (c *LmstfyClient) ConsumeFromQueues(ttrSecond, timeoutSecond uint32, queues ...string) (job *Job, e error) {
+	return c.consumeFromQueues(ttrSecond, timeoutSecond, false, queues...)
+}
+
+func (c *LmstfyClient) ConsumeFromQueuesWithFreezeTries(ttrSecond, timeoutSecond uint32, queues ...string) (job *Job, e error) {
+	return c.consumeFromQueues(ttrSecond, timeoutSecond, true, queues...)
+}
+
+func (c *LmstfyClient) consumeFromQueues(ttrSecond, timeoutSecond uint32, freezeTries bool, queues ...string) (job *Job, e error) {
 	if len(queues) == 0 {
 		return nil, &APIError{
 			Type:   RequestErr,
@@ -515,6 +523,7 @@ func (c *LmstfyClient) ConsumeFromQueues(ttrSecond, timeoutSecond uint32, queues
 	query := url.Values{}
 	query.Add("ttr", strconv.FormatUint(uint64(ttrSecond), 10))
 	query.Add("timeout", strconv.FormatUint(uint64(timeoutSecond), 10))
+	query.Add("freeze_tries", strconv.FormatBool(freezeTries))
 	req, err := c.getReq(http.MethodGet, strings.Join(queues, ","), query, nil)
 	if err != nil {
 		return nil, &APIError{

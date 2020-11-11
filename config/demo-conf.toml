@@ -1,18 +1,21 @@
 Host = "0.0.0.0"
-Port = 7777 
+Port = 7777
 AdminHost = "127.0.0.1" # optional, default to localhost
 AdminPort = 7778 
 #LogDir = "/var/log/lmstfy"
 LogLevel = "info"
 #LogFormat = "text" # Use LogFormat="json" if wants to print the log with json format
 EnableAccessLog = true
-
 # default params
 #TTLSecond = 24 * 60 * 60 // 1 day
 #DelaySecond = 0
 #TriesNum = 1
 #TTRSecond = 2 * 60 // 2 minutes
 #TimeoutSecond = 0  // means non-blocking
+
+# set up basic authorization list for Admin API
+[Accounts]
+test_user = "change.me"
 
 [AdminRedis]  # redis used to store admin data, eg. tokens
 Addr = "localhost:6379"

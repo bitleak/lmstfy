@@ -7,6 +7,21 @@ import (
 	"time"
 )
 
+func TestParseSchemeFromURL(t *testing.T) {
+	cases := map[string]string{
+		"http://abc.com":  "http",
+		"https://abc.com": "https",
+		"abc.com":         "http",
+		"127.0.0.1":       "http",
+	}
+	for rawURL, expectedScheme := range cases {
+		cli := NewLmstfyClient(rawURL, 0, "", "")
+		if cli.scheme != expectedScheme {
+			t.Errorf("scheme %s was expceted, but got %s", expectedScheme, cli.scheme)
+		}
+	}
+}
+
 func TestLmstfyClient_Publish(t *testing.T) {
 	cli := NewLmstfyClient(Host, Port, Namespace, Token)
 	cli.ConfigRetry(3, 5000)

@@ -1,5 +1,7 @@
 ## Admin API
 
+admin api 权限管理通过在配置文件里面增加 basic 认证的账号列表, 如果未配置则不开启 basic 认证
+
 ### 查看 pool 列表
 
 ```

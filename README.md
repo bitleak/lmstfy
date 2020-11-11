@@ -33,20 +33,15 @@ we use AOF and replication on our production env to ensure that.
 
 ## Build and Run
 
-To build the server binary:
-```
-$ make # target file would be inside _build dir
-```
+```shell
+# to build the server binary, the target file would be inside _build dir
+$ make
 
-To run the server:
-```
-redis-server &
-./_build/lmstfy-server -c config/demo-conf.toml
-```
+# setup redis server
+$ redis-server &
 
-To start in developing mode:
-```
-./_build/lmstfy-server -c config/demo-conf.toml -bt debug -sv
+# run the lmstfy server
+$ ./_build/lmstfy-server -c config/demo-conf.toml
 ```
 
 **You can use `./scripts/token-cli` to manage the namespace and token**

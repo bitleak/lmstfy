@@ -1,5 +1,7 @@
 ## Admin API
 
+admin api basic authorization would be enabled when the `acounts` field in config file was not empty.
+
 ### List Pool 
 
 ```

@@ -6,6 +6,7 @@ AdminPort = 7778
 LogLevel = "info"
 #LogFormat = "text" # Use LogFormat="json" if wants to print the log with json format
 EnableAccessLog = true
+
 # default params
 #TTLSecond = 24 * 60 * 60 // 1 day
 #DelaySecond = 0
@@ -13,7 +14,7 @@ EnableAccessLog = true
 #TTRSecond = 2 * 60 // 2 minutes
 #TimeoutSecond = 0  // means non-blocking
 
-# set up basic authorization list for Admin API
+# basic auth accounts for the admin api
 [Accounts]
 test_user = "change.me"
 

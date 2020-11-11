@@ -110,7 +110,10 @@ func apiServer(conf *config.Config, accessLogger, errorLogger *logrus.Logger, de
 func adminServer(conf *config.Config, accessLogger *logrus.Logger, errorLogger *logrus.Logger) *http.Server {
 	gin.SetMode(gin.ReleaseMode)
 	engine := gin.New()
-	engine.Use(middleware.RequestIDMiddleware, middleware.AccessLogMiddleware(accessLogger), gin.RecoveryWithWriter(errorLogger.Out), gin.BasicAuth(conf.AuthList))
+	engine.Use(middleware.RequestIDMiddleware, middleware.AccessLogMiddleware(accessLogger), gin.RecoveryWithWriter(errorLogger.Out))
+	if len(conf.Accounts) > 0 {
+		engine.Use(gin.BasicAuth(conf.Accounts))
+	}
 
 	engine.GET("/info", handlers.EngineMetaInfo)
 	engine.GET("/version", handlers.Version)

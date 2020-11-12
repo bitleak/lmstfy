@@ -8,16 +8,18 @@ import (
 )
 
 func TestParseSchemeFromURL(t *testing.T) {
-	cases := map[string]string{
+	schemeCases := map[string]string{
 		"http://abc.com":  "http",
 		"https://abc.com": "https",
 		"abc.com":         "http",
-		"127.0.0.1":       "http",
 	}
-	for rawURL, expectedScheme := range cases {
+	for rawURL, expectedScheme := range schemeCases {
 		cli := NewLmstfyClient(rawURL, 0, "", "")
 		if cli.scheme != expectedScheme {
 			t.Errorf("scheme %s was expceted, but got %s", expectedScheme, cli.scheme)
+		}
+		if cli.Host != "abc.com" {
+			t.Errorf("host %s was expceted, but got %s", "abc.com", cli.Host)
 		}
 	}
 }

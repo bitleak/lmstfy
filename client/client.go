@@ -60,6 +60,7 @@ func NewLmstfyWithClient(cli *http.Client, host string, port int, namespace, tok
 	scheme := "http"
 	if url, err := url.Parse(host); err == nil && url.Scheme != "" {
 		scheme = url.Scheme
+		host = url.Host
 	}
 
 	return &LmstfyClient{

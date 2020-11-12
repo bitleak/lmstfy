@@ -111,30 +111,36 @@ func adminServer(conf *config.Config, accessLogger *logrus.Logger, errorLogger *
 	gin.SetMode(gin.ReleaseMode)
 	engine := gin.New()
 	engine.Use(middleware.RequestIDMiddleware, middleware.AccessLogMiddleware(accessLogger), gin.RecoveryWithWriter(errorLogger.Out))
+	basicAuthMiddleware := func(c *gin.Context) { c.Next() }
 	if len(conf.Accounts) > 0 {
-		engine.Use(gin.BasicAuth(conf.Accounts))
+		basicAuthMiddleware = gin.BasicAuth(conf.Accounts)
 	}
 
 	engine.GET("/info", handlers.EngineMetaInfo)
 	engine.GET("/version", handlers.Version)
 	engine.GET("/metrics", handlers.PrometheusMetrics)
 	engine.GET("/pools", handlers.ListPools)
-	engine.GET("/token/:namespace", handlers.ListTokens)
-	engine.POST("/token/:namespace", handlers.NewToken)
-	engine.DELETE("/token/:namespace/:token", handlers.DeleteToken)
 
 	// token's limit URI
-	engine.GET("/limits", handlers.ListLimiters)
-	engine.GET("/token/:namespace/:token/limit", handlers.GetLimiter)
-	engine.POST("/token/:namespace/:token/limit", handlers.AddLimiter)
-	engine.PUT("/token/:namespace/:token/limit", handlers.SetLimiter)
-	engine.DELETE("/token/:namespace/:token/limit", handlers.DeleteLimiter)
+	engine.GET("/limits", basicAuthMiddleware, handlers.ListLimiters)
+
+	tokenGroup := engine.Group("/token")
+	{
+		tokenGroup.Use(basicAuthMiddleware)
+		tokenGroup.GET("/:namespace", handlers.ListTokens)
+		tokenGroup.POST("/:namespace", handlers.NewToken)
+		tokenGroup.DELETE("/:namespace/:token", handlers.DeleteToken)
+		tokenGroup.GET("/:namespace/:token/limit", handlers.GetLimiter)
+		tokenGroup.POST("/:namespace/:token/limit", handlers.AddLimiter)
+		tokenGroup.PUT("/:namespace/:token/limit", handlers.SetLimiter)
+		tokenGroup.DELETE("/:namespace/:token/limit", handlers.DeleteLimiter)
+	}
 
 	// pusher's URI
-	engine.GET("/pushers", handlers.ListPushGroups)
+	engine.GET("/pushers", basicAuthMiddleware, handlers.ListPushGroups)
 	pusherGroup := engine.Group("/pusher/:namespace")
 	{
-		pusherGroup.Use(handlers.CheckPoolExists)
+		pusherGroup.Use(basicAuthMiddleware, handlers.CheckPoolExists)
 		pusherGroup.GET("", handlers.ListNamespacePushGroups)
 		pusherGroup.GET("/:group", handlers.GetPushGroup)
 		pusherGroup.POST("/:group", handlers.CreatePushGroup)
@@ -144,7 +150,7 @@ func adminServer(conf *config.Config, accessLogger *logrus.Logger, errorLogger *
 
 	engine.Any("/debug/pprof/*profile", handlers.PProf)
 	engine.GET("/accesslog", handlers.GetAccessLogStatus)
-	engine.POST("/accesslog", handlers.UpdateAccessLogStatus)
+	engine.POST("/accesslog", basicAuthMiddleware, handlers.UpdateAccessLogStatus)
 	errorLogger.Infof("Admin port %d", conf.AdminPort)
 	srv := http.Server{
 		Addr:    fmt.Sprintf("%s:%d", conf.AdminHost, conf.AdminPort),

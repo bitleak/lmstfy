@@ -25,6 +25,7 @@ type Job struct {
 }
 
 type LmstfyClient struct {
+	scheme    string
 	Namespace string
 	Token     string
 	Host      string
@@ -56,12 +57,18 @@ func NewLmstfyClient(host string, port int, namespace, token string) *LmstfyClie
 
 // NewLmstfyWithClient allow using user defined http client to setup the lmstfy client
 func NewLmstfyWithClient(cli *http.Client, host string, port int, namespace, token string) *LmstfyClient {
+	scheme := "http"
+	if url, err := url.Parse(host); err == nil && url.Scheme != "" {
+		scheme = url.Scheme
+	}
+
 	return &LmstfyClient{
 		Namespace: namespace,
 		Token:     token,
 		Host:      host,
 		Port:      port,
 
+		scheme:  scheme,
 		httpCli: cli,
 	}
 }
@@ -79,7 +86,7 @@ func (c *LmstfyClient) ConfigRetry(retryCount int, backOffMillisecond int) {
 
 func (c *LmstfyClient) getReq(method, relativePath string, query url.Values, body []byte) (req *http.Request, err error) {
 	targetUrl := url.URL{
-		Scheme:   "http",
+		Scheme:   c.scheme,
 		Host:     fmt.Sprintf("%s:%d", c.Host, c.Port),
 		Path:     path.Join("/api", c.Namespace, relativePath),
 		RawQuery: query.Encode(),

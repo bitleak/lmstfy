@@ -45,6 +45,8 @@ const (
 func NewLmstfyClient(host string, port int, namespace, token string) *LmstfyClient {
 	cli := &http.Client{
 		Transport: &http.Transport{
+			MaxIdleConns:        128,
+			MaxIdleConnsPerHost: 32,
 			DialContext: (&net.Dialer{
 				Timeout:   5 * time.Second,
 				KeepAlive: time.Minute,

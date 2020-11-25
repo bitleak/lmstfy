@@ -24,7 +24,7 @@ func (bt *BackTrackHook) Levels() []logrus.Level {
 
 func (bt *BackTrackHook) Fire(entry *logrus.Entry) error {
 	pcs := make([]uintptr, 5)
-	n := runtime.Callers(4, pcs)
+	n := runtime.Callers(8, pcs)
 	if n == 0 {
 		return nil
 	}
@@ -34,7 +34,7 @@ func (bt *BackTrackHook) Fire(entry *logrus.Entry) error {
 	funcName := "unknown"
 	for {
 		frame, more := frames.Next()
-		if strings.Index(frame.Function, "vendor") == -1 {
+		if strings.Index(frame.Function, "github.com/sirupsen/logrus") == -1 {
 			// This if the frame we are looking for
 			file = frame.File
 			line = frame.Line

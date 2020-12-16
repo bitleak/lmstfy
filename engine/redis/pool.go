@@ -59,7 +59,7 @@ func (p *Pool) Get(namespace, queue, jobID string) (body []byte, ttlSecond uint3
 	switch err {
 	case nil:
 		val := getCmd.Val()
-		ttl := uint32(ttlCmd.Val().Seconds())
+		ttl := int64(ttlCmd.Val().Seconds())
 		if ttl < 0 {
 			// Use `0` to identify indefinite TTL, NOTE: in redis ttl=0 is possible when
 			// the key is not recycled fast enough. but here is okay we use `0` to identify
@@ -68,7 +68,7 @@ func (p *Pool) Get(namespace, queue, jobID string) (body []byte, ttlSecond uint3
 			ttl = 0
 		}
 		metrics.poolGetJobs.WithLabelValues(p.redis.Name).Inc()
-		return []byte(val), ttl, nil
+		return []byte(val), uint32(ttl), nil
 	case go_redis.Nil:
 		return nil, 0, engine.ErrNotFound
 	default:

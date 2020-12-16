@@ -38,7 +38,7 @@ func TestPublish(t *testing.T) {
 }
 
 func TestConsume(t *testing.T) {
-	body, _ := publishTestJob("ns", "q2", 0)
+	body, _ := publishTestJob("ns", "q2", 0, 0)
 
 	query := url.Values{}
 	query.Add("ttr", "10")
@@ -62,11 +62,13 @@ func TestConsume(t *testing.T) {
 		JobID     string `json:"job_id"`
 		Data      []byte
 		Tries     int `json:"remain_tries"`
+		TTL       int `json:"ttl"`
 	}
 	err = json.Unmarshal(resp.Body.Bytes(), &data)
 	if err != nil {
 		t.Fatalf("Failed to decode response: %s", err)
 	}
+	assert.Equal(t, data.TTL, 0)
 	assert.Equal(t, 0, data.Tries)
 	if !bytes.Equal(data.Data, body) {
 		t.Fatalf("Mismatched job data")
@@ -74,7 +76,7 @@ func TestConsume(t *testing.T) {
 }
 
 func TestNoBlockingConsumeMulti(t *testing.T) {
-	body, jobID := publishTestJob("ns", "q4", 0)
+	body, jobID := publishTestJob("ns", "q4", 0, 60)
 	query := url.Values{}
 	query.Add("ttr", "10")
 	query.Add("timeout", "0")
@@ -107,7 +109,7 @@ func TestNoBlockingConsumeMulti(t *testing.T) {
 }
 
 func TestConsumeMulti(t *testing.T) {
-	body, jobID := publishTestJob("ns", "q4", 2)
+	body, jobID := publishTestJob("ns", "q4", 2, 60)
 	query := url.Values{}
 	query.Add("ttr", "10")
 	query.Add("timeout", "3")
@@ -140,7 +142,7 @@ func TestConsumeMulti(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
-	_, jobID := publishTestJob("ns", "q6", 1)
+	_, jobID := publishTestJob("ns", "q6", 1, 60)
 
 	targetUrl := fmt.Sprintf("http://localhost/api/ns/q6/job/%s", jobID)
 	req, err := http.NewRequest("DELETE", targetUrl, nil)
@@ -162,7 +164,7 @@ func TestDelete(t *testing.T) {
 }
 
 func TestPeekQueue(t *testing.T) {
-	_, jobID := publishTestJob("ns", "q7", 0)
+	_, jobID := publishTestJob("ns", "q7", 0, 60)
 
 	targetUrl := "http://localhost/api/ns/q7/peek"
 	req, err := http.NewRequest("GET", targetUrl, nil)
@@ -195,7 +197,7 @@ func TestPeekQueue(t *testing.T) {
 }
 
 func TestSize(t *testing.T) {
-	publishTestJob("ns", "q8", 0)
+	publishTestJob("ns", "q8", 0, 60)
 
 	targetUrl := "http://localhost/api/ns/q8/size"
 	req, err := http.NewRequest("GET", targetUrl, nil)
@@ -227,7 +229,7 @@ func TestSize(t *testing.T) {
 }
 
 func TestPeekJob(t *testing.T) {
-	_, jobID := publishTestJob("ns", "q9", 0)
+	_, jobID := publishTestJob("ns", "q9", 0, 60)
 
 	targetUrl := fmt.Sprintf("http://localhost/api/ns/q9/job/%s", jobID)
 	req, err := http.NewRequest("GET", targetUrl, nil)
@@ -261,7 +263,7 @@ func TestPeekJob(t *testing.T) {
 
 func TestPeekDeadLetter(t *testing.T) {
 	// Publish and consume a job without ACK(delete), so it will be move to deadletter ASAP
-	_, jobID := publishTestJob("ns", "q10", 0)
+	_, jobID := publishTestJob("ns", "q10", 0, 60)
 	_, jobID2 := consumeTestJob("ns", "q10", 0, 1)
 	if jobID != jobID2 {
 		t.Fatal("Failed to setup dead job")
@@ -285,7 +287,7 @@ func TestPeekDeadLetter(t *testing.T) {
 
 func TestRespawnDeadLetter(t *testing.T) {
 	// Publish and consume a job without ACK(delete), so it will be move to deadletter ASAP
-	_, jobID := publishTestJob("ns", "q11", 0)
+	_, jobID := publishTestJob("ns", "q11", 0, 60)
 	_, jobID2 := consumeTestJob("ns", "q11", 0, 1)
 	if jobID != jobID2 {
 		t.Fatal("Failed to setup dead job")
@@ -314,7 +316,7 @@ func TestRespawnDeadLetter(t *testing.T) {
 
 func TestDeleteDeadLetter(t *testing.T) {
 	// Publish and consume a job without ACK(delete), so it will be move to deadletter ASAP
-	_, jobID := publishTestJob("ns", "q12", 0)
+	_, jobID := publishTestJob("ns", "q12", 0, 60)
 	_, jobID2 := consumeTestJob("ns", "q12", 0, 1)
 	if jobID != jobID2 {
 		t.Fatal("Failed to setup dead job")
@@ -337,7 +339,7 @@ func TestDeleteDeadLetter(t *testing.T) {
 }
 
 func TestDestroyQueue(t *testing.T) {
-	publishTestJob("ns", "q13", 0)
+	publishTestJob("ns", "q13", 0, 60)
 
 	targetUrl := "http://localhost/api/ns/q13"
 	req, err := http.NewRequest("DELETE", targetUrl, nil)
@@ -357,7 +359,7 @@ func TestDestroyQueue(t *testing.T) {
 func TestBatchConsume(t *testing.T) {
 	jobMap := map[string][]byte{}
 	for i := 0; i < 4; i++ {
-		body, jobID := publishTestJob("ns", "q14", 0)
+		body, jobID := publishTestJob("ns", "q14", 0, 60)
 		jobMap[jobID] = body
 	}
 
@@ -429,7 +431,7 @@ func TestBatchConsume(t *testing.T) {
 }
 
 func TestSizeOfDeadLetter(t *testing.T) {
-	_, jobID := publishTestJob("ns", "q15", 0)
+	_, jobID := publishTestJob("ns", "q15", 0, 60)
 	_, jobID2 := consumeTestJob("ns", "q15", 0, 1)
 	if jobID != jobID2 {
 		t.Fatal("Failed to setup dead job")
@@ -462,7 +464,7 @@ func TestSizeOfDeadLetter(t *testing.T) {
 }
 
 func TestRePublish(t *testing.T) {
-	data, jobID := publishTestJob("ns", "q16", 0)
+	data, jobID := publishTestJob("ns", "q16", 0, 60)
 	query := url.Values{}
 	query.Add("delay", "0")
 	query.Add("ttl", "10")
@@ -545,7 +547,7 @@ func TestPublishBulk(t *testing.T) {
 }
 
 func TestConsumeWithFreezeTries(t *testing.T) {
-	body, _ := publishTestJob("ns", "q18", 0)
+	body, _ := publishTestJob("ns", "q18", 0, 60)
 
 	query := url.Values{}
 	query.Add("ttr", "10")
@@ -581,13 +583,13 @@ func TestConsumeWithFreezeTries(t *testing.T) {
 	}
 }
 
-func publishTestJob(ns, q string, delay uint32) (body []byte, jobID string) {
+func publishTestJob(ns, q string, delay, ttl uint32) (body []byte, jobID string) {
 	e := engine.GetEngineByKind("redis", "")
 	body = make([]byte, 10)
 	if _, err := rand.Read(body); err != nil {
 		panic(err)
 	}
-	jobID, _ = e.Publish(ns, q, body, 60, delay, 1)
+	jobID, _ = e.Publish(ns, q, body, ttl, delay, 1)
 	return body, jobID
 }
 

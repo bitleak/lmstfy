@@ -205,7 +205,11 @@ func (e *Engine) Peek(namespace, queue, optionalJobID string) (job engine.Job, e
 		}
 	}
 	body, ttl, err := e.pool.Get(namespace, queue, jobID)
-	if err == engine.ErrNotFound {
+	// Tricky: we shouldn't return the not found error when the job was not found,
+	// since the job may expired(TTL was reached) and it would confuse the user, so
+	// we return the nil job instead of the not found error here. But if the `optionalJobID`
+	// was assigned we should return the not fond error.
+	if optionalJobID == "" && err == engine.ErrNotFound {
 		// return jobID with nil body if the job is expired
 		return engine.NewJobWithID(namespace, queue, nil, 0, 0, jobID), nil
 	}

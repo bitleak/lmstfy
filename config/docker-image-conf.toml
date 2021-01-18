@@ -1,0 +1,37 @@
+Host = "0.0.0.0"
+Port = 7777
+AdminHost = "127.0.0.1" # optional, default to localhost
+AdminPort = 7778 
+#LogDir = "/var/log/lmstfy"
+LogLevel = "info"
+#LogFormat = "text" # Use LogFormat="json" if wants to print the log with json format
+EnableAccessLog = true
+
+# default params
+#TTLSecond = 24 * 60 * 60 // 1 day
+#DelaySecond = 0
+#TriesNum = 1
+#TTRSecond = 2 * 60 // 2 minutes
+#TimeoutSecond = 0  // means non-blocking
+
+# basic auth accounts for the admin api
+[Accounts]
+test_user = "change.me"
+
+[AdminRedis]  # redis used to store admin data, eg. tokens
+Addr = "redis:6379"
+# Password = foobared
+
+[Pool]
+[Pool.default]
+Addr = "redis:6379"
+# Password = foobared
+# DB = 0
+#MigrateTo = "migrate" # When migration is enabled, all PUBLISH will go to `migrate` pool. and `default` will be drained
+#[Pool.migrate]
+#Addr = "localhost:6389"
+
+#[Pool.mysentinel]
+# Addr = "localhost:16379,localhost:6380,localhost:6381"
+# MasterName = "mymaster"
+# Password = foobared

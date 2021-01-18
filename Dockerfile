@@ -4,5 +4,5 @@ WORKDIR /lmstfy
 ADD ./ /lmstfy
 RUN cd /lmstfy && make
 EXPOSE 7777:7777
-ENTRYPOINT ["/lmstfy/_build/lmstfy-server", "-c", "/lmstfy/config/demo-conf.toml"]
+ENTRYPOINT ["/lmstfy/_build/lmstfy-server", "-c", "/lmstfy/config/docker-image-conf.toml"]
 

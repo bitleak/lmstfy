@@ -1,6 +1,6 @@
 Host = "0.0.0.0"
 Port = 7777
-AdminHost = "127.0.0.1" # optional, default to localhost
+AdminHost = "0.0.0.0" # optional, default to localhost
 AdminPort = 7778 
 #LogDir = "/var/log/lmstfy"
 LogLevel = "info"
@@ -16,7 +16,7 @@ EnableAccessLog = true
 
 # basic auth accounts for the admin api
 [Accounts]
-test_user = "change.me"
+#test_user = "change.me"
 
 [AdminRedis]  # redis used to store admin data, eg. tokens
 Addr = "redis:6379"

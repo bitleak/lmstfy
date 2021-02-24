@@ -18,7 +18,7 @@ type RedisInfo struct {
 func GetRedisInfo(redis *RedisInstance) *RedisInfo {
 	info := &RedisInfo{}
 
-	memoryInfo, err := redis.Conn.Info("memory").Result()
+	memoryInfo, err := redis.Conn.Info(dummyCtx, "memory").Result()
 	if err == nil {
 		lines := strings.Split(memoryInfo, "\r\n")
 		for _, l := range lines {
@@ -31,7 +31,7 @@ func GetRedisInfo(redis *RedisInstance) *RedisInfo {
 			}
 		}
 	}
-	keyInfo, err := redis.Conn.Info("keyspace").Result()
+	keyInfo, err := redis.Conn.Info(dummyCtx, "keyspace").Result()
 	if err == nil {
 		lines := strings.Split(keyInfo, "\r\n")
 		for _, l := range lines {
@@ -51,7 +51,7 @@ func GetRedisInfo(redis *RedisInstance) *RedisInfo {
 			}
 		}
 	}
-	clientInfo, err := redis.Conn.Info("clients").Result()
+	clientInfo, err := redis.Conn.Info(dummyCtx, "clients").Result()
 	if err == nil {
 		lines := strings.Split(clientInfo, "\r\n")
 		for _, l := range lines {

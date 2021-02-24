@@ -1,6 +1,7 @@
 package handlers_test
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -48,27 +49,28 @@ PLEASE setup env LMSTFY_TEST_CONFIG to the config file first
 }
 
 func setup() {
+	dummyCtx := context.TODO()
 	logger := logrus.New()
 	level, _ := logrus.ParseLevel(CONF.LogLevel)
 	logger.SetLevel(level)
 
 	conn := helper.NewRedisClient(&CONF.AdminRedis, nil)
-	err := conn.Ping().Err()
+	err := conn.Ping(dummyCtx).Err()
 	if err != nil {
 		panic(fmt.Sprintf("Failed to ping: %s", err))
 	}
-	err = conn.FlushDB().Err()
+	err = conn.FlushDB(dummyCtx).Err()
 	if err != nil {
 		panic(fmt.Sprintf("Failed to flush db: %s", err))
 	}
 
 	for _, poolConf := range CONF.Pool {
 		conn := helper.NewRedisClient(&poolConf, nil)
-		err := conn.Ping().Err()
+		err := conn.Ping(dummyCtx).Err()
 		if err != nil {
 			panic(fmt.Sprintf("Failed to ping: %s", err))
 		}
-		err = conn.FlushDB().Err()
+		err = conn.FlushDB(dummyCtx).Err()
 		if err != nil {
 			panic(fmt.Sprintf("Failed to flush db: %s", err))
 		}

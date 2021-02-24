@@ -1,15 +1,20 @@
 package auth
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"sync"
 
-	"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v8"
 
 	"github.com/bitleak/lmstfy/config"
 	"github.com/bitleak/lmstfy/engine"
 	"github.com/bitleak/lmstfy/helper"
+)
+
+var (
+	dummyCtx = context.TODO()
 )
 
 const TokenPrefix = "tk"
@@ -69,7 +74,7 @@ func (tm *TokenManager) New(pool, namespace, token, description string) (string,
 	if exists := engine.ExistsPool(pool); !exists {
 		return "", ErrPoolNotExist
 	}
-	ok, err := tm.cli.HSetNX(tokenKey(pool, namespace), token, description).Result()
+	ok, err := tm.cli.HSetNX(dummyCtx, tokenKey(pool, namespace), token, description).Result()
 	if err != nil {
 		return "", err
 	}
@@ -95,7 +100,7 @@ func (tm *TokenManager) Exist(pool, namespace, token string) (exist bool, err er
 		return true, nil
 	}
 	tm.rwmu.RUnlock()
-	exist, err = tm.cli.HExists(tokenKey(pool, namespace), token).Result()
+	exist, err = tm.cli.HExists(dummyCtx, tokenKey(pool, namespace), token).Result()
 	if err == nil && exist {
 		tm.rwmu.Lock()
 		tm.cache[cacheKey(pool, namespace, token)] = true
@@ -111,14 +116,14 @@ func (tm *TokenManager) Delete(pool, namespace, token string) error {
 	tm.rwmu.Lock()
 	delete(tm.cache, cacheKey(pool, namespace, token))
 	tm.rwmu.Unlock()
-	return tm.cli.HDel(tokenKey(pool, namespace), token).Err()
+	return tm.cli.HDel(dummyCtx, tokenKey(pool, namespace), token).Err()
 }
 
 func (tm *TokenManager) List(pool, namespace string) (tokens map[string]string, err error) {
 	if exists := engine.ExistsPool(pool); !exists {
 		return nil, ErrPoolNotExist
 	}
-	val, err := tm.cli.HGetAll(tokenKey(pool, namespace)).Result()
+	val, err := tm.cli.HGetAll(dummyCtx, tokenKey(pool, namespace)).Result()
 	if err != nil {
 		return nil, err
 	}
@@ -138,7 +143,7 @@ var _tokenManager *TokenManager
 func Setup(conf *config.Config) error {
 	redisConf := conf.AdminRedis
 	cli := helper.NewRedisClient(&redisConf, nil)
-	if cli.Ping().Err() != nil {
+	if cli.Ping(dummyCtx).Err() != nil {
 		return errors.New("can not connect to admin redis")
 	}
 	_tokenManager = NewTokenManager(cli)

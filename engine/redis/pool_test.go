@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/bitleak/lmstfy/engine"
-	go_redis "github.com/go-redis/redis"
+	go_redis "github.com/go-redis/redis/v8"
 )
 
 func TestPool_Add(t *testing.T) {
@@ -23,7 +23,7 @@ func TestPool_Add2(t *testing.T) {
 	job := engine.NewJob("ns-pool", "q2", []byte("hello msg 2"), 1, 0, 1)
 	p.Add(job)
 	time.Sleep(2 * time.Second)
-	_, err := R.Conn.Get(PoolJobKey(job)).Result()
+	_, err := R.Conn.Get(dummyCtx, PoolJobKey(job)).Result()
 	if err != go_redis.Nil {
 		t.Fatalf("Expected to get nil result, but got: %s", err)
 	}

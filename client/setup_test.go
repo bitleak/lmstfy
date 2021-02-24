@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -41,6 +42,7 @@ PLEASE setup env LMSTFY_TEST_CONFIG to the config file first
 // NOTE: lmstfy server should be start by gitlab CI script from outside, but should use the same
 // config file specified in $LMSTFY_TEST_CONFIG
 func setup() {
+	ctx := context.Background()
 	Host = CONF.Host
 	Port = CONF.Port
 	adminPort := CONF.AdminPort
@@ -48,11 +50,11 @@ func setup() {
 	// Flush redis DB
 	for _, poolConf := range CONF.Pool {
 		conn := helper.NewRedisClient(&poolConf, nil)
-		err := conn.Ping().Err()
+		err := conn.Ping(ctx).Err()
 		if err != nil {
 			panic(fmt.Sprintf("Failed to ping: %s", err))
 		}
-		err = conn.FlushDB().Err()
+		err = conn.FlushDB(ctx).Err()
 		if err != nil {
 			panic(fmt.Sprintf("Failed to flush db: %s", err))
 		}

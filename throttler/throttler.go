@@ -1,6 +1,7 @@
 package throttler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -8,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v8"
 	"github.com/sirupsen/logrus"
 
 	"github.com/bitleak/lmstfy/config"
@@ -34,6 +35,10 @@ if exists == 1 then
 	return redis.call('decr', key)
 end
 `
+)
+
+var (
+	dummyCtx = context.TODO()
 )
 
 // Limit is the detail limit of the token
@@ -85,14 +90,14 @@ func (t *Throttler) RemedyLimiter(pool, namespace, token string, isRead bool) er
 	}
 
 	tokenCounterKey := t.buildCounterKey(pool, namespace, token, isRead)
-	_, err := t.redisCli.EvalSha(t.decrSHA, []string{tokenCounterKey}).Result()
+	_, err := t.redisCli.EvalSha(dummyCtx, t.decrSHA, []string{tokenCounterKey}).Result()
 	if err != nil && strings.HasPrefix(err.Error(), "NOSCRIPT") {
-		sha, err := t.redisCli.ScriptLoad(throttleDecrLuaScript).Result()
+		sha, err := t.redisCli.ScriptLoad(dummyCtx, throttleDecrLuaScript).Result()
 		if err != nil {
 			return err
 		}
 		t.decrSHA = sha
-		_, err = t.redisCli.EvalSha(t.decrSHA, []string{tokenCounterKey}).Result()
+		_, err = t.redisCli.EvalSha(dummyCtx, t.decrSHA, []string{tokenCounterKey}).Result()
 	}
 	return err
 }
@@ -135,14 +140,14 @@ func (t *Throttler) IsReachRateLimit(pool, namespace, token string, isRead bool)
 	}
 
 	tokenCounterKey := t.buildCounterKey(pool, namespace, token, isRead)
-	val, err := t.redisCli.EvalSha(t.incrSHA, []string{tokenCounterKey}, limiter.Interval).Result()
+	val, err := t.redisCli.EvalSha(dummyCtx, t.incrSHA, []string{tokenCounterKey}, limiter.Interval).Result()
 	if err != nil && strings.HasPrefix(err.Error(), "NOSCRIPT") {
-		sha, err := t.redisCli.ScriptLoad(throttleIncrLuaScript).Result()
+		sha, err := t.redisCli.ScriptLoad(dummyCtx, throttleIncrLuaScript).Result()
 		if err != nil {
 			return true, fmt.Errorf("failed to load the throttler incr script err: %s", err.Error())
 		}
 		t.incrSHA = sha
-		val, err = t.redisCli.EvalSha(t.incrSHA, []string{tokenCounterKey}, limiter.Interval).Result()
+		val, err = t.redisCli.EvalSha(dummyCtx, t.incrSHA, []string{tokenCounterKey}, limiter.Interval).Result()
 	}
 	if err != nil {
 		return true, fmt.Errorf("failed to eval the throttler incr script err: %s", err.Error())
@@ -164,7 +169,7 @@ func (t *Throttler) Add(pool, namespace, token string, limiter *Limiter) error {
 		return err
 	}
 	tokenLimitKey := t.buildLimitKey(pool, namespace, token)
-	ok, err := t.redisCli.HSetNX(throttlerRedisKey, tokenLimitKey, string(bytes)).Result()
+	ok, err := t.redisCli.HSetNX(dummyCtx, throttlerRedisKey, tokenLimitKey, string(bytes)).Result()
 	if err != nil {
 		return fmt.Errorf("throttler add token, %s", err.Error())
 	} else if !ok {
@@ -199,7 +204,7 @@ func (t *Throttler) Set(pool, namespace, token string, limiter *Limiter) error {
 	}
 
 	tokenLimitKey := t.buildLimitKey(pool, namespace, token)
-	_, err = t.redisCli.HSet(throttlerRedisKey, tokenLimitKey, string(bytes)).Result()
+	_, err = t.redisCli.HSet(dummyCtx, throttlerRedisKey, tokenLimitKey, string(bytes)).Result()
 	if err != nil {
 		return fmt.Errorf("throttler set token(%s), %s", token, err.Error())
 	}
@@ -212,7 +217,7 @@ func (t *Throttler) Set(pool, namespace, token string, limiter *Limiter) error {
 // Delete would the token from the throttler
 func (t *Throttler) Delete(pool, namespace, token string) error {
 	tokenLimitKey := t.buildLimitKey(pool, namespace, token)
-	_, err := t.redisCli.HDel(throttlerRedisKey, tokenLimitKey).Result()
+	_, err := t.redisCli.HDel(dummyCtx, throttlerRedisKey, tokenLimitKey).Result()
 	if err != nil {
 		return fmt.Errorf("throttler delete token(%s), %s", token, err.Error())
 	}
@@ -230,7 +235,7 @@ func (t *Throttler) Shutdown() {
 
 func (t *Throttler) updateLimiters() {
 	// CAUTION: assume throttler key set was smaller, always fetch at once
-	results, err := t.redisCli.HGetAll(throttlerRedisKey).Result()
+	results, err := t.redisCli.HGetAll(dummyCtx, throttlerRedisKey).Result()
 	if err != nil {
 		t.logger.Errorf("Failed to fetch the throttler tokens, encounter err: %s", err.Error())
 		return
@@ -282,11 +287,11 @@ func GetThrottler() *Throttler {
 // Setup create new throttler
 func Setup(conf *config.RedisConf, logger *logrus.Logger) error {
 	cli := helper.NewRedisClient(conf, nil)
-	sha1, err := cli.ScriptLoad(throttleIncrLuaScript).Result()
+	sha1, err := cli.ScriptLoad(dummyCtx, throttleIncrLuaScript).Result()
 	if err != nil {
 		return fmt.Errorf("load the throttle incr script: %s", err.Error())
 	}
-	sha2, err := cli.ScriptLoad(throttleDecrLuaScript).Result()
+	sha2, err := cli.ScriptLoad(dummyCtx, throttleDecrLuaScript).Result()
 	if err != nil {
 		return fmt.Errorf("load the throttle decr script: %s", err.Error())
 	}

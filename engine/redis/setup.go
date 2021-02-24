@@ -1,20 +1,25 @@
 package redis
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"time"
 
+	"github.com/go-redis/redis/v8"
+	"github.com/sirupsen/logrus"
+
 	"github.com/bitleak/lmstfy/config"
 	"github.com/bitleak/lmstfy/engine"
 	"github.com/bitleak/lmstfy/helper"
-	"github.com/go-redis/redis"
-	"github.com/sirupsen/logrus"
 )
 
 const MaxRedisConnections = 5000
 
-var logger *logrus.Logger
+var (
+	logger *logrus.Logger
+	ctx    = context.TODO()
+)
 
 // Setup set the essential config of redis engine
 func Setup(conf *config.Config, l *logrus.Logger) error {
@@ -30,7 +35,7 @@ func Setup(conf *config.Config, l *logrus.Logger) error {
 		opt.WriteTimeout = 30 * time.Second
 		opt.MinIdleConns = 10
 		cli := helper.NewRedisClient(&poolConf, opt)
-		if cli.Ping().Err() != nil {
+		if cli.Ping(ctx).Err() != nil {
 			return fmt.Errorf("redis server %s was not alive", poolConf.Addr)
 		}
 		e, err := NewEngine(name, cli)

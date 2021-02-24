@@ -1,13 +1,14 @@
 package config
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"strings"
 
 	"github.com/BurntSushi/toml"
-	"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v8"
 	"github.com/sirupsen/logrus"
 )
 
@@ -65,7 +66,7 @@ func detectRedisMode(rc *RedisConf) (int, error) {
 		PoolSize: 1,
 	})
 	defer cli.Close()
-	infoStr, err := cli.Info("server").Result()
+	infoStr, err := cli.Info(context.Background(), "server").Result()
 	if err != nil {
 		return -1, err
 	}

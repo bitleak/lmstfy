@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/bitleak/lmstfy/engine"
-	go_redis "github.com/go-redis/redis"
+	go_redis "github.com/go-redis/redis/v8"
 )
 
 func TestPool_Add(t *testing.T) {

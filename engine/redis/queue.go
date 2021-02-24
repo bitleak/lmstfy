@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/bitleak/lmstfy/engine"
-	go_redis "github.com/go-redis/redis"
+	go_redis "github.com/go-redis/redis/v8"
 	"github.com/sirupsen/logrus"
 )
 
@@ -81,7 +81,7 @@ func (q *Queue) Push(j engine.Job, tries uint16) error {
 	}
 	metrics.queueDirectPushJobs.WithLabelValues(q.redis.Name).Inc()
 	val := structPack(tries, j.ID())
-	return q.redis.Conn.LPush(q.Name(), val).Err()
+	return q.redis.Conn.LPush(ctx, q.Name(), val).Err()
 }
 
 // Pop a job. If the tries > 0, add job to the "in-flight" timer with timestamp
@@ -99,12 +99,12 @@ func (q *Queue) PollWithFrozenTries(timeoutSecond, ttrSecond uint32) (jobID stri
 
 // Return number of the current in-queue jobs
 func (q *Queue) Size() (size int64, err error) {
-	return q.redis.Conn.LLen(q.name.String()).Result()
+	return q.redis.Conn.LLen(ctx, q.name.String()).Result()
 }
 
 // Peek a right-most element in the list without popping it
 func (q *Queue) Peek() (jobID string, tries uint16, err error) {
-	val, err := q.redis.Conn.LIndex(q.Name(), -1).Result()
+	val, err := q.redis.Conn.LIndex(ctx, q.Name(), -1).Result()
 	switch err {
 	case nil:
 		// continue
@@ -121,7 +121,7 @@ func (q *Queue) Destroy() (count int64, err error) {
 	poolPrefix := PoolJobKeyPrefix(q.name.Namespace, q.name.Queue)
 	var batchSize int64 = 100
 	for {
-		val, err := q.redis.Conn.EvalSha(q.lua_destroy_sha, []string{q.Name(), poolPrefix}, batchSize).Result()
+		val, err := q.redis.Conn.EvalSha(ctx, q.lua_destroy_sha, []string{q.Name(), poolPrefix}, batchSize).Result()
 		if err != nil {
 			if isLuaScriptGone(err) {
 				if err := PreloadDeadLetterLuaScript(q.redis); err != nil {
@@ -141,7 +141,7 @@ func (q *Queue) Destroy() (count int64, err error) {
 }
 
 func PreloadQueueLuaScript(redis *RedisInstance) error {
-	sha, err := redis.Conn.ScriptLoad(LUA_Q_RPOPMULTI).Result()
+	sha, err := redis.Conn.ScriptLoad(ctx, LUA_Q_RPOPMULTI).Result()
 	if err != nil {
 		return fmt.Errorf("preload rpop multi lua script err: %s", err)
 	}
@@ -151,15 +151,15 @@ func PreloadQueueLuaScript(redis *RedisInstance) error {
 
 func popMultiQueues(redis *RedisInstance, queueNames []string) (string, string, error) {
 	if len(queueNames) == 1 {
-		val, err := redis.Conn.RPop(queueNames[0]).Result()
+		val, err := redis.Conn.RPop(ctx, queueNames[0]).Result()
 		return queueNames[0], val, err
 	}
-	vals, err := redis.Conn.EvalSha(_lua_rpop_multi_queues, queueNames).Result()
+	vals, err := redis.Conn.EvalSha(ctx, _lua_rpop_multi_queues, queueNames).Result()
 	if err != nil && isLuaScriptGone(err) {
 		if err = PreloadQueueLuaScript(redis); err != nil {
 			return "", "", err
 		}
-		vals, err = redis.Conn.EvalSha(_lua_rpop_multi_queues, queueNames).Result()
+		vals, err = redis.Conn.EvalSha(ctx, _lua_rpop_multi_queues, queueNames).Result()
 	}
 	if err != nil {
 		return "", "", err
@@ -193,7 +193,7 @@ func PollQueues(redis *RedisInstance, timer *Timer, queueNames []QueueName, time
 		keys[i] = k.String()
 	}
 	if timeoutSecond > 0 { // Blocking poll
-		val, err = redis.Conn.BRPop(time.Duration(timeoutSecond)*time.Second, keys...).Result()
+		val, err = redis.Conn.BRPop(ctx, time.Duration(timeoutSecond)*time.Second, keys...).Result()
 	} else { // Non-Blocking fetch
 		val = make([]string, 2) // Just to be coherent with BRPop return values
 		val[0], val[1], err = popMultiQueues(redis, keys)

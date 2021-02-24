@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"time"
 
-	"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v8"
 )
 
 const (
@@ -64,7 +64,7 @@ func NewTimer(name string, redis *RedisInstance, interval time.Duration) (*Timer
 	}
 
 	// Preload the lua scripts
-	sha, err := redis.Conn.ScriptLoad(LUA_T_PUMP).Result()
+	sha, err := redis.Conn.ScriptLoad(ctx, LUA_T_PUMP).Result()
 	if err != nil {
 		logger.WithField("err", err).Error("Failed to preload lua script in timer")
 		return nil, err
@@ -98,7 +98,7 @@ func (t *Timer) Add(namespace, queue, jobID string, delaySecond uint32, tries ui
 	binary.LittleEndian.PutUint16(buf[2+namespaceLen+2+queueLen+2:], uint16(jobIDLen))
 	copy(buf[2+namespaceLen+2+queueLen+2+2:], jobID)
 
-	return t.redis.Conn.ZAdd(t.Name(), redis.Z{Score: float64(timestamp), Member: buf}).Err()
+	return t.redis.Conn.ZAdd(ctx, t.Name(), &redis.Z{Score: float64(timestamp), Member: buf}).Err()
 }
 
 // Tick pump all due jobs to the target queue
@@ -117,10 +117,10 @@ func (t *Timer) tick() {
 
 func (t *Timer) pump(currentSecond int64) {
 	for {
-		val, err := t.redis.Conn.EvalSha(t.lua_pump_sha, []string{t.Name(), QueuePrefix, PoolPrefix, DeadLetterPrefix}, currentSecond, BATCH_SIZE).Result()
+		val, err := t.redis.Conn.EvalSha(ctx, t.lua_pump_sha, []string{t.Name(), QueuePrefix, PoolPrefix, DeadLetterPrefix}, currentSecond, BATCH_SIZE).Result()
 		if err != nil {
 			if isLuaScriptGone(err) { // when redis restart, the script needs to be uploaded again
-				sha, err := t.redis.Conn.ScriptLoad(LUA_T_PUMP).Result()
+				sha, err := t.redis.Conn.ScriptLoad(ctx, LUA_T_PUMP).Result()
 				if err != nil {
 					logger.WithField("err", err).Error("Failed to reload script")
 					time.Sleep(time.Second)
@@ -150,5 +150,5 @@ func (t *Timer) Shutdown() {
 }
 
 func (t *Timer) Size() (size int64, err error) {
-	return t.redis.Conn.ZCard(t.name).Result()
+	return t.redis.Conn.ZCard(ctx, t.name).Result()
 }

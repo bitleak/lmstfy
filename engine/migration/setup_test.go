@@ -17,7 +17,7 @@ var (
 	CONF           *config.Config
 	OldRedisEngine engine.Engine
 	NewRedisEngine engine.Engine
-	ctx            = context.TODO()
+	dummyCtx       = context.TODO()
 )
 
 func init() {
@@ -44,11 +44,11 @@ func setup() {
 	}
 	for _, poolConf := range CONF.Pool {
 		conn := helper.NewRedisClient(&poolConf, nil)
-		err := conn.Ping(ctx).Err()
+		err := conn.Ping(dummyCtx).Err()
 		if err != nil {
 			panic(fmt.Sprintf("Failed to ping: %s", err))
 		}
-		err = conn.FlushDB(ctx).Err()
+		err = conn.FlushDB(dummyCtx).Err()
 		if err != nil {
 			panic(fmt.Sprintf("Failed to flush db: %s", err))
 		}

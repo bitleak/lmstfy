@@ -120,7 +120,7 @@ func Setup(conf *config.Config, updateInterval time.Duration, logger *logrus.Log
 	var err error
 	redisConf := conf.AdminRedis
 	cli := helper.NewRedisClient(&redisConf, nil)
-	if cli.Ping(ctx).Err() != nil {
+	if cli.Ping(dummyCtx).Err() != nil {
 		return fmt.Errorf("can not connect to admin redis: %s", err.Error())
 	}
 	setupMetrics()

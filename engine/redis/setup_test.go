@@ -36,11 +36,11 @@ PLEASE setup env LMSTFY_TEST_CONFIG to the config file first
 func setup() {
 	poolConf := CONF.Pool["default"]
 	conn := helper.NewRedisClient(&poolConf, nil)
-	err := conn.Ping(ctx).Err()
+	err := conn.Ping(dummyCtx).Err()
 	if err != nil {
 		panic(fmt.Sprintf("Failed to ping: %s", err))
 	}
-	err = conn.FlushDB(ctx).Err()
+	err = conn.FlushDB(dummyCtx).Err()
 	if err != nil {
 		panic(fmt.Sprintf("Failed to flush db: %s", err))
 	}

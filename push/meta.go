@@ -30,7 +30,7 @@ var ErrMetaKeyExists = errors.New("the meta key has already exists")
 var ErrMetaKeyNotFound = errors.New("the meta key was not found")
 
 var (
-	ctx = context.TODO()
+	dummyCtx = context.TODO()
 )
 
 type Meta struct {
@@ -66,9 +66,9 @@ func newMetaManager(
 	onCreated onCreatedFunc,
 	onUpdated onUpdatedFunc,
 	onDeleted onDeletedFunc) (*MetaManager, error) {
-	latestMetasVersion, err := redisCli.Get(ctx, redisMetasVersionKey).Int64()
+	latestMetasVersion, err := redisCli.Get(dummyCtx, redisMetasVersionKey).Int64()
 	if err == redis.Nil {
-		latestMetasVersion, err = redisCli.Incr(ctx, redisMetasVersionKey).Result()
+		latestMetasVersion, err = redisCli.Incr(dummyCtx, redisMetasVersionKey).Result()
 	}
 	mm := &MetaManager{
 		redisCli:           redisCli,
@@ -102,7 +102,7 @@ func (mm *MetaManager) splitKey(key string) (string, string, string, error) {
 }
 
 func (mm *MetaManager) updateMetas() error {
-	vals, err := mm.redisCli.HGetAll(ctx, redisMetasKey).Result()
+	vals, err := mm.redisCli.HGetAll(dummyCtx, redisMetasKey).Result()
 	if err != nil {
 		return err
 	}
@@ -166,7 +166,7 @@ func (mm *MetaManager) asyncLoop() {
 	for {
 		select {
 		case <-ticker.C:
-			latestMetasVersion, err := mm.redisCli.Get(ctx, redisMetasVersionKey).Int64()
+			latestMetasVersion, err := mm.redisCli.Get(dummyCtx, redisMetasVersionKey).Int64()
 			if err != nil {
 				if err != redis.Nil {
 					mm.logger.WithFields(logrus.Fields{
@@ -192,7 +192,7 @@ func (mm *MetaManager) asyncLoop() {
 
 func (mm *MetaManager) GetFromRemote(pool, ns, group string) (*Meta, error) {
 	key := mm.buildKey(pool, ns, group)
-	metaStr, err := mm.redisCli.HGet(ctx, redisMetasKey, key).Result()
+	metaStr, err := mm.redisCli.HGet(dummyCtx, redisMetasKey, key).Result()
 	if err != nil && err != redis.Nil {
 		return nil, err
 	}
@@ -217,36 +217,36 @@ func (mm *MetaManager) Get(pool, ns, group string) *Meta {
 func (mm *MetaManager) Create(pool, ns, group string, meta *Meta) error {
 	key := mm.buildKey(pool, ns, group)
 	bytes, _ := json.Marshal(meta)
-	ok, err := mm.redisCli.HSetNX(ctx, redisMetasKey, key, string(bytes)).Result()
+	ok, err := mm.redisCli.HSetNX(dummyCtx, redisMetasKey, key, string(bytes)).Result()
 	if err != nil {
 		return err
 	}
 	if !ok {
 		return ErrMetaKeyExists
 	}
-	return mm.redisCli.Incr(ctx, redisMetasVersionKey).Err()
+	return mm.redisCli.Incr(dummyCtx, redisMetasVersionKey).Err()
 }
 
 func (mm *MetaManager) Update(pool, ns, group string, meta *Meta) error {
 	key := mm.buildKey(pool, ns, group)
 	bytes, _ := json.Marshal(meta)
-	_, err := mm.redisCli.HSet(ctx, redisMetasKey, key, string(bytes)).Result()
+	_, err := mm.redisCli.HSet(dummyCtx, redisMetasKey, key, string(bytes)).Result()
 	if err != nil {
 		return err
 	}
-	return mm.redisCli.Incr(ctx, redisMetasVersionKey).Err()
+	return mm.redisCli.Incr(dummyCtx, redisMetasVersionKey).Err()
 }
 
 func (mm *MetaManager) Delete(pool, ns, group string) error {
 	key := mm.buildKey(pool, ns, group)
-	cnt, err := mm.redisCli.HDel(ctx, redisMetasKey, key).Result()
+	cnt, err := mm.redisCli.HDel(dummyCtx, redisMetasKey, key).Result()
 	if err != nil {
 		return err
 	}
 	if cnt == 0 {
 		return ErrMetaKeyNotFound
 	}
-	return mm.redisCli.Incr(ctx, redisMetasVersionKey).Err()
+	return mm.redisCli.Incr(dummyCtx, redisMetasVersionKey).Err()
 }
 
 func (mm *MetaManager) ListPusherByNamespace(wantedPool, wantedNamespace string) map[string]Meta {

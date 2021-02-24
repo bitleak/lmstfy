@@ -70,7 +70,7 @@ func TestDeadLetter_Respawn(t *testing.T) {
 
 	// Ensure TTL is removed when put into deadletter
 	job1Key := PoolJobKey(job1)
-	job1TTL := R.Conn.TTL(ctx, job1Key).Val()
+	job1TTL := R.Conn.TTL(dummyCtx, job1Key).Val()
 	if job1TTL.Seconds() > 0 {
 		t.Fatalf("Respawned job's TTL should be removed")
 	}
@@ -92,7 +92,7 @@ func TestDeadLetter_Respawn(t *testing.T) {
 	}
 	// Ensure TTL is set
 	job1Key = PoolJobKey(job1)
-	job1TTL = R.Conn.TTL(ctx, job1Key).Val()
+	job1TTL = R.Conn.TTL(dummyCtx, job1Key).Val()
 	if 10-job1TTL.Seconds() > 2 { // 2 seconds passed? no way.
 		t.Fatal("Deadletter job's TTL is not correct")
 	}
@@ -109,7 +109,7 @@ func TestDeadLetter_Respawn(t *testing.T) {
 
 	// Ensure TTL is set
 	job2Key := PoolJobKey(job2)
-	job2TTL := R.Conn.TTL(ctx, job2Key).Val()
+	job2TTL := R.Conn.TTL(dummyCtx, job2Key).Val()
 	if 10-job2TTL.Seconds() > 2 {
 		t.Fatal("Deadletter job's TTL is not correct")
 	}

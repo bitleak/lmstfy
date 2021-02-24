@@ -41,13 +41,13 @@ func (m *MetaManager) RecordIfNotExist(namespace, queue string) {
 	if m.nsCache[namespace] {
 		m.qCache[join(namespace, queue)] = true
 		m.rwmu.Unlock()
-		m.redis.Conn.HSet(ctx, join(MetaPrefix, "ns", namespace), queue, 1)
+		m.redis.Conn.HSet(dummyCtx, join(MetaPrefix, "ns", namespace), queue, 1)
 	} else {
 		m.nsCache[namespace] = true
 		m.qCache[join(namespace, queue)] = true
 		m.rwmu.Unlock()
-		m.redis.Conn.HSet(ctx, join(MetaPrefix, "ns"), namespace, 1)
-		m.redis.Conn.HSet(ctx, join(MetaPrefix, "ns", namespace), queue, 1)
+		m.redis.Conn.HSet(dummyCtx, join(MetaPrefix, "ns"), namespace, 1)
+		m.redis.Conn.HSet(dummyCtx, join(MetaPrefix, "ns", namespace), queue, 1)
 	}
 }
 
@@ -56,11 +56,11 @@ func (m *MetaManager) Remove(namespace, queue string) {
 	delete(m.nsCache, namespace)
 	delete(m.qCache, join(namespace, queue))
 	m.rwmu.Unlock()
-	m.redis.Conn.HDel(ctx, join(MetaPrefix, "ns", namespace), queue)
+	m.redis.Conn.HDel(dummyCtx, join(MetaPrefix, "ns", namespace), queue)
 }
 
 func (m *MetaManager) ListNamespaces() (namespaces []string, err error) {
-	val, err := m.redis.Conn.HGetAll(ctx, join(MetaPrefix, "ns")).Result()
+	val, err := m.redis.Conn.HGetAll(dummyCtx, join(MetaPrefix, "ns")).Result()
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +71,7 @@ func (m *MetaManager) ListNamespaces() (namespaces []string, err error) {
 }
 
 func (m *MetaManager) ListQueues(namespace string) (queues []string, err error) {
-	val, err := m.redis.Conn.HGetAll(ctx, join(MetaPrefix, "ns", namespace)).Result()
+	val, err := m.redis.Conn.HGetAll(dummyCtx, join(MetaPrefix, "ns", namespace)).Result()
 	if err != nil {
 		return nil, err
 	}

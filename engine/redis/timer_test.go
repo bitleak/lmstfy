@@ -35,7 +35,7 @@ func TestTimer_Tick(t *testing.T) {
 		defer func() {
 			wait <- struct{}{}
 		}()
-		val, err := R.Conn.BRPop(ctx, 5*time.Second, join(QueuePrefix, "ns-timer", "q2")).Result()
+		val, err := R.Conn.BRPop(dummyCtx, 5*time.Second, join(QueuePrefix, "ns-timer", "q2")).Result()
 		if err != nil || len(val) == 0 {
 			t.Fatal("Failed to pop the job from target queue")
 		}
@@ -88,7 +88,7 @@ func benchmarkTimer_Pop(timer *Timer) func(b *testing.B) {
 		}
 		b.StartTimer()
 		for i := 0; i < b.N; i++ {
-			R.Conn.BRPop(ctx, 5*time.Second, key)
+			R.Conn.BRPop(dummyCtx, 5*time.Second, key)
 		}
 	}
 }

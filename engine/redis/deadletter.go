@@ -57,13 +57,13 @@ var (
 // DeadLetters are transient objects like Queue. So we have to preload
 // the lua scripts separately.
 func PreloadDeadLetterLuaScript(redis *RedisInstance) error {
-	sha, err := redis.Conn.ScriptLoad(ctx, LUA_D_RESPAWN).Result()
+	sha, err := redis.Conn.ScriptLoad(dummyCtx, LUA_D_RESPAWN).Result()
 	if err != nil {
 		return fmt.Errorf("failed to preload lua script: %s", err)
 	}
 	_lua_respawn_deadletter_sha = sha
 
-	sha, err = redis.Conn.ScriptLoad(ctx, LUA_D_DELETE).Result()
+	sha, err = redis.Conn.ScriptLoad(dummyCtx, LUA_D_DELETE).Result()
 	if err != nil {
 		return fmt.Errorf("failed to preload luascript: %s", err)
 	}
@@ -107,14 +107,14 @@ func (dl *DeadLetter) Name() string {
 // implement in the timer's LUA_T_PUMP script. please refer to that.
 func (dl *DeadLetter) Add(jobID string) error {
 	val := structPack(1, jobID)
-	if err := dl.redis.Conn.Persist(ctx, PoolJobKey2(dl.namespace, dl.queue, jobID)).Err(); err != nil {
+	if err := dl.redis.Conn.Persist(dummyCtx, PoolJobKey2(dl.namespace, dl.queue, jobID)).Err(); err != nil {
 		return err
 	}
-	return dl.redis.Conn.LPush(ctx, dl.Name(), val).Err()
+	return dl.redis.Conn.LPush(dummyCtx, dl.Name(), val).Err()
 }
 
 func (dl *DeadLetter) Peek() (size int64, jobID string, err error) {
-	val, err := dl.redis.Conn.LIndex(ctx, dl.Name(), -1).Result()
+	val, err := dl.redis.Conn.LIndex(dummyCtx, dl.Name(), -1).Result()
 	switch err {
 	case nil:
 		// continue
@@ -127,7 +127,7 @@ func (dl *DeadLetter) Peek() (size int64, jobID string, err error) {
 	if err != nil || tries != 1 {
 		return 0, "", fmt.Errorf("failed to unpack data: %s", err)
 	}
-	size, err = dl.redis.Conn.LLen(ctx, dl.Name()).Result()
+	size, err = dl.redis.Conn.LLen(dummyCtx, dl.Name()).Result()
 	if err != nil {
 		return 0, "", err
 	}
@@ -142,7 +142,7 @@ func (dl *DeadLetter) Delete(limit int64) (count int64, err error) {
 			batchSize = limit
 		}
 		for {
-			val, err := dl.redis.Conn.EvalSha(ctx, dl.lua_delete_sha, []string{dl.Name(), poolPrefix}, batchSize).Result()
+			val, err := dl.redis.Conn.EvalSha(dummyCtx, dl.lua_delete_sha, []string{dl.Name(), poolPrefix}, batchSize).Result()
 			if err != nil {
 				if isLuaScriptGone(err) {
 					if err := PreloadDeadLetterLuaScript(dl.redis); err != nil {
@@ -166,7 +166,7 @@ func (dl *DeadLetter) Delete(limit int64) (count int64, err error) {
 		}
 		return count, nil
 	} else if limit == 1 {
-		data, err := dl.redis.Conn.RPop(ctx, dl.Name()).Result()
+		data, err := dl.redis.Conn.RPop(dummyCtx, dl.Name()).Result()
 		if err != nil {
 			if err == go_redis.Nil {
 				return 0, nil
@@ -177,7 +177,7 @@ func (dl *DeadLetter) Delete(limit int64) (count int64, err error) {
 		if err != nil {
 			return 1, err
 		}
-		err = dl.redis.Conn.Del(ctx, PoolJobKey2(dl.namespace, dl.queue, jobID)).Err()
+		err = dl.redis.Conn.Del(dummyCtx, PoolJobKey2(dl.namespace, dl.queue, jobID)).Err()
 		if err != nil {
 			return 1, fmt.Errorf("failed to delete job data: %s", err)
 		}
@@ -204,7 +204,7 @@ func (dl *DeadLetter) Respawn(limit, ttlSecond int64) (count int64, err error) {
 			batchSize = limit
 		}
 		for {
-			val, err := dl.redis.Conn.EvalSha(ctx, dl.lua_respawn_sha, []string{dl.Name(), queueName, poolPrefix}, batchSize, ttlSecond).Result() // Respawn `batchSize` jobs at a time
+			val, err := dl.redis.Conn.EvalSha(dummyCtx, dl.lua_respawn_sha, []string{dl.Name(), queueName, poolPrefix}, batchSize, ttlSecond).Result() // Respawn `batchSize` jobs at a time
 			if err != nil {
 				if isLuaScriptGone(err) {
 					if err := PreloadDeadLetterLuaScript(dl.redis); err != nil {
@@ -228,7 +228,7 @@ func (dl *DeadLetter) Respawn(limit, ttlSecond int64) (count int64, err error) {
 		}
 		return count, nil
 	} else if limit == 1 {
-		data, err := dl.redis.Conn.RPopLPush(ctx, dl.Name(), queueName).Result()
+		data, err := dl.redis.Conn.RPopLPush(dummyCtx, dl.Name(), queueName).Result()
 		if err != nil {
 			if err == go_redis.Nil {
 				return 0, nil
@@ -240,7 +240,7 @@ func (dl *DeadLetter) Respawn(limit, ttlSecond int64) (count int64, err error) {
 			return 1, err
 		}
 		if ttlSecond > 0 {
-			err = dl.redis.Conn.Expire(ctx, PoolJobKey2(dl.namespace, dl.queue, jobID), time.Duration(ttlSecond)*time.Second).Err()
+			err = dl.redis.Conn.Expire(dummyCtx, PoolJobKey2(dl.namespace, dl.queue, jobID), time.Duration(ttlSecond)*time.Second).Err()
 		}
 		if err != nil {
 			return 1, fmt.Errorf("failed to set TTL on respawned job[%s]: %s", jobID, err)
@@ -252,5 +252,5 @@ func (dl *DeadLetter) Respawn(limit, ttlSecond int64) (count int64, err error) {
 }
 
 func (dl *DeadLetter) Size() (size int64, err error) {
-	return dl.redis.Conn.LLen(ctx, dl.Name()).Result()
+	return dl.redis.Conn.LLen(dummyCtx, dl.Name()).Result()
 }

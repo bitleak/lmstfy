@@ -17,8 +17,8 @@ import (
 const MaxRedisConnections = 5000
 
 var (
-	logger *logrus.Logger
-	ctx    = context.TODO()
+	logger   *logrus.Logger
+	dummyCtx = context.TODO()
 )
 
 // Setup set the essential config of redis engine
@@ -35,7 +35,7 @@ func Setup(conf *config.Config, l *logrus.Logger) error {
 		opt.WriteTimeout = 30 * time.Second
 		opt.MinIdleConns = 10
 		cli := helper.NewRedisClient(&poolConf, opt)
-		if cli.Ping(ctx).Err() != nil {
+		if cli.Ping(dummyCtx).Err() != nil {
 			return fmt.Errorf("redis server %s was not alive", poolConf.Addr)
 		}
 		e, err := NewEngine(name, cli)

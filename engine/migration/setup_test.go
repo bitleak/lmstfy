@@ -1,6 +1,7 @@
 package migration
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -16,6 +17,7 @@ var (
 	CONF           *config.Config
 	OldRedisEngine engine.Engine
 	NewRedisEngine engine.Engine
+	ctx            = context.TODO()
 )
 
 func init() {
@@ -42,11 +44,11 @@ func setup() {
 	}
 	for _, poolConf := range CONF.Pool {
 		conn := helper.NewRedisClient(&poolConf, nil)
-		err := conn.Ping().Err()
+		err := conn.Ping(ctx).Err()
 		if err != nil {
 			panic(fmt.Sprintf("Failed to ping: %s", err))
 		}
-		err = conn.FlushDB().Err()
+		err = conn.FlushDB(ctx).Err()
 		if err != nil {
 			panic(fmt.Sprintf("Failed to flush db: %s", err))
 		}

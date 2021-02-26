@@ -50,7 +50,7 @@ It is as simple as:
 % make
 ```
 
-The application binary would be generated at `_build` dir, you can run it on `Running Lmstfy` section.
+The application binary would be generated at `_build` dir, you can run it on the `Running Lmstfy` section.
 
 ## Running Lmstfy
 

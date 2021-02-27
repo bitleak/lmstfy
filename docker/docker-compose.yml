@@ -1,0 +1,15 @@
+version: '2'
+
+services:
+  redis:
+    image: redis:4
+    ports:
+      - "6379:6379"
+
+  cluster-0:
+    image: bitleak/lmstfy:latest
+    links:
+      - redis:redis
+    ports:
+      - "7777:7777"
+      - "7778:7778"

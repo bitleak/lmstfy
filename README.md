@@ -1,7 +1,7 @@
-# Let Me Schedule Tasks For You (lmstfy)
+# LMSTFY(Let Me Schedule Task For You) 
 [![Build Status](https://github.com/bitleak/lmstfy/workflows/Lmstfy%20Actions/badge.svg)](https://github.com/bitleak/lmstfy/actions)  [![Go Report Card](https://goreportcard.com/badge/github.com/bitleak/lmstfy)](https://goreportcard.com/report/github.com/bitleak/lmstfy) [![Coverage Status](https://coveralls.io/repos/github/bitleak/lmstfy/badge.svg?branch=add-coverage-reports)](https://coveralls.io/github/bitleak/lmstfy?branch=add-coverage-reports) [![GitHub release](https://img.shields.io/github/tag/bitleak/lmstfy.svg?label=release)](https://github.com/bitleak/lmstfy/releases) [![GitHub release date](https://img.shields.io/github/release-date/bitleak/lmstfy.svg)](https://github.com/bitleak/lmstfy/releases) [![LICENSE](https://img.shields.io/github/license/bitleak/lmstfy.svg)](https://github.com/bitleak/lmstfy/blob/master/LICENSE) [![GoDoc](https://img.shields.io/badge/Godoc-reference-blue.svg)](https://godoc.org/github.com/bitleak/lmstfy)
 
-lmstfy(pronounce /'lam.si.fai/) is a simple task queue (or job queue) service, providing the following features:
+lmstfy(pronounce /'lam.si.fai/) is a simple task queue (or job queue) service based on the Redis storage, providing the following features:
 
 - basic job queue primitives: PUBLISH, CONSUME and DELETE via HTTP API
 - support extra lifecycle management of jobs:
@@ -16,54 +16,72 @@ lmstfy itself doesn't handle data storage, it delegates the storage to the `Redi
 storage backend is under implementing). So data integrity and durability is in the hand of redis,
 we use AOF and replication on our production env to ensure that.
 
-## Who use lmstfy 
+## Playing with Lmstfy 
 
-<table>
-<tr>
-<td height = "128" width = "164"><img src="https://imgur.com/9X1kc2j.png" alt="Meitu"></td>
-</tr>
-</table>
-
-## SDK for lmstfy
-
-* [php lmstfy client](https://github.com/bitleak/php-lmstfy-client)
-* [golang lmstfy client](https://github.com/bitleak/lmstfy/tree/master/client)
-* [java lmstfy client](https://github.com/bitleak/java-lmstfy-client)
-* [rust lmstfy client](https://github.com/bitleak/rust-lmstfy-client)
-
-## Build and Run
+If you just want to have a try, the `docker-compose` was highly recommended but DON'T use it in production. 
+We would use docker-compose to setup and play with Lmstfy.
 
 ```shell
-# to build the server binary, the target file would be inside _build dir
-$ make
+# run the lmstfy and redis, server would listen on localhost:7777
+# and admin port on localhost:7778.
 
-# setup redis server
-$ redis-server &
+% cd docker && docker-compose -p test-lmstfy up -d
 
-# run the lmstfy server
-$ ./_build/lmstfy-server -c config/demo-conf.toml
+# create a new namespace(`test-ns`) and token through the admin API
+% curl -XPOST -d "description=test namesapce" "http://127.0.0.1:7778/token/test-ns" 
+
+# Publish a new message, the queue would be dynamic created,
+# so feel free to publish the message to any queues. Below http request
+# would create a job with delay = 1s, ttl = 3600s and tries = 16.
+% curl -XPUT -H "X-token:{ENTER YOUR TOKEN}" "http://127.0.0.1:7777/api/test-ns/test-queue?delay=1&ttl=3600&tries=16" 
+
+# Consume a job from the queue
+% curl -H "X-token:{ENTER YOUR TOKEN}" "http://127.0.0.1:7777/api/test-ns/test-queue?ttr=30&timeout=2" 
+
+# ACK the job
+% curl -i -XDELETE -H "X-token:{ENTER YOUR TOKEN}" "http://127.0.0.1:7777/api/test-ns/test-queue/job/{YOUR JOB ID}" 
 ```
 
-**You can use `./scripts/token-cli` to manage the namespace and token**
+## Building Lmstfy
 
-## DOCs
+It is as simple as:
 
-* [HTTP API Doc](https://github.com/bitleak/lmstfy/blob/master/doc/API.md)
-* [Administration API Doc](https://github.com/bitleak/lmstfy/blob/master/doc/administration.en.md)
-* [Throttler API Doc](https://github.com/bitleak/lmstfy/blob/master/doc/throttler.en.md)
-* [Pusher API Doc](https://github.com/bitleak/lmstfy/blob/master/doc/pusher.en.md)
-* [Administration API Chinese Doc](https://github.com/bitleak/lmstfy/blob/master/doc/administration.cn.md)
-* [Throttler API Chinese Doc](https://github.com/bitleak/lmstfy/blob/master/doc/throttler.cn.md)
-* [Pusher API Chinese Doc](https://github.com/bitleak/lmstfy/blob/master/doc/pusher.cn.md)
+```shell
+% make
+```
 
----
+The application binary would be generated at `_build` dir, you can run it on `Running Lmstfy` section.
 
-## Dashboard
+## Running Lmstfy
 
-* [Grafana](https://grafana.com/grafana/dashboards/12748)
+You must setup the Redis first and configure it in the lmstfy config file before running:
 
-## Internal
+```
+_build/lmstfy-server -c config/demo-conf.toml
+```
+
+## Lmstfy Internal
 
 Detailed internal implementation looks like:
 
-<img src="https://github.com/bitleak/lmstfy/raw/master/doc/job-flow.png" alt="job flow" width="800px">
+![lmstfy internal](https://raw.githubusercontent.com/bitleak/lmstfy/master/doc/lmstfy-internal.png)
+
+## Client drivers
+
+* [Go](https://github.com/bitleak/lmstfy/tree/master/client) (The most stable and widely used)
+* [PHP](https://github.com/bitleak/php-lmstfy-client)
+* [Java](https://github.com/bitleak/java-lmstfy-client)
+* [Rust](https://github.com/bitleak/rust-lmstfy-client)
+
+## Documentation
+
+* [HTTP API](https://github.com/bitleak/lmstfy/blob/master/doc/API.md)
+* [Administration API](https://github.com/bitleak/lmstfy/blob/master/doc/administration.en.md)
+* [Throttler API](https://github.com/bitleak/lmstfy/blob/master/doc/throttler.en.md)
+* [Administration API Chinese](https://github.com/bitleak/lmstfy/blob/master/doc/administration.cn.md)
+* [Throttler API Chinese](https://github.com/bitleak/lmstfy/blob/master/doc/throttler.cn.md)
+* [Pusher API Chinese](https://github.com/bitleak/lmstfy/blob/master/doc/pusher.cn.md)
+* [Grafana](https://grafana.com/grafana/dashboards/12748)
+
+## License
+LMSTFY is under the MIT license. See the [LICENSE](https://github.com/bitleak/lmstfy/blob/master/LICENSE) file for details.

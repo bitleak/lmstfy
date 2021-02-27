@@ -21,24 +21,34 @@ we use AOF and replication on our production env to ensure that.
 If you just want to have a try, the `docker-compose` was highly recommended but DON'T use it in production. 
 We would use docker-compose to setup and play with Lmstfy.
 
+* Running the Redis and Lmstfy server 
 ```shell
 # run the lmstfy and redis, server would listen on localhost:7777
 # and admin port on localhost:7778.
 
 % cd docker && docker-compose -p test-lmstfy up -d
-
-# create a new namespace(`test-ns`) and token through the admin API
+```
+* Create a new namespace and token
+```shell
 % curl -XPOST -d "description=test namesapce" "http://127.0.0.1:7778/token/test-ns" 
+```
 
-# Publish a new message, the queue would be dynamic created,
-# so feel free to publish the message to any queues. Below http request
-# would create a job with delay = 1s, ttl = 3600s and tries = 16.
+* Publish a new message
+```shell
+# The queue would be dynamic created, so feel free to publish the message to any queues.
+# Below http request would create a job with delay = 1s, ttl = 3600s and tries = 16.
+
 % curl -XPUT -H "X-token:{ENTER YOUR TOKEN}" "http://127.0.0.1:7777/api/test-ns/test-queue?delay=1&ttl=3600&tries=16" 
+```
 
-# Consume a job from the queue
+* Consume a job from the queue
+
+```shell
 % curl -H "X-token:{ENTER YOUR TOKEN}" "http://127.0.0.1:7777/api/test-ns/test-queue?ttr=30&timeout=2" 
+```
 
-# ACK the job
+* ACK the job
+```shell
 % curl -i -XDELETE -H "X-token:{ENTER YOUR TOKEN}" "http://127.0.0.1:7777/api/test-ns/test-queue/job/{YOUR JOB ID}" 
 ```
 
@@ -60,7 +70,7 @@ You must setup the Redis first and configure it in the lmstfy config file before
 _build/lmstfy-server -c config/demo-conf.toml
 ```
 
-## Lmstfy Internal
+## Internal
 
 Detailed internal implementation looks like:
 

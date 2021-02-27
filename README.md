@@ -1,7 +1,7 @@
 # LMSTFY(Let Me Schedule Task For You) 
 [![Build Status](https://github.com/bitleak/lmstfy/workflows/Lmstfy%20Actions/badge.svg)](https://github.com/bitleak/lmstfy/actions)  [![Go Report Card](https://goreportcard.com/badge/github.com/bitleak/lmstfy)](https://goreportcard.com/report/github.com/bitleak/lmstfy) [![Coverage Status](https://coveralls.io/repos/github/bitleak/lmstfy/badge.svg?branch=add-coverage-reports)](https://coveralls.io/github/bitleak/lmstfy?branch=add-coverage-reports) [![GitHub release](https://img.shields.io/github/tag/bitleak/lmstfy.svg?label=release)](https://github.com/bitleak/lmstfy/releases) [![GitHub release date](https://img.shields.io/github/release-date/bitleak/lmstfy.svg)](https://github.com/bitleak/lmstfy/releases) [![LICENSE](https://img.shields.io/github/license/bitleak/lmstfy.svg)](https://github.com/bitleak/lmstfy/blob/master/LICENSE) [![GoDoc](https://img.shields.io/badge/Godoc-reference-blue.svg)](https://godoc.org/github.com/bitleak/lmstfy)
 
-lmstfy(pronounce /'lam.si.fai/) is a simple task queue (or job queue) service based on Redis, providing the following features:
+lmstfy(pronounce /'lam.si.fai/) is a simple task queue (or job queue) service based on the Redis storage, providing the following features:
 
 - basic job queue primitives: PUBLISH, CONSUME and DELETE via HTTP API
 - support extra lifecycle management of jobs:
@@ -64,7 +64,7 @@ _build/lmstfy-server -c config/demo-conf.toml
 
 Detailed internal implementation looks like:
 
-![lmstfy internal](https://raw.githubusercontent.com/git-hulk/lmstfy/improve-readme/doc/lmstfy-internal.png)
+![lmstfy internal](https://raw.githubusercontent.com/bitleak/lmstfy/master/doc/lmstfy-internal.png)
 
 ## Client drivers
 
@@ -84,4 +84,4 @@ Detailed internal implementation looks like:
 * [Grafana](https://grafana.com/grafana/dashboards/12748)
 
 ## License
-LMSTFY is under the MIT license. See the LICENSE file for details.
+LMSTFY is under the MIT license. See the [LICENSE](https://github.com/bitleak/lmstfy/blob/master/LICENSE) file for details.

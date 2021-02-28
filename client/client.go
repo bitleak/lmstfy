@@ -318,10 +318,10 @@ func (c *LmstfyClient) consume(queue string, ttrSecond, timeoutSecond uint32, fr
 			Reason: "TTR should be > 0",
 		}
 	}
-	if timeoutSecond < 0 || timeoutSecond >= maxReadTimeout {
+	if timeoutSecond >= maxReadTimeout {
 		return nil, &APIError{
 			Type:   RequestErr,
-			Reason: fmt.Sprintf("timeout should be >= 0 && < %d", maxReadTimeout),
+			Reason: fmt.Sprintf("timeout should be < %d", maxReadTimeout),
 		}
 	}
 	query := url.Values{}
@@ -427,10 +427,10 @@ func (c *LmstfyClient) batchConsume(queues []string, count, ttrSecond, timeoutSe
 			Reason: "COUNT should be > 0",
 		}
 	}
-	if timeoutSecond < 0 || timeoutSecond >= maxReadTimeout {
+	if timeoutSecond >= maxReadTimeout {
 		return nil, &APIError{
 			Type:   RequestErr,
-			Reason: fmt.Sprintf("timeout should be >= 0 && < %d", maxReadTimeout),
+			Reason: fmt.Sprintf("timeout should be < %d", maxReadTimeout),
 		}
 	}
 
@@ -524,10 +524,10 @@ func (c *LmstfyClient) consumeFromQueues(ttrSecond, timeoutSecond uint32, freeze
 			Reason: "TTR should be > 0",
 		}
 	}
-	if timeoutSecond < 0 || timeoutSecond >= maxReadTimeout {
+	if timeoutSecond >= maxReadTimeout {
 		return nil, &APIError{
 			Type:   RequestErr,
-			Reason: fmt.Sprintf("timeout must be >= 0 && < %d when fetch from multiple queues", maxReadTimeout),
+			Reason: fmt.Sprintf("timeout must be < %d when fetch from multiple queues", maxReadTimeout),
 		}
 	}
 	query := url.Values{}

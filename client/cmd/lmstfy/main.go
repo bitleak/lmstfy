@@ -72,7 +72,7 @@ func main() {
 		Aliases: []string{"get", "con"},
 		Args:    cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			ttr, err := cmd.Flags().GetUint32("ttr")
+			ttr, _ := cmd.Flags().GetUint32("ttr")
 			timeout, _ := cmd.Flags().GetUint32("timeout")
 			job, err := lmstfyClient.Consume(args[0], ttr, timeout)
 			if err != nil {
@@ -192,5 +192,5 @@ func main() {
 	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "config file path")
 
 	rootCmd.AddCommand(publishCmd, consumeCmd, ackCmd, sizeCmd, peekCmd, respawnCmd)
-	rootCmd.Execute()
+	_ = rootCmd.Execute()
 }

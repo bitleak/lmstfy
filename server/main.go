@@ -9,14 +9,12 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/bitleak/lmstfy/auth"
 	"github.com/bitleak/lmstfy/config"
 	"github.com/bitleak/lmstfy/engine/migration"
 	redis_engine "github.com/bitleak/lmstfy/engine/redis"
 	"github.com/bitleak/lmstfy/log"
-	"github.com/bitleak/lmstfy/push"
 	"github.com/bitleak/lmstfy/server/handlers"
 	"github.com/bitleak/lmstfy/server/middleware"
 	"github.com/bitleak/lmstfy/throttler"
@@ -136,18 +134,6 @@ func adminServer(conf *config.Config, accessLogger *logrus.Logger, errorLogger *
 		tokenGroup.DELETE("/:namespace/:token/limit", handlers.DeleteLimiter)
 	}
 
-	// pusher's URI
-	engine.GET("/pushers", basicAuthMiddleware, handlers.ListPushGroups)
-	pusherGroup := engine.Group("/pusher/:namespace")
-	{
-		pusherGroup.Use(basicAuthMiddleware, handlers.CheckPoolExists)
-		pusherGroup.GET("", handlers.ListNamespacePushGroups)
-		pusherGroup.GET("/:group", handlers.GetPushGroup)
-		pusherGroup.POST("/:group", handlers.CreatePushGroup)
-		pusherGroup.PUT("/:group", handlers.UpdatePushGroup)
-		pusherGroup.DELETE("/:group", handlers.DeletePushGroup)
-	}
-
 	engine.Any("/debug/pprof/*profile", handlers.PProf)
 	engine.GET("/accesslog", handlers.GetAccessLogStatus)
 	engine.POST("/accesslog", basicAuthMiddleware, handlers.UpdateAccessLogStatus)
@@ -208,9 +194,6 @@ func main() {
 	if err := auth.Setup(conf); err != nil {
 		panic(fmt.Sprintf("Failed to setup auth module: %s", err))
 	}
-	if err := push.Setup(conf, 3*time.Second, errorLogger); err != nil {
-		panic(fmt.Sprintf("Failed to setup push module: %s", err))
-	}
 	if conf.EnableAccessLog {
 		middleware.EnableAccessLog()
 	}
@@ -225,7 +208,6 @@ func main() {
 	adminSrv.Close() // Admin server does not need to be stopped gracefully
 	apiSrv.Shutdown(context.Background())
 
-	push.Shutdown()
 	throttler.GetThrottler().Shutdown()
 	errorLogger.Infof("[%d] Bye bye", os.Getpid())
 }

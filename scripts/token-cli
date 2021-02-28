@@ -10,7 +10,7 @@ examples = """examples:
     ./token-cli 127.0.0.1:7778 -d -p pool -n namespace                    # delete the namespace
     ./token-cli 127.0.0.1:7778 -l -p pool -n namespace                    # list tokens in namespace
 """
-parser = parser = argparse.ArgumentParser(
+parser = argparse.ArgumentParser(
     description="Manage the namepace and tokens",
     formatter_class=argparse.RawDescriptionHelpFormatter,
     epilog=examples)
@@ -32,17 +32,17 @@ if args.pools:
     print(r.text)
     exit(0)
 
-if args.namespace == None:
+if args.namespace is None:
     print("param 'namespace' is missing, please use -n to assign the namespace")
     exit(1)
-if args.create and args.description == None:
+if args.create and args.description is None:
     print("param 'description' is missing, please use -D to assign the description")
     exit(1)
-if args.delete and args.token == None:
+if args.delete and args.token is None:
     print("param 'token' is missing, please use -t to assign the token")
     exit(1)
 
-if args.pool == None or args.pool == "default":
+if args.pool is None or args.pool == "default":
     args.pool = ""
 
 if args.list:

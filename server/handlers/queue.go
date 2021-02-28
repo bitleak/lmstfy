@@ -45,14 +45,14 @@ func Publish(c *gin.Context) {
 
 	delaySecondStr := c.DefaultQuery("delay", DefaultDelay)
 	delaySecond, err := strconv.ParseUint(delaySecondStr, 10, 32)
-	if delaySecond < 0 || err != nil {
+	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid delay"})
 		return
 	}
 
 	ttlSecondStr := c.DefaultQuery("ttl", DefaultTTL)
 	ttlSecond, err := strconv.ParseUint(ttlSecondStr, 10, 32)
-	if ttlSecond < 0 || err != nil {
+	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ttl"})
 		return
 	}
@@ -122,14 +122,14 @@ func PublishBulk(c *gin.Context) {
 
 	delaySecondStr := c.DefaultQuery("delay", DefaultDelay)
 	delaySecond, err := strconv.ParseUint(delaySecondStr, 10, 32)
-	if delaySecond < 0 || err != nil {
+	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid delay"})
 		return
 	}
 
 	ttlSecondStr := c.DefaultQuery("ttl", DefaultTTL)
 	ttlSecond, err := strconv.ParseUint(ttlSecondStr, 10, 32)
-	if ttlSecond < 0 || err != nil {
+	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ttl"})
 		return
 	}
@@ -228,14 +228,14 @@ func Consume(c *gin.Context) {
 
 	ttrSecondStr := c.DefaultQuery("ttr", DefaultTTR) // Default to 1 minute
 	ttrSecond, err := strconv.ParseUint(ttrSecondStr, 10, 32)
-	if ttrSecond < 0 || err != nil {
+	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ttr"})
 		return
 	}
 
 	timeoutSecondStr := c.DefaultQuery("timeout", DefaultTimeout) // Default non-blocking
 	timeoutSecond, err := strconv.ParseUint(timeoutSecondStr, 10, 32)
-	if timeoutSecond < 0 || err != nil {
+	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid timeout"})
 		return
 	}

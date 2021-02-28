@@ -89,10 +89,11 @@ func (t *Throttler) RemedyLimiter(pool, namespace, token string, isRead bool) er
 		return nil
 	}
 
+	var sha string
 	tokenCounterKey := t.buildCounterKey(pool, namespace, token, isRead)
 	_, err := t.redisCli.EvalSha(dummyCtx, t.decrSHA, []string{tokenCounterKey}).Result()
 	if err != nil && strings.HasPrefix(err.Error(), "NOSCRIPT") {
-		sha, err := t.redisCli.ScriptLoad(dummyCtx, throttleDecrLuaScript).Result()
+		sha, err = t.redisCli.ScriptLoad(dummyCtx, throttleDecrLuaScript).Result()
 		if err != nil {
 			return err
 		}
@@ -139,10 +140,11 @@ func (t *Throttler) IsReachRateLimit(pool, namespace, token string, isRead bool)
 		return false, nil
 	}
 
+	var sha string
 	tokenCounterKey := t.buildCounterKey(pool, namespace, token, isRead)
 	val, err := t.redisCli.EvalSha(dummyCtx, t.incrSHA, []string{tokenCounterKey}, limiter.Interval).Result()
 	if err != nil && strings.HasPrefix(err.Error(), "NOSCRIPT") {
-		sha, err := t.redisCli.ScriptLoad(dummyCtx, throttleIncrLuaScript).Result()
+		sha, err = t.redisCli.ScriptLoad(dummyCtx, throttleIncrLuaScript).Result()
 		if err != nil {
 			return true, fmt.Errorf("failed to load the throttler incr script err: %s", err.Error())
 		}

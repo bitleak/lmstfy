@@ -21,10 +21,6 @@ test:
 	@LMSTFY_TEST_CONFIG=`pwd`/scripts/test-conf.toml sh scripts/run-test.sh 
 	- cd scripts/redis && docker-compose down && cd ../..
 
-coverage:
-	- $(HOME)/gopath/bin/goveralls -coverprofile=build/coverage.out -service=travis-ci -repotoken $(COVERAGE_TOKEN)
-	@rm -rf build/coverage.out
-
 lint:
 	@rm -rf lint.log
 	@printf $(CCCOLOR)"Checking format...\n"$(ENDCOLOR)

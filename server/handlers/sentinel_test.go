@@ -44,7 +44,7 @@ func TestSentinel_Consume(t *testing.T) {
 }
 
 func publishSentinelTestJob(ns, q string, delay uint32) (body []byte, jobID string) {
-	e := engine.GetEngineByKind("redis", testSentinelPool)
+	e := engine.GetEngineByKind(engine.KindRedis, testSentinelPool)
 	body = make([]byte, 10)
 	if _, err := rand.Read(body); err != nil {
 		panic(err)
@@ -54,7 +54,7 @@ func publishSentinelTestJob(ns, q string, delay uint32) (body []byte, jobID stri
 }
 
 func consumeSentinelTestJob(ns, q string, ttr, timeout uint32) (body []byte, jobID string) {
-	e := engine.GetEngineByKind("redis", testSentinelPool)
+	e := engine.GetEngineByKind(engine.KindRedis, testSentinelPool)
 	job, _ := e.Consume(ns, []string{q}, ttr, timeout, false)
 	if job == nil {
 		return nil, ""

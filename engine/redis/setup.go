@@ -42,9 +42,9 @@ func Setup(conf *config.Config, l *logrus.Logger) error {
 		if err != nil {
 			return fmt.Errorf("setup engine error: %s", err)
 		}
-		engine.Register("redis", name, e)
+		engine.Register(engine.KindRedis, name, e)
 	}
-	if engine.GetEngineByKind("redis", "") == nil {
+	if engine.GetEngineByKind(engine.KindRedis, "") == nil {
 		return errors.New("default redis engine not found")
 	}
 	return nil

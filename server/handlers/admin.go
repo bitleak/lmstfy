@@ -26,6 +26,7 @@ func PrometheusMetrics(c *gin.Context) {
 
 // GET /pools/
 func ListPools(c *gin.Context) {
+	// TODO: support kind
 	c.IndentedJSON(http.StatusOK, engine.GetPools())
 }
 
@@ -259,7 +260,7 @@ func PProf(c *gin.Context) {
 // List all namespaces and queues
 func EngineMetaInfo(c *gin.Context) {
 	logger := GetHTTPLogger(c)
-	e := engine.GetEngineByKind("redis", c.Query("pool"))
+	e := engine.GetEngineByKind(engine.KindRedis, c.Query("pool"))
 	if e == nil {
 		return
 	}
@@ -267,7 +268,7 @@ func EngineMetaInfo(c *gin.Context) {
 	if err != nil {
 		logger.WithFields(logrus.Fields{
 			"error": err,
-			"kind":  "redis",
+			"kind":  engine.KindRedis,
 			"pool":  c.Query("pool"),
 		}).Error("dump engine meta info error")
 		return

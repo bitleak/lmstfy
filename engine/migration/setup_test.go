@@ -53,8 +53,8 @@ func setup() {
 			panic(fmt.Sprintf("Failed to flush db: %s", err))
 		}
 	}
-	OldRedisEngine = engine.GetEngineByKind("redis", "default")
-	NewRedisEngine = engine.GetEngineByKind("redis", "migrate")
+	OldRedisEngine = engine.GetEngineByKind(engine.KindRedis, "default")
+	NewRedisEngine = engine.GetEngineByKind(engine.KindRedis, "migrate")
 }
 
 func teardown() {

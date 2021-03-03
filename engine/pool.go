@@ -55,13 +55,10 @@ func GetEngine(pool string) Engine {
 }
 
 func Register(kind, pool string, e Engine) {
-	if p, ok := engines[kind]; ok {
-		p[pool] = e
-	} else {
-		p = make(map[string]Engine)
-		p[pool] = e
-		engines[kind] = p
+	if _, ok := engines[kind]; !ok {
+		engines[kind] = make(map[string]Engine)
 	}
+	engines[kind][pool] = e
 }
 
 func Shutdown() {

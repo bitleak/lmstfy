@@ -26,7 +26,7 @@ func setupMetrics() {
 			Help:      "rest api latencies",
 			Buckets:   prometheus.ExponentialBuckets(15, 2.5, 9),
 		},
-		[]string{"pool", "namespace", "api"},
+		[]string{"pool", "namespace", "api", "method"},
 	)
 
 	httpCodes := prometheus.NewCounterVec(
@@ -36,7 +36,7 @@ func setupMetrics() {
 			Name:      "http_codes",
 			Help:      "rest api response code",
 		},
-		[]string{"pool", "namespace", "api", "code"},
+		[]string{"pool", "namespace", "api", "method", "code"},
 	)
 
 	rateLimits := prometheus.NewCounterVec(
@@ -56,24 +56,27 @@ func setupMetrics() {
 	metrics.RateLimits = rateLimits
 }
 
-func CollectMetrics(apiName string) func(*gin.Context) {
-	return func(c *gin.Context) {
-		before := time.Now()
-		c.Next()
-		after := time.Now()
-		duration := after.Sub(before)
-		code := c.Writer.Status()
-		if code < 300 {
-			metrics.Latencies.WithLabelValues(
-				c.GetString("pool"),
-				c.Param("namespace"),
-				apiName).Observe(duration.Seconds() * 1000)
-		}
-		metrics.HTTPCodes.WithLabelValues(
+func CollectMetrics(c *gin.Context) {
+	before := time.Now()
+	c.Next()
+	after := time.Now()
+	duration := after.Sub(before)
+	relativePath := c.FullPath()
+	code := c.Writer.Status()
+	if code < 300 {
+		metrics.Latencies.WithLabelValues(
 			c.GetString("pool"),
 			c.Param("namespace"),
-			apiName,
-			strconv.Itoa(code),
-		).Inc()
+			relativePath,
+			c.Request.Method,
+		).Observe(duration.Seconds() * 1000)
 	}
+	metrics.HTTPCodes.WithLabelValues(
+		c.GetString("pool"),
+		c.Param("namespace"),
+		relativePath,
+		c.Request.Method,
+		strconv.Itoa(code),
+	).Inc()
+
 }

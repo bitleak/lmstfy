@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	LUA_Q_RPOPMULTI = `
+	luaRPOPMultiQueuesScript = `
 	for _, queue in ipairs(KEYS) do
 		local v = redis.call("RPOP", queue)
 		if v ~= false then
@@ -23,7 +23,7 @@ const (
 `
 )
 
-var _lua_rpop_multi_queues string
+var rpopMultiQueuesSHA string
 
 type QueueName struct {
 	Namespace string
@@ -50,7 +50,7 @@ type Queue struct {
 	redis *RedisInstance
 	timer *Timer
 
-	lua_destroy_sha string
+	destroySHA string
 }
 
 func NewQueue(namespace, queue string, redis *RedisInstance, timer *Timer) *Queue {
@@ -62,7 +62,7 @@ func NewQueue(namespace, queue string, redis *RedisInstance, timer *Timer) *Queu
 		// NOTE: deadletter and queue are actually the same data structure, we could reuse the lua script
 		// to empty the redis list (used as queue here). all we need to do is pass the queue name as the
 		// deadletter name.
-		lua_destroy_sha: _lua_delete_deadletter_sha,
+		destroySHA: deleteDeadletterSHA,
 	}
 }
 
@@ -121,7 +121,7 @@ func (q *Queue) Destroy() (count int64, err error) {
 	poolPrefix := PoolJobKeyPrefix(q.name.Namespace, q.name.Queue)
 	var batchSize int64 = 100
 	for {
-		val, err := q.redis.Conn.EvalSha(dummyCtx, q.lua_destroy_sha, []string{q.Name(), poolPrefix}, batchSize).Result()
+		val, err := q.redis.Conn.EvalSha(dummyCtx, q.destroySHA, []string{q.Name(), poolPrefix}, batchSize).Result()
 		if err != nil {
 			if isLuaScriptGone(err) {
 				if err := PreloadDeadLetterLuaScript(q.redis); err != nil {
@@ -141,11 +141,11 @@ func (q *Queue) Destroy() (count int64, err error) {
 }
 
 func PreloadQueueLuaScript(redis *RedisInstance) error {
-	sha, err := redis.Conn.ScriptLoad(dummyCtx, LUA_Q_RPOPMULTI).Result()
+	sha, err := redis.Conn.ScriptLoad(dummyCtx, luaRPOPMultiQueuesScript).Result()
 	if err != nil {
 		return fmt.Errorf("preload rpop multi lua script err: %s", err)
 	}
-	_lua_rpop_multi_queues = sha
+	rpopMultiQueuesSHA = sha
 	return nil
 }
 
@@ -154,12 +154,12 @@ func popMultiQueues(redis *RedisInstance, queueNames []string) (string, string, 
 		val, err := redis.Conn.RPop(dummyCtx, queueNames[0]).Result()
 		return queueNames[0], val, err
 	}
-	vals, err := redis.Conn.EvalSha(dummyCtx, _lua_rpop_multi_queues, queueNames).Result()
+	vals, err := redis.Conn.EvalSha(dummyCtx, rpopMultiQueuesSHA, queueNames).Result()
 	if err != nil && isLuaScriptGone(err) {
 		if err = PreloadQueueLuaScript(redis); err != nil {
 			return "", "", err
 		}
-		vals, err = redis.Conn.EvalSha(dummyCtx, _lua_rpop_multi_queues, queueNames).Result()
+		vals, err = redis.Conn.EvalSha(dummyCtx, rpopMultiQueuesSHA, queueNames).Result()
 	}
 	if err != nil {
 		return "", "", err

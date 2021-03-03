@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	LUA_T_PUMP = `
+	luaPumpQueueScript = `
 local zset_key = KEYS[1]
 local output_queue_prefix = KEYS[2]
 local pool_prefix = KEYS[3]
@@ -51,7 +51,7 @@ type Timer struct {
 	interval time.Duration
 	shutdown chan struct{}
 
-	lua_pump_sha string
+	pumpSHA string
 }
 
 // NewTimer return an instance of delay queue
@@ -64,12 +64,12 @@ func NewTimer(name string, redis *RedisInstance, interval time.Duration) (*Timer
 	}
 
 	// Preload the lua scripts
-	sha, err := redis.Conn.ScriptLoad(dummyCtx, LUA_T_PUMP).Result()
+	sha, err := redis.Conn.ScriptLoad(dummyCtx, luaPumpQueueScript).Result()
 	if err != nil {
 		logger.WithField("err", err).Error("Failed to preload lua script in timer")
 		return nil, err
 	}
-	timer.lua_pump_sha = sha
+	timer.pumpSHA = sha
 
 	go timer.tick()
 	return timer, nil
@@ -117,16 +117,16 @@ func (t *Timer) tick() {
 
 func (t *Timer) pump(currentSecond int64) {
 	for {
-		val, err := t.redis.Conn.EvalSha(dummyCtx, t.lua_pump_sha, []string{t.Name(), QueuePrefix, PoolPrefix, DeadLetterPrefix}, currentSecond, BATCH_SIZE).Result()
+		val, err := t.redis.Conn.EvalSha(dummyCtx, t.pumpSHA, []string{t.Name(), QueuePrefix, PoolPrefix, DeadLetterPrefix}, currentSecond, BatchSize).Result()
 		if err != nil {
 			if isLuaScriptGone(err) { // when redis restart, the script needs to be uploaded again
-				sha, err := t.redis.Conn.ScriptLoad(dummyCtx, LUA_T_PUMP).Result()
+				sha, err := t.redis.Conn.ScriptLoad(dummyCtx, luaPumpQueueScript).Result()
 				if err != nil {
 					logger.WithField("err", err).Error("Failed to reload script")
 					time.Sleep(time.Second)
 					return
 				}
-				t.lua_pump_sha = sha
+				t.pumpSHA = sha
 			}
 			logger.WithField("err", err).Error("Failed to pump")
 			time.Sleep(time.Second)
@@ -135,7 +135,7 @@ func (t *Timer) pump(currentSecond int64) {
 		n, _ := val.(int64)
 		logger.WithField("count", n).Debug("Due jobs")
 		metrics.timerDueJobs.WithLabelValues(t.redis.Name).Add(float64(n))
-		if n == BATCH_SIZE {
+		if n == BatchSize {
 			// There might have more expired jobs to pump
 			metrics.timerFullBatches.WithLabelValues(t.redis.Name).Inc()
 			time.Sleep(10 * time.Millisecond) // Hurry up! accelerate pumping the due jobs

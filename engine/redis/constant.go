@@ -5,6 +5,6 @@ const (
 	QueuePrefix      = "q"
 	DeadLetterPrefix = "d"
 	MetaPrefix       = "m"
-)
 
-const BATCH_SIZE = 100
+	BatchSize = int64(100)
+)

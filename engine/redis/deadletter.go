@@ -6,11 +6,12 @@ import (
 	"time"
 
 	"github.com/bitleak/lmstfy/engine"
+
 	go_redis "github.com/go-redis/redis/v8"
 )
 
 const (
-	LUA_D_RESPAWN = `
+	luaRespawnDeadletterScript = `
 local deadletter = KEYS[1]
 local queue = KEYS[2]
 local poolPrefix = KEYS[3]
@@ -30,7 +31,7 @@ for i = 1, limit do
 end
 return limit  -- deadletter has more data when return value is >= limit
 `
-	LUA_D_DELETE = `
+	luaDeleteDeadletterScript = `
 local deadletter = KEYS[1]
 local poolPrefix = KEYS[2]
 local limit = tonumber(ARGV[1])
@@ -49,47 +50,43 @@ return limit
 )
 
 var (
-	_lua_respawn_deadletter_sha string
-	_lua_delete_deadletter_sha  string
+	respawnDeadletterSHA string
+	deleteDeadletterSHA  string
 )
 
 // Because the DeadLetter is not like Timer which is a singleton,
 // DeadLetters are transient objects like Queue. So we have to preload
 // the lua scripts separately.
 func PreloadDeadLetterLuaScript(redis *RedisInstance) error {
-	sha, err := redis.Conn.ScriptLoad(dummyCtx, LUA_D_RESPAWN).Result()
+	sha, err := redis.Conn.ScriptLoad(dummyCtx, luaRespawnDeadletterScript).Result()
 	if err != nil {
 		return fmt.Errorf("failed to preload lua script: %s", err)
 	}
-	_lua_respawn_deadletter_sha = sha
+	respawnDeadletterSHA = sha
 
-	sha, err = redis.Conn.ScriptLoad(dummyCtx, LUA_D_DELETE).Result()
+	sha, err = redis.Conn.ScriptLoad(dummyCtx, luaDeleteDeadletterScript).Result()
 	if err != nil {
 		return fmt.Errorf("failed to preload luascript: %s", err)
 	}
-	_lua_delete_deadletter_sha = sha
+	deleteDeadletterSHA = sha
 	return nil
 }
 
 // DeadLetter is where dead job will be buried, the job can be respawned into ready queue
 type DeadLetter struct {
-	redis           *RedisInstance
-	namespace       string
-	queue           string
-	lua_respawn_sha string
-	lua_delete_sha  string
+	redis     *RedisInstance
+	namespace string
+	queue     string
 }
 
 // NewDeadLetter return an instance of DeadLetter storage
 func NewDeadLetter(namespace, queue string, redis *RedisInstance) (*DeadLetter, error) {
 	dl := &DeadLetter{
-		redis:           redis,
-		namespace:       namespace,
-		queue:           queue,
-		lua_respawn_sha: _lua_respawn_deadletter_sha,
-		lua_delete_sha:  _lua_delete_deadletter_sha,
+		redis:     redis,
+		namespace: namespace,
+		queue:     queue,
 	}
-	if dl.lua_respawn_sha == "" {
+	if respawnDeadletterSHA == "" || deleteDeadletterSHA == "" {
 		return nil, errors.New("dead letter's lua script is not preloaded")
 	}
 	return dl, nil
@@ -104,7 +101,7 @@ func (dl *DeadLetter) Name() string {
 // the dead job back to the ready queue.
 //
 // NOTE: this method is not called any where except in tests, but this logic is
-// implement in the timer's LUA_T_PUMP script. please refer to that.
+// implement in the timer's pump script. please refer to that.
 func (dl *DeadLetter) Add(jobID string) error {
 	val := structPack(1, jobID)
 	if err := dl.redis.Conn.Persist(dummyCtx, PoolJobKey2(dl.namespace, dl.queue, jobID)).Err(); err != nil {
@@ -142,7 +139,7 @@ func (dl *DeadLetter) Delete(limit int64) (count int64, err error) {
 			batchSize = limit
 		}
 		for {
-			val, err := dl.redis.Conn.EvalSha(dummyCtx, dl.lua_delete_sha, []string{dl.Name(), poolPrefix}, batchSize).Result()
+			val, err := dl.redis.Conn.EvalSha(dummyCtx, deleteDeadletterSHA, []string{dl.Name(), poolPrefix}, batchSize).Result()
 			if err != nil {
 				if isLuaScriptGone(err) {
 					if err := PreloadDeadLetterLuaScript(dl.redis); err != nil {
@@ -199,12 +196,12 @@ func (dl *DeadLetter) Respawn(limit, ttlSecond int64) (count int64, err error) {
 	}).String()
 	poolPrefix := PoolJobKeyPrefix(dl.namespace, dl.queue)
 	if limit > 1 {
-		var batchSize int64 = 100
+		var batchSize = BatchSize
 		if batchSize > limit {
 			batchSize = limit
 		}
 		for {
-			val, err := dl.redis.Conn.EvalSha(dummyCtx, dl.lua_respawn_sha, []string{dl.Name(), queueName, poolPrefix}, batchSize, ttlSecond).Result() // Respawn `batchSize` jobs at a time
+			val, err := dl.redis.Conn.EvalSha(dummyCtx, respawnDeadletterSHA, []string{dl.Name(), queueName, poolPrefix}, batchSize, ttlSecond).Result() // Respawn `batchSize` jobs at a time
 			if err != nil {
 				if isLuaScriptGone(err) {
 					if err := PreloadDeadLetterLuaScript(dl.redis); err != nil {

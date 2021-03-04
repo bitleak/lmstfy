@@ -79,6 +79,7 @@ func apiServer(conf *config.Config, accessLogger, errorLogger *logrus.Logger, de
 	engine.Use(
 		middleware.RequestIDMiddleware,
 		middleware.AccessLogMiddleware(accessLogger),
+		handlers.CollectMetrics,
 		gin.RecoveryWithWriter(errorLogger.Out),
 	)
 	handlers.SetupParamDefaults(conf)

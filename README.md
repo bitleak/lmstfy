@@ -1,3 +1,5 @@
+<img src="doc/images/logo.png" alt="lmstfy_logo" width="200" height="200"/>
+
 # LMSTFY(Let Me Schedule Task For You) 
 [![Build Status](https://github.com/bitleak/lmstfy/workflows/Lmstfy%20Actions/badge.svg)](https://github.com/bitleak/lmstfy/actions)  [![Go Report Card](https://goreportcard.com/badge/github.com/bitleak/lmstfy)](https://goreportcard.com/report/github.com/bitleak/lmstfy) [![codecov](https://codecov.io/gh/bitleak/lmstfy/branch/master/graph/badge.svg?token=1O559OI069)](https://codecov.io/gh/bitleak/lmstfy) [![GitHub release](https://img.shields.io/github/tag/bitleak/lmstfy.svg?label=release)](https://github.com/bitleak/lmstfy/releases) [![GitHub release date](https://img.shields.io/github/release-date/bitleak/lmstfy.svg)](https://github.com/bitleak/lmstfy/releases) [![LICENSE](https://img.shields.io/github/license/bitleak/lmstfy.svg)](https://github.com/bitleak/lmstfy/blob/master/LICENSE) [![GoDoc](https://img.shields.io/badge/Godoc-reference-blue.svg)](https://godoc.org/github.com/bitleak/lmstfy)
 

@@ -10,17 +10,22 @@ import (
 	"github.com/bitleak/lmstfy/throttler"
 )
 
-func Throttle(throttler *throttler.Throttler, action string) gin.HandlerFunc {
+const (
+	ThrottleActionConsume = "consume"
+	ThrottleActionProduce = "produce"
+)
+
+func Throttle(action string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		pool := c.GetString("pool")
 		namespace := c.Param("namespace")
 		token := c.GetString("token")
-		if action != "consume" && action != "produce" {
+		if action != ThrottleActionConsume && action != ThrottleActionProduce {
 			c.Next()
 			return
 		}
-		isRead := action == "consume"
-		isReachRateLimited, err := throttler.IsReachRateLimit(pool, namespace, token, isRead)
+		isRead := action == ThrottleActionConsume
+		isReachRateLimited, err := throttler.GetThrottler().IsReachRateLimit(pool, namespace, token, isRead)
 		if err != nil {
 			logger := GetHTTPLogger(c)
 			logger.WithFields(logrus.Fields{
@@ -42,7 +47,7 @@ func Throttle(throttler *throttler.Throttler, action string) gin.HandlerFunc {
 		c.Next()
 		statusCode := c.Writer.Status()
 		if (isRead && statusCode != http.StatusOK) || (!isRead && statusCode != http.StatusCreated) {
-			throttler.RemedyLimiter(pool, namespace, token, isRead)
+			throttler.GetThrottler().RemedyLimiter(pool, namespace, token, isRead)
 		}
 	}
 }

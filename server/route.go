@@ -6,20 +6,17 @@ import (
 	"net/http"
 
 	"github.com/bitleak/lmstfy/server/handlers"
-	"github.com/bitleak/lmstfy/throttler"
 )
 
-func SetupRoutes(e *gin.Engine, throttler *throttler.Throttler, logger *logrus.Logger, devMode bool) {
+func SetupRoutes(e *gin.Engine, logger *logrus.Logger, devMode bool) {
 	handlers.Setup(logger)
 	group := e.Group("/api")
 	group.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
 	if !devMode {
 		group.Use(handlers.ValidateToken)
 	}
-	group.PUT("/:namespace/:queue",
-		handlers.Throttle(throttler, "produce"), handlers.Publish)
-	group.PUT("/:namespace/:queue/bulk",
-		handlers.Throttle(throttler, "produce"), handlers.PublishBulk)
+	group.PUT("/:namespace/:queue", handlers.Throttle(handlers.ThrottleActionProduce), handlers.Publish)
+	group.PUT("/:namespace/:queue/bulk", handlers.Throttle(handlers.ThrottleActionProduce), handlers.PublishBulk)
 	group.PUT("/:namespace/:queue/job/:job_id", handlers.Publish)
 	group.GET("/:namespace/:queue/peek", handlers.PeekQueue)
 	group.GET("/:namespace/:queue/job/:job_id", handlers.PeekJob)
@@ -34,8 +31,7 @@ func SetupRoutes(e *gin.Engine, throttler *throttler.Throttler, logger *logrus.L
 	}
 	// NOTE: the route should be named /:namespace/:queues, but gin http-router reports conflict
 	// when mixing /:queue and /:queues together, :(
-	group2.GET("/:namespace/:queue",
-		handlers.Throttle(throttler, "consume"), handlers.Consume)
+	group2.GET("/:namespace/:queue", handlers.Throttle(handlers.ThrottleActionConsume), handlers.Consume)
 
 	// Dead letter
 	group.GET("/:namespace/:queue/deadletter", handlers.PeekDeadLetter)
@@ -51,4 +47,35 @@ func SetupRoutes(e *gin.Engine, throttler *throttler.Throttler, logger *logrus.L
 	e.NoRoute(func(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "api not found"})
 	})
+}
+
+func SetupAdminRoutes(e *gin.Engine, accounts gin.Accounts) {
+	basicAuthMiddleware := func(c *gin.Context) { c.Next() }
+	if len(accounts) > 0 {
+		basicAuthMiddleware = gin.BasicAuth(accounts)
+	}
+
+	e.GET("/info", handlers.EngineMetaInfo)
+	e.GET("/version", handlers.Version)
+	e.GET("/metrics", handlers.PrometheusMetrics)
+	e.GET("/pools", handlers.ListPools)
+
+	// token's limit URI
+	e.GET("/limits", basicAuthMiddleware, handlers.ListLimiters)
+
+	tokenGroup := e.Group("/token")
+	{
+		tokenGroup.Use(basicAuthMiddleware)
+		tokenGroup.GET("/:namespace", handlers.ListTokens)
+		tokenGroup.POST("/:namespace", handlers.NewToken)
+		tokenGroup.DELETE("/:namespace/:token", handlers.DeleteToken)
+		tokenGroup.GET("/:namespace/:token/limit", handlers.GetLimiter)
+		tokenGroup.POST("/:namespace/:token/limit", handlers.AddLimiter)
+		tokenGroup.PUT("/:namespace/:token/limit", handlers.SetLimiter)
+		tokenGroup.DELETE("/:namespace/:token/limit", handlers.DeleteLimiter)
+	}
+
+	e.Any("/debug/pprof/*profile", handlers.PProf)
+	e.GET("/accesslog", handlers.GetAccessLogStatus)
+	e.POST("/accesslog", basicAuthMiddleware, handlers.UpdateAccessLogStatus)
 }

@@ -10,7 +10,6 @@ import (
 
 	"github.com/bitleak/lmstfy/auth"
 	"github.com/bitleak/lmstfy/server/handlers"
-	throttler2 "github.com/bitleak/lmstfy/throttler"
 	"github.com/bitleak/lmstfy/uuid"
 )
 
@@ -27,8 +26,7 @@ func publishWithThrottler(namespace, queue, token string) error {
 		return fmt.Errorf("create request err: %s", err.Error())
 	}
 	c, e, resp := ginTest(req)
-	throttler := throttler2.GetThrottler()
-	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine, handlers.Throttle(throttler, "produce"))
+	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine, handlers.Throttle(handlers.ThrottleActionProduce))
 	e.PUT("/api/:namespace/:queue", handlers.Publish)
 	e.HandleContext(c)
 	if resp.Code != http.StatusCreated {
@@ -48,8 +46,7 @@ func consumeWithThrottler(namespace, queue, token string) error {
 		return fmt.Errorf("create request err: %s", err.Error())
 	}
 	c, e, resp := ginTest(req)
-	throttler := throttler2.GetThrottler()
-	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine, handlers.Throttle(throttler, "consume"))
+	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine, handlers.Throttle(handlers.ThrottleActionConsume))
 	e.GET("/api/:namespace/:queue", handlers.Consume)
 	e.HandleContext(c)
 	if resp.Code != http.StatusOK {

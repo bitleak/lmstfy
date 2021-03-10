@@ -87,10 +87,9 @@ func apiServer(conf *config.Config, accessLogger, errorLogger *logrus.Logger, de
 	if err != nil {
 		errorLogger.Errorf("Failed to create throttler, err: %s", err.Error())
 	}
-	SetupRoutes(engine, throttler.GetThrottler(), errorLogger, devMode)
+	SetupRoutes(engine, errorLogger, devMode)
 	addr := fmt.Sprintf("%s:%d", conf.Host, conf.Port)
 	errorLogger.Infof("Server listening at %s", addr)
-	// engine.Run(addr)
 	srv := http.Server{
 		Addr:    addr,
 		Handler: engine,
@@ -109,35 +108,11 @@ func apiServer(conf *config.Config, accessLogger, errorLogger *logrus.Logger, de
 func adminServer(conf *config.Config, accessLogger *logrus.Logger, errorLogger *logrus.Logger) *http.Server {
 	gin.SetMode(gin.ReleaseMode)
 	engine := gin.New()
-	engine.Use(middleware.RequestIDMiddleware, middleware.AccessLogMiddleware(accessLogger), gin.RecoveryWithWriter(errorLogger.Out))
-	basicAuthMiddleware := func(c *gin.Context) { c.Next() }
-	if len(conf.Accounts) > 0 {
-		basicAuthMiddleware = gin.BasicAuth(conf.Accounts)
-	}
-
-	engine.GET("/info", handlers.EngineMetaInfo)
-	engine.GET("/version", handlers.Version)
-	engine.GET("/metrics", handlers.PrometheusMetrics)
-	engine.GET("/pools", handlers.ListPools)
-
-	// token's limit URI
-	engine.GET("/limits", basicAuthMiddleware, handlers.ListLimiters)
-
-	tokenGroup := engine.Group("/token")
-	{
-		tokenGroup.Use(basicAuthMiddleware)
-		tokenGroup.GET("/:namespace", handlers.ListTokens)
-		tokenGroup.POST("/:namespace", handlers.NewToken)
-		tokenGroup.DELETE("/:namespace/:token", handlers.DeleteToken)
-		tokenGroup.GET("/:namespace/:token/limit", handlers.GetLimiter)
-		tokenGroup.POST("/:namespace/:token/limit", handlers.AddLimiter)
-		tokenGroup.PUT("/:namespace/:token/limit", handlers.SetLimiter)
-		tokenGroup.DELETE("/:namespace/:token/limit", handlers.DeleteLimiter)
-	}
-
-	engine.Any("/debug/pprof/*profile", handlers.PProf)
-	engine.GET("/accesslog", handlers.GetAccessLogStatus)
-	engine.POST("/accesslog", basicAuthMiddleware, handlers.UpdateAccessLogStatus)
+	engine.Use(
+		middleware.RequestIDMiddleware,
+		middleware.AccessLogMiddleware(accessLogger),
+		gin.RecoveryWithWriter(errorLogger.Out))
+	SetupAdminRoutes(engine, conf.Accounts)
 	errorLogger.Infof("Admin port %d", conf.AdminPort)
 	srv := http.Server{
 		Addr:    fmt.Sprintf("%s:%d", conf.AdminHost, conf.AdminPort),

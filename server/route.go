@@ -11,7 +11,7 @@ import (
 func SetupRoutes(e *gin.Engine, logger *logrus.Logger, devMode bool) {
 	handlers.Setup(logger)
 	group := e.Group("/api")
-	group.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
+	group.Use(handlers.ValidateParams, handlers.SetupEngine, handlers.SetupQueue)
 	if !devMode {
 		group.Use(handlers.ValidateToken)
 	}
@@ -25,7 +25,7 @@ func SetupRoutes(e *gin.Engine, logger *logrus.Logger, devMode bool) {
 	// Consume API is special, it accepts the url like `/api/namespace/q1,q2,q3`,
 	// while all other APIs forbid.
 	group2 := e.Group("/api")
-	group2.Use(handlers.ValidateMultiConsume, handlers.SetupQueueEngine)
+	group2.Use(handlers.ValidateMultiConsume, handlers.SetupEngine, handlers.SetupQueues)
 	if !devMode {
 		group2.Use(handlers.ValidateToken)
 	}
@@ -34,15 +34,20 @@ func SetupRoutes(e *gin.Engine, logger *logrus.Logger, devMode bool) {
 	group2.GET("/:namespace/:queue", handlers.Throttle(handlers.ThrottleActionConsume), handlers.Consume)
 
 	// Dead letter
-	group.GET("/:namespace/:queue/deadletter", handlers.PeekDeadLetter)
-	group.PUT("/:namespace/:queue/deadletter", handlers.RespawnDeadLetter)
-	group.DELETE("/:namespace/:queue/deadletter", handlers.DeleteDeadLetter)
+	deadLetterGroup := e.Group("/api")
+	deadLetterGroup.Use(handlers.ValidateParams, handlers.SetupEngine, handlers.SetupDeadLetter)
+	if !devMode {
+		deadLetterGroup.Use(handlers.ValidateToken)
+	}
+	deadLetterGroup.GET("/:namespace/:queue/deadletter", handlers.PeekDeadLetter)
+	deadLetterGroup.PUT("/:namespace/:queue/deadletter", handlers.RespawnDeadLetter)
+	deadLetterGroup.DELETE("/:namespace/:queue/deadletter", handlers.DeleteDeadLetter)
 
 	// Public API group
 	pubGroup := e.Group("/api")
-	pubGroup.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
-	pubGroup.GET("/:namespace/:queue/size", handlers.Size)
-	pubGroup.GET("/:namespace/:queue/deadletter/size", handlers.GetDeadLetterSize)
+	pubGroup.Use(handlers.ValidateParams, handlers.SetupEngine)
+	pubGroup.GET("/:namespace/:queue/size", handlers.SetupQueue, handlers.Size)
+	pubGroup.GET("/:namespace/:queue/deadletter/size", handlers.SetupDeadLetter, handlers.GetDeadLetterSize)
 
 	e.NoRoute(func(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "api not found"})

@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/bitleak/lmstfy/uuid"
 	"time"
 
 	"github.com/bitleak/lmstfy/engine"
@@ -25,86 +26,152 @@ const (
 
 var rpopMultiQueuesSHA string
 
-type QueueName struct {
-	Namespace string
-	Queue     string
+func queueMetaToReadyQueue(meta engine.QueueMeta) string {
+	return join(QueuePrefix, meta.Namespace, meta.Queue)
 }
 
-func (k *QueueName) String() string {
-	return join(QueuePrefix, k.Namespace, k.Queue)
-}
-
-func (k *QueueName) Decode(str string) error {
-	splits := splits(3, str)
+func readyQueueToQueueMeta(queue string) (*engine.QueueMeta, error) {
+	splits := splits(3, queue)
 	if len(splits) != 3 || splits[0] != QueuePrefix {
-		return errors.New("invalid format")
+		return nil, errors.New("invalid format")
 	}
-	k.Namespace = splits[1]
-	k.Queue = splits[2]
-	return nil
+	meta := &engine.QueueMeta{
+		Namespace: splits[1],
+		Queue:     splits[2],
+	}
+	return meta, nil
 }
 
 // Queue is the "ready queue" that has all the jobs that can be consumed right now
 type Queue struct {
-	name  QueueName
-	redis *RedisInstance
-	timer *Timer
+	meta engine.QueueMeta
+	e    *Engine
 
 	destroySHA string
 }
 
-func NewQueue(namespace, queue string, redis *RedisInstance, timer *Timer) *Queue {
-	return &Queue{
-		name:  QueueName{Namespace: namespace, Queue: queue},
-		redis: redis,
-		timer: timer,
-
-		// NOTE: deadletter and queue are actually the same data structure, we could reuse the lua script
-		// to empty the redis list (used as queue here). all we need to do is pass the queue name as the
-		// deadletter name.
-		destroySHA: deleteDeadletterSHA,
-	}
+func (q *Queue) Name() string {
+	return queueMetaToReadyQueue(q.meta)
 }
 
-func (q *Queue) Name() string {
-	return q.name.String()
+func (q Queue) Publish(job engine.Job) (jobID string, err error) {
+	defer func() {
+		if err == nil {
+			metrics.publishJobs.WithLabelValues(q.e.redis.Name).Inc()
+			metrics.publishQueueJobs.WithLabelValues(q.e.redis.Name, q.meta.Namespace, q.meta.Queue).Inc()
+		}
+	}()
+	q.e.meta.RecordIfNotExist(q.meta)
+	q.e.monitor.MonitorIfNotExist(q.meta)
+
+	err = q.e.pool.Add(job)
+	if err != nil {
+		return job.ID(), fmt.Errorf("pool: %s", err)
+	}
+
+	if job.Delay() == 0 {
+		err = q.push(job)
+		if err != nil {
+			err = fmt.Errorf("queue: %s", err)
+		}
+		return job.ID(), err
+	}
+	err = q.e.timer.Add(q.meta.Namespace, q.meta.Queue, job.ID(), job.Delay(), job.Tries())
+	if err != nil {
+		err = fmt.Errorf("timer: %s", err)
+	}
+	return job.ID(), err
 }
 
 // Push a job into the queue, the job data format: {tries}{job id}
-func (q *Queue) Push(j engine.Job, tries uint16) error {
-	if tries == 0 {
+func (q *Queue) push(j engine.Job) error {
+	if j.Tries() == 0 {
 		return nil
 	}
-	if j.Namespace() != q.name.Namespace || j.Queue() != q.name.Queue {
+	if j.Namespace() != q.meta.Namespace || j.Queue() != q.meta.Queue {
 		// Wrong queue for the job
 		return engine.ErrWrongQueue
 	}
-	metrics.queueDirectPushJobs.WithLabelValues(q.redis.Name).Inc()
-	val := structPack(tries, j.ID())
-	return q.redis.Conn.LPush(dummyCtx, q.Name(), val).Err()
+	metrics.queueDirectPushJobs.WithLabelValues(q.e.redis.Name).Inc()
+	val := structPack(j.Tries(), j.ID())
+	return q.e.redis.Conn.LPush(dummyCtx, q.Name(), val).Err()
 }
 
-// Pop a job. If the tries > 0, add job to the "in-flight" timer with timestamp
-// set to `TTR + now()`; Or we might just move the job to "dead-letter".
-func (q *Queue) Poll(timeoutSecond, ttrSecond uint32) (jobID string, tries uint16, err error) {
-	_, jobID, tries, err = PollQueues(q.redis, q.timer, []QueueName{q.name}, timeoutSecond, ttrSecond, false)
-	return jobID, tries, err
+// Consume consume a job of the queue
+func (q Queue) Consume(ttrSecond, timeoutSecond uint32) (job engine.Job, err error) {
+	return poll(q.e, []engine.QueueMeta{q.meta}, ttrSecond, timeoutSecond)
 }
 
-// PollWithFrozenTries was same as `Poll` except would not consume tries
-func (q *Queue) PollWithFrozenTries(timeoutSecond, ttrSecond uint32) (jobID string, tries uint16, err error) {
-	_, jobID, tries, err = PollQueues(q.redis, q.timer, []QueueName{q.name}, timeoutSecond, ttrSecond, true)
-	return jobID, tries, err
+// BatchConsume consume some jobs of the queue
+func (q Queue) BatchConsume(count, ttrSecond, timeoutSecond uint32) (jobs []engine.Job, err error) {
+	jobs = make([]engine.Job, 0)
+	// timeout is 0 to fast check whether there is any job in the ready queue,
+	// if any, we wouldn't be blocked until the new job was published.
+	for i := uint32(0); i < count; i++ {
+		job, err := q.Consume(ttrSecond, 0)
+		if err != nil {
+			return jobs, err
+		}
+		if job == nil {
+			break
+		}
+		jobs = append(jobs, job)
+	}
+	// If there is no job and consumed in block mode, wait for a single job and return
+	if timeoutSecond > 0 && len(jobs) == 0 {
+		job, err := q.Consume(ttrSecond, timeoutSecond)
+		if err != nil {
+			return jobs, err
+		}
+		if job != nil {
+			jobs = append(jobs, job)
+		}
+		return jobs, nil
+	}
+	return jobs, nil
 }
 
-// Return number of the current in-queue jobs
-func (q *Queue) Size() (size int64, err error) {
-	return q.redis.Conn.LLen(dummyCtx, q.name.String()).Result()
+func (q Queue) Delete(jobID string) error {
+	err := q.e.pool.Delete(q.meta.Namespace, q.meta.Queue, jobID)
+	if err == nil {
+		elapsedMS, _ := uuid.ElapsedMilliSecondFromUniqueID(jobID)
+		metrics.jobAckElapsedMS.WithLabelValues(q.e.redis.Name, q.meta.Namespace, q.meta.Queue).Observe(float64(elapsedMS))
+	}
+	return err
+}
+
+func (q Queue) Peek(optionalJobID string) (job engine.Job, err error) {
+	jobID := optionalJobID
+	var tries uint16
+	if optionalJobID == "" {
+		jobID, tries, err = q.peek()
+		switch err {
+		case nil:
+			// continue
+		case engine.ErrNotFound:
+			return nil, engine.ErrEmptyQueue
+		default:
+			return nil, fmt.Errorf("failed to peek queue: %s", err)
+		}
+	}
+	body, ttl, err := q.e.pool.Get(q.meta.Namespace, q.meta.Queue, jobID)
+	// Tricky: we shouldn't return the not found error when the job was not found,
+	// since the job may expired(TTL was reached) and it would confuse the user, so
+	// we return the nil job instead of the not found error here. But if the `optionalJobID`
+	// was assigned we should return the not fond error.
+	if optionalJobID == "" && err == engine.ErrNotFound {
+		// return jobID with nil body if the job is expired
+		return engine.NewJobWithID(q.meta, nil, 0, 0, jobID), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return engine.NewJobWithID(q.meta, body, ttl, tries, jobID), err
 }
 
 // Peek a right-most element in the list without popping it
-func (q *Queue) Peek() (jobID string, tries uint16, err error) {
-	val, err := q.redis.Conn.LIndex(dummyCtx, q.Name(), -1).Result()
+func (q *Queue) peek() (jobID string, tries uint16, err error) {
+	val, err := q.e.redis.Conn.LIndex(dummyCtx, q.Name(), -1).Result()
 	switch err {
 	case nil:
 		// continue
@@ -117,14 +184,21 @@ func (q *Queue) Peek() (jobID string, tries uint16, err error) {
 	return jobID, tries, err
 }
 
-func (q *Queue) Destroy() (count int64, err error) {
-	poolPrefix := PoolJobKeyPrefix(q.name.Namespace, q.name.Queue)
+// Return number of the current in-queue jobs
+func (q Queue) Size() (size int64, err error) {
+	return q.e.redis.Conn.LLen(dummyCtx, q.Name()).Result()
+}
+
+func (q Queue) Destroy() (count int64, err error) {
+	q.e.meta.Remove(q.meta)
+	q.e.monitor.Remove(q.meta)
+	poolPrefix := PoolJobKeyPrefix(q.meta)
 	var batchSize int64 = 100
 	for {
-		val, err := q.redis.Conn.EvalSha(dummyCtx, q.destroySHA, []string{q.Name(), poolPrefix}, batchSize).Result()
+		val, err := q.e.redis.Conn.EvalSha(dummyCtx, q.destroySHA, []string{q.Name(), poolPrefix}, batchSize).Result()
 		if err != nil {
 			if isLuaScriptGone(err) {
-				if err := PreloadDeadLetterLuaScript(q.redis); err != nil {
+				if err := PreloadDeadLetterLuaScript(q.e.redis); err != nil {
 					logger.WithField("err", err).Error("Failed to load deadletter lua script")
 				}
 				continue
@@ -138,6 +212,110 @@ func (q *Queue) Destroy() (count int64, err error) {
 		}
 	}
 	return count, nil
+}
+
+func poll(e *Engine, metas []engine.QueueMeta, timeoutSecond, ttrSecond uint32) (job engine.Job, err error) {
+	defer func() {
+		if job != nil {
+			metrics.consumeMultiJobs.WithLabelValues(e.redis.Name).Inc()
+			metrics.consumeQueueJobs.WithLabelValues(e.redis.Name, job.Namespace(), job.Queue()).Inc()
+		}
+	}()
+	for {
+		startTime := time.Now().Unix()
+		meta, jobID, tries, err := pollReady(e, metas, timeoutSecond, ttrSecond)
+		if err != nil {
+			return nil, fmt.Errorf("queue: %s", err)
+		}
+		if jobID == "" {
+			return nil, nil
+		}
+		endTime := time.Now().Unix()
+		body, ttl, err := e.pool.Get(meta.Namespace, meta.Queue, jobID)
+		switch err {
+		case nil:
+			// no-op
+		case engine.ErrNotFound:
+			timeoutSecond = timeoutSecond - uint32(endTime-startTime)
+			if timeoutSecond > 0 {
+				// This can happen if the job's delay time is larger than job's ttl,
+				// so when the timer fires the job ID, the actual job data is long gone.
+				// When so, we should use what's left in the timeoutSecond to keep on polling.
+				//
+				// Other scene is: A consumer DELETE the job _after_ TTR, and B consumer is
+				// polling on the queue, and get notified to retry the job, but only to find that
+				// job was deleted by A.
+				continue
+			} else {
+				return nil, nil
+			}
+		default:
+			return nil, fmt.Errorf("pool: %s", err)
+		}
+		job = engine.NewJobWithID(*meta, body, ttl, tries, jobID)
+		metrics.jobElapsedMS.WithLabelValues(e.redis.Name, meta.Namespace, meta.Queue).Observe(float64(job.ElapsedMS()))
+		return job, nil
+	}
+}
+
+func pollReady(e *Engine, metas []engine.QueueMeta, timeoutSecond, ttrSecond uint32) (meta *engine.QueueMeta, jobID string, retries uint16, err error) {
+	defer func() {
+		if jobID != "" {
+			metrics.queuePopJobs.WithLabelValues(e.redis.Name).Inc()
+		}
+	}()
+
+	var val []string
+	keys := make([]string, len(metas))
+	for i, meta := range metas {
+		keys[i] = queueMetaToReadyQueue(meta)
+	}
+	if timeoutSecond > 0 { // Blocking poll
+		val, err = e.redis.Conn.BRPop(dummyCtx, time.Duration(timeoutSecond)*time.Second, keys...).Result()
+	} else { // Non-Blocking fetch
+		val = make([]string, 2) // Just to be coherent with BRPop return values
+		val[0], val[1], err = popMultiQueues(e.redis, keys)
+	}
+	switch err {
+	case nil:
+		// continue
+	case go_redis.Nil:
+		logger.Debug("Job not found")
+		return nil, "", 0, nil
+	default:
+		logger.WithField("err", err).Error("Failed to pop job from queue")
+		return nil, "", 0, err
+	}
+	meta, err = readyQueueToQueueMeta(val[0])
+	if err != nil {
+		logger.WithField("err", err).Error("Failed to decode queue meta")
+		return nil, "", 0, err
+	}
+	tries, jobID, err := structUnpack(val[1])
+	if err != nil {
+		logger.WithField("err", err).Error("Failed to unpack lua struct data")
+		return nil, "", 0, err
+	}
+
+	if tries == 0 {
+		logger.WithFields(logrus.Fields{
+			"jobID": jobID,
+			"ttr":   ttrSecond,
+			"meta":  meta,
+		}).Error("Job with tries == 0 appeared")
+		return nil, "", 0, fmt.Errorf("Job %s with tries == 0 appeared", jobID)
+	}
+	err = e.timer.Add(meta.Namespace, meta.Queue, jobID, ttrSecond, tries) // NOTE: tries is not decreased
+	if err != nil {
+		logger.WithFields(logrus.Fields{
+			"err":   err,
+			"jobID": jobID,
+			"ttr":   ttrSecond,
+			"meta":  meta,
+		}).Error("Failed to add job to timer for ttr")
+		return meta, jobID, tries, err
+	}
+	return meta, jobID, tries, nil
 }
 
 func PreloadQueueLuaScript(redis *RedisInstance) error {
@@ -177,70 +355,6 @@ func popMultiQueues(redis *RedisInstance, queueNames []string) (string, string, 
 		return "", "", go_redis.Nil
 	}
 	return queueName, value, nil
-}
-
-// Poll from multiple queues using blocking method; OR pop a job from one queue using non-blocking method
-func PollQueues(redis *RedisInstance, timer *Timer, queueNames []QueueName, timeoutSecond, ttrSecond uint32, freezeTries bool) (queueName *QueueName, jobID string, retries uint16, err error) {
-	defer func() {
-		if jobID != "" {
-			metrics.queuePopJobs.WithLabelValues(redis.Name).Inc()
-		}
-	}()
-
-	var val []string
-	keys := make([]string, len(queueNames))
-	for i, k := range queueNames {
-		keys[i] = k.String()
-	}
-	if timeoutSecond > 0 { // Blocking poll
-		val, err = redis.Conn.BRPop(dummyCtx, time.Duration(timeoutSecond)*time.Second, keys...).Result()
-	} else { // Non-Blocking fetch
-		val = make([]string, 2) // Just to be coherent with BRPop return values
-		val[0], val[1], err = popMultiQueues(redis, keys)
-	}
-	switch err {
-	case nil:
-		// continue
-	case go_redis.Nil:
-		logger.Debug("Job not found")
-		return nil, "", 0, nil
-	default:
-		logger.WithField("err", err).Error("Failed to pop job from queue")
-		return nil, "", 0, err
-	}
-	queueName = &QueueName{}
-	if err := queueName.Decode(val[0]); err != nil {
-		logger.WithField("err", err).Error("Failed to decode queue name")
-		return nil, "", 0, err
-	}
-	tries, jobID, err := structUnpack(val[1])
-	if err != nil {
-		logger.WithField("err", err).Error("Failed to unpack lua struct data")
-		return nil, "", 0, err
-	}
-
-	if tries == 0 {
-		logger.WithFields(logrus.Fields{
-			"jobID": jobID,
-			"ttr":   ttrSecond,
-			"queue": queueName.String(),
-		}).Error("Job with tries == 0 appeared")
-		return nil, "", 0, fmt.Errorf("Job %s with tries == 0 appeared", jobID)
-	}
-	if !freezeTries {
-		tries = tries - 1
-	}
-	err = timer.Add(queueName.Namespace, queueName.Queue, jobID, ttrSecond, tries) // NOTE: tries is not decreased
-	if err != nil {
-		logger.WithFields(logrus.Fields{
-			"err":   err,
-			"jobID": jobID,
-			"ttr":   ttrSecond,
-			"queue": queueName.String(),
-		}).Error("Failed to add job to timer for ttr")
-		return queueName, jobID, tries, err
-	}
-	return queueName, jobID, tries, nil
 }
 
 // Pack (tries, jobID) into lua struct pack of format "HHHc0", in lua this can be done:

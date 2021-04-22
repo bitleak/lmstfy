@@ -24,12 +24,12 @@ func PoolJobKey(j engine.Job) string {
 	return join(PoolPrefix, j.Namespace(), j.Queue(), j.ID())
 }
 
-func PoolJobKey2(namespace, queue, jobID string) string {
-	return join(PoolPrefix, namespace, queue, jobID)
+func PoolJobKey2(meta engine.QueueMeta, jobID string) string {
+	return join(PoolPrefix, meta.Namespace, meta.Queue, jobID)
 }
 
-func PoolJobKeyPrefix(namespace, queue string) string {
-	return join(PoolPrefix, namespace, queue)
+func PoolJobKeyPrefix(meta engine.QueueMeta) string {
+	return join(PoolPrefix, meta.Namespace, meta.Queue)
 }
 
 func (p *Pool) Add(j engine.Job) error {

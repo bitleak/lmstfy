@@ -26,7 +26,7 @@ func publishWithThrottler(namespace, queue, token string) error {
 		return fmt.Errorf("create request err: %s", err.Error())
 	}
 	c, e, resp := ginTest(req)
-	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine, handlers.Throttle(handlers.ThrottleActionProduce))
+	e.Use(handlers.ValidateParams, handlers.SetupEngine, handlers.Throttle(handlers.ThrottleActionProduce))
 	e.PUT("/api/:namespace/:queue", handlers.Publish)
 	e.HandleContext(c)
 	if resp.Code != http.StatusCreated {
@@ -46,7 +46,7 @@ func consumeWithThrottler(namespace, queue, token string) error {
 		return fmt.Errorf("create request err: %s", err.Error())
 	}
 	c, e, resp := ginTest(req)
-	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine, handlers.Throttle(handlers.ThrottleActionConsume))
+	e.Use(handlers.ValidateParams, handlers.SetupEngine, handlers.Throttle(handlers.ThrottleActionConsume))
 	e.GET("/api/:namespace/:queue", handlers.Consume)
 	e.HandleContext(c)
 	if resp.Code != http.StatusOK {

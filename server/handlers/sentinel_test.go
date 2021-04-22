@@ -27,7 +27,7 @@ func TestSentinel_Publish(t *testing.T) {
 		t.Fatalf("Failed to create request")
 	}
 	c, e, resp := ginTest(req)
-	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
+	e.Use(handlers.ValidateParams, handlers.SetupEngine)
 	e.PUT("/api/:namespace/:queue", handlers.Publish)
 	e.HandleContext(c)
 	if resp.Code != http.StatusCreated {

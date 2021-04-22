@@ -1,6 +1,7 @@
 package redis
 
 import (
+	"github.com/bitleak/lmstfy/engine"
 	"sync"
 
 	"github.com/sirupsen/logrus"
@@ -29,34 +30,34 @@ func NewMetaManager(redis *RedisInstance) *MetaManager {
 	return m
 }
 
-func (m *MetaManager) RecordIfNotExist(namespace, queue string) {
+func (m *MetaManager) RecordIfNotExist(meta engine.QueueMeta) {
 	m.rwmu.RLock()
-	if m.nsCache[namespace] && m.qCache[join(namespace, queue)] {
+	if m.nsCache[meta.Namespace] && m.qCache[join(meta.Namespace, meta.Queue)] {
 		m.rwmu.RUnlock()
 		return
 	}
 	m.rwmu.RUnlock()
 
 	m.rwmu.Lock()
-	if m.nsCache[namespace] {
-		m.qCache[join(namespace, queue)] = true
+	if m.nsCache[meta.Namespace] {
+		m.qCache[join(meta.Namespace, meta.Queue)] = true
 		m.rwmu.Unlock()
-		m.redis.Conn.HSet(dummyCtx, join(MetaPrefix, "ns", namespace), queue, 1)
+		m.redis.Conn.HSet(dummyCtx, join(MetaPrefix, "ns", meta.Namespace), meta.Queue, 1)
 	} else {
-		m.nsCache[namespace] = true
-		m.qCache[join(namespace, queue)] = true
+		m.nsCache[meta.Namespace] = true
+		m.qCache[join(meta.Namespace, meta.Queue)] = true
 		m.rwmu.Unlock()
-		m.redis.Conn.HSet(dummyCtx, join(MetaPrefix, "ns"), namespace, 1)
-		m.redis.Conn.HSet(dummyCtx, join(MetaPrefix, "ns", namespace), queue, 1)
+		m.redis.Conn.HSet(dummyCtx, join(MetaPrefix, "ns"), meta.Namespace, 1)
+		m.redis.Conn.HSet(dummyCtx, join(MetaPrefix, "ns", meta.Namespace), meta.Queue, 1)
 	}
 }
 
-func (m *MetaManager) Remove(namespace, queue string) {
+func (m *MetaManager) Remove(meta engine.QueueMeta) {
 	m.rwmu.Lock()
-	delete(m.nsCache, namespace)
-	delete(m.qCache, join(namespace, queue))
+	delete(m.nsCache, meta.Namespace)
+	delete(m.qCache, join(meta.Namespace, meta.Queue))
 	m.rwmu.Unlock()
-	m.redis.Conn.HDel(dummyCtx, join(MetaPrefix, "ns", namespace), queue)
+	m.redis.Conn.HDel(dummyCtx, join(MetaPrefix, "ns", meta.Namespace), meta.Queue)
 }
 
 func (m *MetaManager) ListNamespaces() (namespaces []string, err error) {

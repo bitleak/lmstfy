@@ -30,7 +30,7 @@ func parseToken(rawToken string) (pool, token string) {
 	return config.DefaultPoolName, rawToken
 }
 
-func SetupQueueEngine(c *gin.Context) {
+func SetupEngine(c *gin.Context) {
 	pool, token := parseToken(getToken(c))
 	c.Set("pool", pool)
 	c.Set("token", token)
@@ -41,6 +41,43 @@ func SetupQueueEngine(c *gin.Context) {
 		return
 	}
 	c.Set("engine", e)
+}
+
+func SetupQueue(c *gin.Context) {
+	e := c.MustGet("engine").(engine.Engine)
+	c.Set("queue", e.Queue(engine.QueueMeta{
+		Namespace: c.Param("namespace"),
+		Queue:     c.Param("queue"),
+	}))
+}
+
+func SetupQueues(c *gin.Context) {
+	e := c.MustGet("engine").(engine.Engine)
+	queues := c.Param("queue") // NOTE: param name should be `queues`, refer to comment in route.go
+	namespace := c.Param("namespace")
+	var metaList []engine.QueueMeta
+	for _, q := range strings.Split(queues, ",") {
+		if q == "" {
+			continue
+		}
+		metaList = append(metaList, engine.QueueMeta{
+			Namespace: namespace,
+			Queue:     q,
+		})
+	}
+	if len(metaList) == 0 {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid queue name(s)"})
+		return
+	}
+	c.Set("queue", e.Queues(metaList))
+}
+
+func SetupDeadLetter(c *gin.Context) {
+	e := c.MustGet("engine").(engine.Engine)
+	c.Set("deadletter", e.DeadLetter(engine.QueueMeta{
+		Namespace: c.Param("namespace"),
+		Queue:     c.Param("queue"),
+	}))
 }
 
 func ValidateToken(c *gin.Context) {

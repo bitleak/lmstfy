@@ -2,14 +2,12 @@ package handlers
 
 import (
 	"encoding/json"
-	"math"
-	"net/http"
-	"strconv"
-	"strings"
-
 	"github.com/bitleak/lmstfy/engine"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"math"
+	"net/http"
+	"strconv"
 )
 
 const (
@@ -24,14 +22,14 @@ const (
 //  - tries: uint16
 func Publish(c *gin.Context) {
 	logger := GetHTTPLogger(c)
-	e := c.MustGet("engine").(engine.Engine)
+	q := c.MustGet("queue").(engine.Queue)
 	namespace := c.Param("namespace")
 	queue := c.Param("queue")
 	jobID := c.Param("job_id")
 
 	if jobID != "" {
 		// delete job whatever other publish parameters
-		if err := e.Delete(namespace, queue, jobID); err != nil {
+		if err := q.Delete(jobID); err != nil {
 			logger.WithFields(logrus.Fields{
 				"err":       err,
 				"namespace": namespace,
@@ -83,8 +81,11 @@ func Publish(c *gin.Context) {
 		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "body too large"})
 		return
 	}
-
-	jobID, err = e.Publish(namespace, queue, body, uint32(ttlSecond), uint32(delaySecond), uint16(tries))
+	job := engine.NewJob(engine.QueueMeta{
+		Namespace: namespace,
+		Queue:     queue,
+	}, body, uint32(ttlSecond), uint32(delaySecond), uint16(tries))
+	jobID, err = q.Publish(job)
 	if err != nil {
 		logger.WithFields(logrus.Fields{
 			"err":       err,
@@ -116,7 +117,7 @@ func Publish(c *gin.Context) {
 //  - tries: uint16
 func PublishBulk(c *gin.Context) {
 	logger := GetHTTPLogger(c)
-	e := c.MustGet("engine").(engine.Engine)
+	q := c.MustGet("queue").(engine.Queue)
 	namespace := c.Param("namespace")
 	queue := c.Param("queue")
 
@@ -156,30 +157,34 @@ func PublishBulk(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read body"})
 		return
 	}
-	jobs := make([]json.RawMessage, 0)
-	if err := json.Unmarshal(body, &jobs); err != nil {
+	jobDatas := make([]json.RawMessage, 0)
+	if err := json.Unmarshal(body, &jobDatas); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "request body should be an array of objects"})
 		return
 	}
-	count := len(jobs)
+	count := len(jobDatas)
 	if count == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "no jobs"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "no jobDatas"})
 		return
 	}
 	if count > maxBulkPublishSize {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "too many jobs"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "too many jobDatas"})
 		return
 	}
-	for _, job := range jobs {
-		if len(job) > math.MaxUint16 { // Larger than 64 KB
+	for _, jobData := range jobDatas {
+		if len(jobData) > math.MaxUint16 { // Larger than 64 KB
 			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "job too large"})
 			return
 		}
 	}
 
 	jobIDs := make([]string, 0)
-	for _, job := range jobs {
-		jobID, err := e.Publish(namespace, queue, job, uint32(ttlSecond), uint32(delaySecond), uint16(tries))
+	for _, jobData := range jobDatas {
+		job := engine.NewJob(engine.QueueMeta{
+			Namespace: namespace,
+			Queue:     queue,
+		}, jobData, uint32(ttlSecond), uint32(delaySecond), uint16(tries))
+		jobID, err := q.Publish(job)
 		if err != nil {
 			logger.WithFields(logrus.Fields{
 				"err":       err,
@@ -215,16 +220,8 @@ func PublishBulk(c *gin.Context) {
 // so I decide to use "," as the separator of queue names
 func Consume(c *gin.Context) {
 	logger := GetHTTPLogger(c)
-	e := c.MustGet("engine").(engine.Engine)
+	q := c.MustGet("queue").(engine.Consumable)
 	namespace := c.Param("namespace")
-	queues := c.Param("queue") // NOTE: param name should be `queues`, refer to comment in route.go
-	var queueList []string
-	for _, q := range strings.Split(queues, ",") {
-		if q == "" {
-			continue
-		}
-		queueList = append(queueList, q)
-	}
 
 	ttrSecondStr := c.DefaultQuery("ttr", DefaultTTR) // Default to 1 minute
 	ttrSecond, err := strconv.ParseUint(ttrSecondStr, 10, 32)
@@ -247,19 +244,8 @@ func Consume(c *gin.Context) {
 		return
 	}
 
-	freezeTries, err := strconv.ParseBool(c.DefaultQuery("freeze_tries", "false"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid freeze_tries value"})
-		return
-	}
-
-	if len(queueList) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid queue name(s)"})
-		return
-	}
-
 	if count > 1 {
-		jobs, err := e.BatchConsume(namespace, queueList, uint32(count), uint32(ttrSecond), uint32(timeoutSecond), freezeTries)
+		jobs, err := q.BatchConsume(uint32(count), uint32(ttrSecond), uint32(timeoutSecond))
 		if err != nil {
 			logger.WithField("err", err).Error("Failed to batch consume")
 		}
@@ -290,7 +276,7 @@ func Consume(c *gin.Context) {
 		c.JSON(http.StatusOK, data)
 		return
 	}
-	job, err := e.Consume(namespace, queueList, uint32(ttrSecond), uint32(timeoutSecond), freezeTries)
+	job, err := q.Consume(uint32(ttrSecond), uint32(timeoutSecond))
 	if err != nil {
 		logger.WithField("err", err).Error("Failed to consume")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
@@ -322,12 +308,12 @@ func Consume(c *gin.Context) {
 // DELETE /:namespace/:queue/job/:job_id
 func Delete(c *gin.Context) {
 	logger := GetHTTPLogger(c)
-	e := c.MustGet("engine").(engine.Engine)
+	q := c.MustGet("queue").(engine.Queue)
 	namespace := c.Param("namespace")
 	queue := c.Param("queue")
 	jobID := c.Param("job_id")
 
-	if err := e.Delete(namespace, queue, jobID); err != nil {
+	if err := q.Delete(jobID); err != nil {
 		logger.WithFields(logrus.Fields{
 			"err":       err,
 			"namespace": namespace,
@@ -343,11 +329,11 @@ func Delete(c *gin.Context) {
 // GET /:namespace/:queue/peek
 func PeekQueue(c *gin.Context) {
 	logger := GetHTTPLogger(c)
-	e := c.MustGet("engine").(engine.Engine)
+	q := c.MustGet("queue").(engine.Queue)
 	namespace := c.Param("namespace")
 	queue := c.Param("queue")
 
-	if job, err := e.Peek(namespace, queue, ""); err != nil {
+	if job, err := q.Peek(""); err != nil {
 		switch err {
 		case engine.ErrNotFound:
 			fallthrough
@@ -379,12 +365,12 @@ func PeekQueue(c *gin.Context) {
 // GET /:namespace/:queue/job/:job_id
 func PeekJob(c *gin.Context) {
 	logger := GetHTTPLogger(c)
-	e := c.MustGet("engine").(engine.Engine)
+	q := c.MustGet("queue").(engine.Queue)
 	namespace := c.Param("namespace")
 	queue := c.Param("queue")
 	jobID := c.Param("job_id")
 
-	if job, err := e.Peek(namespace, queue, jobID); err != nil {
+	if job, err := q.Peek(jobID); err != nil {
 		if err == engine.ErrNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": "job not found"})
 			return
@@ -414,11 +400,11 @@ func PeekJob(c *gin.Context) {
 // GET /:namespace/:queue/size
 func Size(c *gin.Context) {
 	logger := GetHTTPLogger(c)
-	e := c.MustGet("engine").(engine.Engine)
+	q := c.MustGet("queue").(engine.Queue)
 	namespace := c.Param("namespace")
 	queue := c.Param("queue")
 
-	size, err := e.Size(namespace, queue)
+	size, err := q.Size()
 	if err != nil {
 		logger.WithFields(logrus.Fields{
 			"err":       err,
@@ -439,11 +425,11 @@ func Size(c *gin.Context) {
 // GET /:namespace/:queue/deadletter/size
 func GetDeadLetterSize(c *gin.Context) {
 	logger := GetHTTPLogger(c)
-	e := c.MustGet("engine").(engine.Engine)
+	dl := c.MustGet("deadletter").(engine.DeadLetter)
 	namespace := c.Param("namespace")
 	queue := c.Param("queue")
 
-	size, err := e.SizeOfDeadLetter(namespace, queue)
+	size, err := dl.Size()
 	if err != nil {
 		logger.WithFields(logrus.Fields{
 			"err":       err,
@@ -464,11 +450,11 @@ func GetDeadLetterSize(c *gin.Context) {
 // Get the first job in the deadletter
 func PeekDeadLetter(c *gin.Context) {
 	logger := GetHTTPLogger(c)
-	e := c.MustGet("engine").(engine.Engine)
+	dl := c.MustGet("deadletter").(engine.DeadLetter)
 	namespace := c.Param("namespace")
 	queue := c.Param("queue")
 
-	size, jobID, err := e.PeekDeadLetter(namespace, queue)
+	size, jobID, err := dl.Peek()
 	switch err {
 	case nil, engine.ErrNotFound:
 		// continue
@@ -493,7 +479,7 @@ func PeekDeadLetter(c *gin.Context) {
 // Respawn job(s) in the deadletter
 func RespawnDeadLetter(c *gin.Context) {
 	logger := GetHTTPLogger(c)
-	e := c.MustGet("engine").(engine.Engine)
+	dl := c.MustGet("deadletter").(engine.DeadLetter)
 	namespace := c.Param("namespace")
 	queue := c.Param("queue")
 	limitStr := c.DefaultQuery("limit", "1")
@@ -510,7 +496,7 @@ func RespawnDeadLetter(c *gin.Context) {
 		return
 	}
 
-	count, err := e.RespawnDeadLetter(namespace, queue, limit, ttlSecond)
+	count, err := dl.Respawn(limit, ttlSecond)
 	if err != nil {
 		logger.WithFields(logrus.Fields{
 			"limit":     limitStr,
@@ -538,7 +524,7 @@ func RespawnDeadLetter(c *gin.Context) {
 // Delete job(s) in the deadletter
 func DeleteDeadLetter(c *gin.Context) {
 	logger := GetHTTPLogger(c)
-	e := c.MustGet("engine").(engine.Engine)
+	dl := c.MustGet("deadletter").(engine.DeadLetter)
 	namespace := c.Param("namespace")
 	queue := c.Param("queue")
 	limitStr := c.DefaultQuery("limit", "1")
@@ -549,7 +535,7 @@ func DeleteDeadLetter(c *gin.Context) {
 		return
 	}
 
-	count, err := e.DeleteDeadLetter(namespace, queue, limit)
+	count, err := dl.Delete(limit)
 	if err != nil {
 		logger.WithFields(logrus.Fields{
 			"limit":     limitStr,
@@ -572,11 +558,11 @@ func DeleteDeadLetter(c *gin.Context) {
 
 func DestroyQueue(c *gin.Context) {
 	logger := GetHTTPLogger(c)
-	e := c.MustGet("engine").(engine.Engine)
+	q := c.MustGet("queue").(engine.Queue)
 	namespace := c.Param("namespace")
 	queue := c.Param("queue")
 
-	count, err := e.Destroy(namespace, queue)
+	count, err := q.Destroy()
 	if err != nil {
 		logger.WithFields(logrus.Fields{
 			"count":     count,

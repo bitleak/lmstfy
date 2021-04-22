@@ -29,7 +29,7 @@ func TestPublish(t *testing.T) {
 		t.Fatalf("Failed to create request")
 	}
 	c, e, resp := ginTest(req)
-	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
+	e.Use(handlers.ValidateParams, handlers.SetupEngine)
 	e.PUT("/api/:namespace/:queue", handlers.Publish)
 	e.HandleContext(c)
 	if resp.Code != http.StatusCreated {
@@ -49,7 +49,7 @@ func TestConsume(t *testing.T) {
 		t.Fatalf("Failed to create request")
 	}
 	c, e, resp := ginTest(req)
-	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
+	e.Use(handlers.ValidateParams, handlers.SetupEngine)
 	e.GET("/api/:namespace/:queue", handlers.Consume)
 	e.HandleContext(c)
 	if resp.Code != http.StatusOK {
@@ -86,7 +86,7 @@ func TestNoBlockingConsumeMulti(t *testing.T) {
 		t.Fatalf("Failed to create request")
 	}
 	c, e, resp := ginTest(req)
-	e.Use(handlers.ValidateMultiConsume, handlers.SetupQueueEngine)
+	e.Use(handlers.ValidateMultiConsume, handlers.SetupEngine)
 	e.GET("/api/:namespace/:queue", handlers.Consume)
 	e.HandleContext(c)
 	if resp.Code != http.StatusOK {
@@ -119,7 +119,7 @@ func TestConsumeMulti(t *testing.T) {
 		t.Fatalf("Failed to create request")
 	}
 	c, e, resp := ginTest(req)
-	e.Use(handlers.ValidateMultiConsume, handlers.SetupQueueEngine)
+	e.Use(handlers.ValidateMultiConsume, handlers.SetupEngine)
 	e.GET("/api/:namespace/:queue", handlers.Consume)
 	e.HandleContext(c)
 	if resp.Code != http.StatusOK {
@@ -150,7 +150,7 @@ func TestDelete(t *testing.T) {
 		t.Fatalf("Failed to create request")
 	}
 	c, e, resp := ginTest(req)
-	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
+	e.Use(handlers.ValidateParams, handlers.SetupEngine)
 	e.DELETE("/api/:namespace/:queue/job/:job_id", handlers.Delete)
 	e.HandleContext(c)
 	if resp.Code != http.StatusNoContent {
@@ -172,7 +172,7 @@ func TestPeekQueue(t *testing.T) {
 		t.Fatalf("Failed to create request")
 	}
 	c, e, resp := ginTest(req)
-	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
+	e.Use(handlers.ValidateParams, handlers.SetupEngine)
 	e.GET("/api/:namespace/:queue/peek", handlers.PeekQueue)
 	e.HandleContext(c)
 	if resp.Code != http.StatusOK {
@@ -205,7 +205,7 @@ func TestSize(t *testing.T) {
 		t.Fatalf("Failed to create request")
 	}
 	c, e, resp := ginTest(req)
-	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
+	e.Use(handlers.ValidateParams, handlers.SetupEngine)
 	e.GET("/api/:namespace/:queue/size", handlers.Size)
 	e.HandleContext(c)
 	if resp.Code != http.StatusOK {
@@ -237,7 +237,7 @@ func TestPeekJob(t *testing.T) {
 		t.Fatalf("Failed to create request")
 	}
 	c, e, resp := ginTest(req)
-	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
+	e.Use(handlers.ValidateParams, handlers.SetupEngine)
 	e.GET("/api/:namespace/:queue/job/:job_id", handlers.PeekJob)
 	e.HandleContext(c)
 	if resp.Code != http.StatusOK {
@@ -276,7 +276,7 @@ func TestPeekDeadLetter(t *testing.T) {
 		t.Fatalf("Failed to create request")
 	}
 	c, e, resp := ginTest(req)
-	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
+	e.Use(handlers.ValidateParams, handlers.SetupEngine)
 	e.GET("/api/:namespace/:queue/deadletter", handlers.PeekDeadLetter)
 	e.HandleContext(c)
 	if resp.Code != http.StatusOK {
@@ -300,7 +300,7 @@ func TestRespawnDeadLetter(t *testing.T) {
 		t.Fatalf("Failed to create request")
 	}
 	c, e, resp := ginTest(req)
-	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
+	e.Use(handlers.ValidateParams, handlers.SetupEngine)
 	e.PUT("/api/:namespace/:queue/deadletter", handlers.RespawnDeadLetter)
 	e.HandleContext(c)
 	if resp.Code != http.StatusOK {
@@ -329,7 +329,7 @@ func TestDeleteDeadLetter(t *testing.T) {
 		t.Fatalf("Failed to create request")
 	}
 	c, e, resp := ginTest(req)
-	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
+	e.Use(handlers.ValidateParams, handlers.SetupEngine)
 	e.DELETE("/api/:namespace/:queue/deadletter", handlers.DeleteDeadLetter)
 	e.HandleContext(c)
 	if resp.Code != http.StatusNoContent {
@@ -347,7 +347,7 @@ func TestDestroyQueue(t *testing.T) {
 		t.Fatalf("Failed to create request")
 	}
 	c, e, resp := ginTest(req)
-	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
+	e.Use(handlers.ValidateParams, handlers.SetupEngine)
 	e.DELETE("/api/:namespace/:queue", handlers.DestroyQueue)
 	e.HandleContext(c)
 	if resp.Code != http.StatusNoContent {
@@ -373,7 +373,7 @@ func TestBatchConsume(t *testing.T) {
 		t.Fatalf("Failed to create request")
 	}
 	c, e, resp := ginTest(req)
-	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
+	e.Use(handlers.ValidateParams, handlers.SetupEngine)
 	e.GET("/api/:namespace/:queue", handlers.Consume)
 	e.HandleContext(c)
 	if resp.Code != http.StatusOK {
@@ -402,7 +402,7 @@ func TestBatchConsume(t *testing.T) {
 	}
 
 	c, e, resp = ginTest(req)
-	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
+	e.Use(handlers.ValidateParams, handlers.SetupEngine)
 	e.GET("/api/:namespace/:queue", handlers.Consume)
 	e.HandleContext(c)
 	if resp.Code != http.StatusOK {
@@ -422,7 +422,7 @@ func TestBatchConsume(t *testing.T) {
 	}
 
 	c, e, resp = ginTest(req)
-	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
+	e.Use(handlers.ValidateParams, handlers.SetupEngine)
 	e.GET("/api/:namespace/:queue", handlers.Consume)
 	e.HandleContext(c)
 	if resp.Code != http.StatusNotFound {
@@ -443,7 +443,7 @@ func TestSizeOfDeadLetter(t *testing.T) {
 		t.Fatalf("Failed to create request")
 	}
 	c, e, resp := ginTest(req)
-	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
+	e.Use(handlers.ValidateParams, handlers.SetupEngine)
 	e.GET("/api/:namespace/:queue/deadletter/size", handlers.GetDeadLetterSize)
 	e.HandleContext(c)
 	if resp.Code != http.StatusOK {
@@ -477,7 +477,7 @@ func TestRePublish(t *testing.T) {
 		t.Fatalf("Failed to create request")
 	}
 	c, e, resp := ginTest(req)
-	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
+	e.Use(handlers.ValidateParams, handlers.SetupEngine)
 	e.PUT("/api/:namespace/:queue/job/:job_id", handlers.Publish)
 	e.HandleContext(c)
 	if resp.Code != http.StatusCreated {
@@ -512,7 +512,7 @@ func TestPublishBulk(t *testing.T) {
 		t.Fatalf("Failed to create request")
 	}
 	c, e, resp := ginTest(req)
-	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
+	e.Use(handlers.ValidateParams, handlers.SetupEngine)
 	e.PUT("/api/:namespace/:queue/bulk", handlers.PublishBulk)
 	e.HandleContext(c)
 	if resp.Code != http.StatusCreated {
@@ -559,7 +559,7 @@ func TestConsumeWithFreezeTries(t *testing.T) {
 		t.Fatalf("Failed to create request")
 	}
 	c, e, resp := ginTest(req)
-	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
+	e.Use(handlers.ValidateParams, handlers.SetupEngine)
 	e.GET("/api/:namespace/:queue", handlers.Consume)
 	e.HandleContext(c)
 	if resp.Code != http.StatusOK {

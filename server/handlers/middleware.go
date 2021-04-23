@@ -6,10 +6,11 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/bitleak/lmstfy/auth"
 	"github.com/bitleak/lmstfy/config"
 	"github.com/bitleak/lmstfy/engine"
-	"github.com/gin-gonic/gin"
 )
 
 func getToken(c *gin.Context) (token string) {

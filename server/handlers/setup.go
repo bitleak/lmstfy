@@ -3,9 +3,10 @@ package handlers
 import (
 	"strconv"
 
-	"github.com/bitleak/lmstfy/config"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+
+	"github.com/bitleak/lmstfy/config"
 )
 
 var _logger *logrus.Logger

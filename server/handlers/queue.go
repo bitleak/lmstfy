@@ -2,12 +2,14 @@ package handlers
 
 import (
 	"encoding/json"
-	"github.com/bitleak/lmstfy/engine"
-	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 	"math"
 	"net/http"
 	"strconv"
+
+	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
+
+	"github.com/bitleak/lmstfy/engine"
 )
 
 const (

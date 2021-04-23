@@ -2,12 +2,13 @@ package redis
 
 import (
 	"fmt"
-	"github.com/bitleak/lmstfy/engine"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/bitleak/lmstfy/engine"
 )
 
 type Metrics struct {

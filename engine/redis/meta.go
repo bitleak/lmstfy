@@ -1,10 +1,11 @@
 package redis
 
 import (
-	"github.com/bitleak/lmstfy/engine"
 	"sync"
 
 	"github.com/sirupsen/logrus"
+
+	"github.com/bitleak/lmstfy/engine"
 )
 
 /**

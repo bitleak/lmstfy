@@ -5,9 +5,9 @@ import (
 )
 
 type Engine interface {
-	Queue(meta QueueMeta) Queue
-	Queues(metas []QueueMeta) Queues
-	DeadLetter(meta QueueMeta) DeadLetter
+	Queue(meta QueueMeta) (Queue, error)
+	Queues(metas []QueueMeta) (Queues, error)
+	DeadLetter(meta QueueMeta) (DeadLetter, error)
 	Shutdown()
 	DumpInfo(output io.Writer) error
 }

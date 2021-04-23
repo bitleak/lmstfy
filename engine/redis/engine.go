@@ -59,7 +59,7 @@ func NewEngine(redisName string, conn *go_redis.Client) (engine.Engine, error) {
 	}, nil
 }
 
-func (e *Engine) Queue(meta engine.QueueMeta) engine.Queue {
+func (e *Engine) Queue(meta engine.QueueMeta) (engine.Queue, error) {
 	return &Queue{
 		meta: meta,
 		e:    e,
@@ -67,20 +67,20 @@ func (e *Engine) Queue(meta engine.QueueMeta) engine.Queue {
 		// to empty the redis list (used as queue here). all we need to do is pass the queue name as the
 		// deadletter name.
 		destroySHA: deleteDeadletterSHA,
-	}
+	}, nil
 }
 
-func (e *Engine) Queues(metas []engine.QueueMeta) engine.Queues {
+func (e *Engine) Queues(metas []engine.QueueMeta) (engine.Queues, error) {
 	return &Queues{
 		meta: metas,
 		e:    e,
-	}
+	}, nil
 }
-func (e *Engine) DeadLetter(meta engine.QueueMeta) engine.DeadLetter {
+func (e *Engine) DeadLetter(meta engine.QueueMeta) (engine.DeadLetter, error) {
 	return &DeadLetter{
 		meta:  meta,
 		redis: e.redis,
-	}
+	}, nil
 }
 
 func (e *Engine) Shutdown() {

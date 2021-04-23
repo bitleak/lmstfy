@@ -45,10 +45,17 @@ func SetupEngine(c *gin.Context) {
 
 func SetupQueue(c *gin.Context) {
 	e := c.MustGet("engine").(engine.Engine)
-	c.Set("queue", e.Queue(engine.QueueMeta{
+	meta := engine.QueueMeta{
 		Namespace: c.Param("namespace"),
 		Queue:     c.Param("queue"),
-	}))
+	}
+	queue, err := e.Queue(meta)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+	c.Set("meta", meta)
+	c.Set("queue", queue)
 }
 
 func SetupQueues(c *gin.Context) {
@@ -69,15 +76,28 @@ func SetupQueues(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid queue name(s)"})
 		return
 	}
-	c.Set("queue", e.Queues(metaList))
+	queue, err := e.Queues(metaList)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+	c.Set("meta", metaList)
+	c.Set("queue", queue)
 }
 
 func SetupDeadLetter(c *gin.Context) {
 	e := c.MustGet("engine").(engine.Engine)
-	c.Set("deadletter", e.DeadLetter(engine.QueueMeta{
+	meta := engine.QueueMeta{
 		Namespace: c.Param("namespace"),
 		Queue:     c.Param("queue"),
-	}))
+	}
+	dl, err := e.DeadLetter(meta)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+	c.Set("meta", meta)
+	c.Set("deadletter", dl)
 }
 
 func ValidateToken(c *gin.Context) {

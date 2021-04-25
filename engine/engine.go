@@ -6,8 +6,8 @@ import (
 
 type Engine interface {
 	Publish(namespace, queue string, body []byte, ttlSecond, delaySecond uint32, tries uint16) (jobID string, err error)
-	Consume(namespace string, queues []string, ttrSecond, timeoutSecond uint32, freezeTries bool) (job Job, err error)
-	BatchConsume(namespace string, queues []string, count, ttrSecond, timeoutSecond uint32, freezeTries bool) (jobs []Job, err error)
+	Consume(namespace string, queues []string, ttrSecond, timeoutSecond uint32) (job Job, err error)
+	BatchConsume(namespace string, queues []string, count, ttrSecond, timeoutSecond uint32) (jobs []Job, err error)
 	Delete(namespace, queue, jobID string) error
 	Peek(namespace, queue, optionalJobID string) (job Job, err error)
 	Size(namespace, queue string) (size int64, err error)

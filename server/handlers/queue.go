@@ -247,19 +247,13 @@ func Consume(c *gin.Context) {
 		return
 	}
 
-	freezeTries, err := strconv.ParseBool(c.DefaultQuery("freeze_tries", "false"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid freeze_tries value"})
-		return
-	}
-
 	if len(queueList) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid queue name(s)"})
 		return
 	}
 
 	if count > 1 {
-		jobs, err := e.BatchConsume(namespace, queueList, uint32(count), uint32(ttrSecond), uint32(timeoutSecond), freezeTries)
+		jobs, err := e.BatchConsume(namespace, queueList, uint32(count), uint32(ttrSecond), uint32(timeoutSecond))
 		if err != nil {
 			logger.WithField("err", err).Error("Failed to batch consume")
 		}
@@ -290,7 +284,7 @@ func Consume(c *gin.Context) {
 		c.JSON(http.StatusOK, data)
 		return
 	}
-	job, err := e.Consume(namespace, queueList, uint32(ttrSecond), uint32(timeoutSecond), freezeTries)
+	job, err := e.Consume(namespace, queueList, uint32(ttrSecond), uint32(timeoutSecond))
 	if err != nil {
 		logger.WithField("err", err).Error("Failed to consume")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})

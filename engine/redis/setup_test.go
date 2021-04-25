@@ -2,6 +2,7 @@ package redis
 
 import (
 	"fmt"
+	"github.com/bitleak/lmstfy/engine"
 	"os"
 	"testing"
 
@@ -13,6 +14,7 @@ import (
 var (
 	CONF *config.Config
 	R    *RedisInstance
+	E    engine.Engine
 )
 
 func init() {
@@ -53,9 +55,14 @@ func setup() {
 	if err = PreloadDeadLetterLuaScript(R); err != nil {
 		panic(fmt.Sprintf("Failed to preload deadletter lua script: %s", err))
 	}
+	E, err = NewEngine(R.Name, R.Conn)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to setup engine: %s", err))
+	}
 }
 
 func teardown() {
+	E.Shutdown()
 }
 
 func TestMain(m *testing.M) {

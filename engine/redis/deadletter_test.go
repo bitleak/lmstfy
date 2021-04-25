@@ -9,14 +9,22 @@ import (
 )
 
 func TestDeadLetter_Add(t *testing.T) {
-	dl, _ := NewDeadLetter("ns-dead", "q0", R)
+	meta := engine.QueueMeta{
+		Namespace: "ns-dead",
+		Queue:     "q0",
+	}
+	dl := DeadLetter{meta: meta, redis: R}
 	if err := dl.Add("x"); err != nil {
 
 	}
 }
 
 func TestDeadLetter_Peek(t *testing.T) {
-	dl, _ := NewDeadLetter("ns-dead", "q1", R)
+	meta := engine.QueueMeta{
+		Namespace: "ns-dead",
+		Queue:     "q1",
+	}
+	dl := DeadLetter{meta: meta, redis: R}
 	dl.Add("x")
 	dl.Add("y")
 	dl.Add("z")
@@ -31,7 +39,11 @@ func TestDeadLetter_Peek(t *testing.T) {
 }
 
 func TestDeadLetter_Delete(t *testing.T) {
-	dl, _ := NewDeadLetter("ns-dead", "q2", R)
+	meta := engine.QueueMeta{
+		Namespace: "ns-dead",
+		Queue:     "q2",
+	}
+	dl := DeadLetter{meta: meta, redis: R}
 	dl.Add("x")
 	dl.Add("y")
 	dl.Add("z")
@@ -56,14 +68,19 @@ func TestDeadLetter_Delete(t *testing.T) {
 }
 
 func TestDeadLetter_Respawn(t *testing.T) {
+	meta := engine.QueueMeta{
+		Namespace: "ns-dead",
+		Queue:     "q3",
+	}
+
 	p := NewPool(R)
-	job1 := engine.NewJob("ns-dead", "q3", []byte("1"), 60, 0, 1)
-	job2 := engine.NewJob("ns-dead", "q3", []byte("2"), 60, 0, 1)
-	job3 := engine.NewJob("ns-dead", "q3", []byte("3"), 60, 0, 1)
+	job1 := engine.NewJob(meta, []byte("1"), 60, 0, 1)
+	job2 := engine.NewJob(meta, []byte("2"), 60, 0, 1)
+	job3 := engine.NewJob(meta, []byte("3"), 60, 0, 1)
 	p.Add(job1)
 	p.Add(job2)
 	p.Add(job3)
-	dl, _ := NewDeadLetter("ns-dead", "q3", R)
+	dl := DeadLetter{meta: meta, redis: R}
 	dl.Add(job1.ID())
 	dl.Add(job2.ID())
 	dl.Add(job3.ID())
@@ -80,13 +97,12 @@ func TestDeadLetter_Respawn(t *testing.T) {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))
 	}
 	defer timer.Shutdown()
-	q := NewQueue("ns-dead", "q3", R, timer)
 
 	count, err := dl.Respawn(2, 10)
 	if err != nil || count != 2 {
 		t.Fatalf("Failed to respawn two jobs: %s", err)
 	}
-	jobID, _, err := q.Poll(1, 1)
+	_, jobID, _, err := pollReady(E.(*Engine), []engine.QueueMeta{meta}, 1, 1)
 	if err != nil || jobID != job1.ID() {
 		t.Fatal("Expected to poll the first job respawned from deadletter")
 	}
@@ -96,13 +112,13 @@ func TestDeadLetter_Respawn(t *testing.T) {
 	if 10-job1TTL.Seconds() > 2 { // 2 seconds passed? no way.
 		t.Fatal("Deadletter job's TTL is not correct")
 	}
-	q.Poll(1, 1) // rm job2
+	pollReady(E.(*Engine), []engine.QueueMeta{meta}, 1, 1)
 
 	count, err = dl.Respawn(1, 10)
 	if err != nil || count != 1 {
 		t.Fatalf("Failed to respawn one jobs: %s", err)
 	}
-	jobID, _, err = q.Poll(1, 1)
+	_, jobID, _, err = pollReady(E.(*Engine), []engine.QueueMeta{meta}, 1, 1)
 	if err != nil || jobID != job3.ID() {
 		t.Fatal("Expected to poll the second job respawned from deadletter")
 	}
@@ -117,10 +133,14 @@ func TestDeadLetter_Respawn(t *testing.T) {
 
 func TestDeadLetter_Size(t *testing.T) {
 	p := NewPool(R)
-	dl, _ := NewDeadLetter("ns-dead", "q3", R)
+	meta := engine.QueueMeta{
+		Namespace: "ns-dead",
+		Queue:     "q3",
+	}
+	dl := DeadLetter{meta: meta, redis: R}
 	cnt := 3
 	for i := 0; i < cnt; i++ {
-		job := engine.NewJob("ns-dead", "q3", []byte("1"), 60, 0, 1)
+		job := engine.NewJob(meta, []byte("1"), 60, 0, 1)
 		p.Add(job)
 		dl.Add(job.ID())
 	}

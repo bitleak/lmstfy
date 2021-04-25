@@ -11,7 +11,11 @@ import (
 
 func TestPool_Add(t *testing.T) {
 	p := NewPool(R)
-	job := engine.NewJob("ns-pool", "q1", []byte("hello msg 1"), 10, 0, 1)
+	meta := engine.QueueMeta{
+		Namespace: "ns-pool",
+		Queue:     "q1",
+	}
+	job := engine.NewJob(meta, []byte("hello msg 1"), 10, 0, 1)
 	if err := p.Add(job); err != nil {
 		t.Errorf("Failed to add job to pool: %s", err)
 	}
@@ -20,7 +24,11 @@ func TestPool_Add(t *testing.T) {
 // Test TTL
 func TestPool_Add2(t *testing.T) {
 	p := NewPool(R)
-	job := engine.NewJob("ns-pool", "q2", []byte("hello msg 2"), 1, 0, 1)
+	meta := engine.QueueMeta{
+		Namespace: "ns-pool",
+		Queue:     "q2",
+	}
+	job := engine.NewJob(meta, []byte("hello msg 2"), 1, 0, 1)
 	p.Add(job)
 	time.Sleep(2 * time.Second)
 	_, err := R.Conn.Get(dummyCtx, PoolJobKey(job)).Result()
@@ -32,7 +40,11 @@ func TestPool_Add2(t *testing.T) {
 
 func TestPool_Delete(t *testing.T) {
 	p := NewPool(R)
-	job := engine.NewJob("ns-pool", "q3", []byte("hello msg 3"), 10, 0, 1)
+	meta := engine.QueueMeta{
+		Namespace: "ns-pool",
+		Queue:     "q3",
+	}
+	job := engine.NewJob(meta, []byte("hello msg 3"), 10, 0, 1)
 	p.Add(job)
 	if err := p.Delete(job.Namespace(), job.Queue(), job.ID()); err != nil {
 		t.Fatalf("Failed to delete job from pool: %s", err)
@@ -41,7 +53,11 @@ func TestPool_Delete(t *testing.T) {
 
 func TestPool_Get(t *testing.T) {
 	p := NewPool(R)
-	job := engine.NewJob("ns-pool", "q4", []byte("hello msg 4"), 50, 0, 1)
+	meta := engine.QueueMeta{
+		Namespace: "ns-pool",
+		Queue:     "q4",
+	}
+	job := engine.NewJob(meta, []byte("hello msg 4"), 50, 0, 1)
 	p.Add(job)
 	body, ttl, err := p.Get(job.Namespace(), job.Queue(), job.ID())
 	if err != nil {

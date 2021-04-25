@@ -1,6 +1,7 @@
 package redis
 
 import (
+	"bytes"
 	"fmt"
 	"strconv"
 	"testing"
@@ -11,21 +12,191 @@ import (
 	"github.com/bitleak/lmstfy/engine"
 )
 
-func TestQueue_Push(t *testing.T) {
-	timer, err := NewTimer("timer_set_q", R, time.Second)
-	if err != nil {
-		panic(fmt.Sprintf("Failed to new timer: %s", err))
+func TestQueue_Publish(t *testing.T) {
+	meta := engine.QueueMeta{
+		Namespace: "ns-engine",
+		Queue:     "q1",
 	}
-	defer timer.Shutdown()
-	q := NewQueue("ns-queue", "q1", R, timer)
-	job := engine.NewJob("ns-queue", "q1", []byte("hello msg 1"), 10, 0, 1)
-	if err := q.Push(job, 5); err != nil {
+	body := []byte("hello msg 1")
+	q, _ := E.Queue(meta)
+	job := engine.NewJob(meta, body, 10, 2, 1)
+	jobID, err := q.Publish(job)
+	t.Log(jobID)
+	if err != nil {
+		t.Fatalf("Failed to publish: %s", err)
+	}
+
+	// Publish no-delay job
+	job = engine.NewJob(meta, body, 10, 0, 1)
+	jobID, err = q.Publish(job)
+	t.Log(jobID)
+	if err != nil {
+		t.Fatalf("Failed to publish: %s", err)
+	}
+}
+
+func TestQueue_Push(t *testing.T) {
+	meta := engine.QueueMeta{
+		Namespace: "ns-engine",
+		Queue:     "q1",
+	}
+	q, _ := E.Queue(meta)
+	job := engine.NewJob(meta, []byte("hello msg 1"), 10, 0, 1)
+	if err := q.(Queue).push(job); err != nil {
 		t.Fatalf("Failed to push job into queue: %s", err)
 	}
 
-	job2 := engine.NewJob("ns-queue", "q2", []byte("hello msg 1"), 10, 0, 1)
-	if err := q.Push(job2, 5); err != engine.ErrWrongQueue {
+	job2 := engine.NewJob(meta, []byte("hello msg 1"), 10, 0, 1)
+	if err := q.(Queue).push(job2); err != engine.ErrWrongQueue {
 		t.Fatalf("Expected to get wrong queue error, but got: %s", err)
+	}
+}
+
+func TestQueue_Consume(t *testing.T) {
+	meta := engine.QueueMeta{
+		Namespace: "ns-engine",
+		Queue:     "q2",
+	}
+	body := []byte("hello msg 2")
+	job := engine.NewJob(meta, body, 10, 2, 1)
+	q, _ := E.Queue(meta)
+	jobID, err := q.Publish(job)
+	t.Log(jobID)
+	if err != nil {
+		t.Fatalf("Failed to publish: %s", err)
+	}
+
+	job, err = q.Consume(3, 3)
+	if err != nil {
+		t.Fatalf("Failed to consume: %s", err)
+	}
+	if job.Tries() != 0 {
+		t.Fatalf("job tries = 0 was expected, but got %d", job.Tries())
+	}
+	if !bytes.Equal(body, job.Body()) || jobID != job.ID() {
+		t.Fatalf("Mistmatched job data")
+	}
+
+	// Consume job that's published in no-delay way
+	job = engine.NewJob(meta, body, 10, 0, 1)
+	jobID, err = q.Publish(job)
+	t.Log(jobID)
+	if err != nil {
+		t.Fatalf("Failed to publish: %s", err)
+	}
+	job, err = q.Consume(3, 0)
+	if err != nil {
+		t.Fatalf("Failed to consume: %s", err)
+	}
+	if !bytes.Equal(body, job.Body()) || jobID != job.ID() {
+		t.Fatalf("Mistmatched job data")
+	}
+}
+
+// Consume the first one from multi publish
+func TestQueue_Consume2(t *testing.T) {
+	meta := engine.QueueMeta{
+		Namespace: "ns-engine",
+		Queue:     "q3",
+	}
+	body := []byte("hello msg 3")
+	job := engine.NewJob(meta, []byte("delay msg"), 10, 5, 1)
+	q, _ := E.Queue(meta)
+	_, err := q.Publish(job)
+	if err != nil {
+		t.Fatalf("Failed to publish: %s", err)
+	}
+	job = engine.NewJob(meta, body, 10, 2, 1)
+	jobID, err := q.Publish(job)
+	if err != nil {
+		t.Fatalf("Failed to publish: %s", err)
+	}
+	job, err = q.Consume(3, 3)
+	if err != nil {
+		t.Fatalf("Failed to consume: %s", err)
+	}
+	if job.Tries() != 0 {
+		t.Fatalf("job tries = 0 was expected, but got %d", job.Tries())
+	}
+	if !bytes.Equal(body, job.Body()) || jobID != job.ID() {
+		t.Fatalf("Mistmatched job data")
+	}
+}
+
+func TestQueue_BatchConsume(t *testing.T) {
+	meta := engine.QueueMeta{
+		Namespace: "ns-engine",
+		Queue:     "q4",
+	}
+	body := []byte("hello msg 7")
+	job := engine.NewJob(meta, body, 10, 3, 1)
+	q, _ := E.Queue(meta)
+	jobID, err := q.Publish(job)
+	t.Log(jobID)
+	if err != nil {
+		t.Fatalf("Failed to publish: %s", err)
+	}
+	jobs, err := q.BatchConsume(2, 5, 2)
+	if err != nil {
+		t.Fatalf("Failed to Batch consume: %s", err)
+	}
+	if len(jobs) != 0 {
+		t.Fatalf("Wrong job consumed")
+	}
+
+	jobs, err = q.BatchConsume(2, 3, 2)
+	if err != nil {
+		t.Fatalf("Failed to Batch consume: %s", err)
+	}
+	if len(jobs) != 1 || !bytes.Equal(body, jobs[0].Body()) || jobID != jobs[0].ID() {
+		t.Fatalf("Mistmatched job data")
+	}
+
+	// Consume some jobs
+	jobIDMap := map[string]bool{}
+	for i := 0; i < 4; i++ {
+		job := engine.NewJob(meta, body, 10, 0, 1)
+		jobID, err := q.Publish(job)
+		t.Log(jobID)
+		if err != nil {
+			t.Fatalf("Failed to publish: %s", err)
+		}
+		jobIDMap[jobID] = true
+	}
+
+	// First time batch consume three jobs
+	jobs, err = q.BatchConsume(3, 3, 3)
+	if err != nil {
+		t.Fatalf("Failed to consume: %s", err)
+	}
+	if len(jobs) != 3 {
+		t.Fatalf("Mistmatched jobs count")
+	}
+	for _, job := range jobs {
+		if !bytes.Equal(body, job.Body()) || !jobIDMap[job.ID()] {
+			t.Fatalf("Mistmatched job data")
+		}
+	}
+
+	// Second time batch consume can only get a single job
+	jobs, err = q.BatchConsume(3, 3, 3)
+	if err != nil {
+		t.Fatalf("Failed to consume: %s", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("Mistmatched jobs count")
+	}
+	if !bytes.Equal(body, jobs[0].Body()) || !jobIDMap[jobs[0].ID()] {
+		t.Fatalf("Mistmatched job data")
+	}
+
+	// Third time batch consume will be blocked by 3s
+	jobs, err = q.BatchConsume(3, 3, 3)
+	if err != nil {
+		t.Fatalf("Failed to consume: %s", err)
+	}
+	if len(jobs) != 0 {
+		t.Fatalf("Mistmatched jobs count")
 	}
 }
 

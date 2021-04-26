@@ -1,4 +1,4 @@
-package redis
+package redis_v2
 
 import (
 	"fmt"
@@ -48,10 +48,6 @@ func setup() {
 	R = &RedisInstance{
 		Name: "unittest",
 		Conn: conn,
-	}
-
-	if err = PreloadDeadLetterLuaScript(R); err != nil {
-		panic(fmt.Sprintf("Failed to preload deadletter lua script: %s", err))
 	}
 }
 

@@ -10,30 +10,30 @@ import (
 )
 
 const (
-	MetaSubscribeChannel = "_lmstfy_v2_meta_pubsub_channel_"
-	MetaPrefix           = "_lmstfy_v2_meta_"
+	QueueManagerSubscribeChannel = "_lmstfy_v2_queues_pubsub_channel_"
+	QueueManagerPrefix           = "_lmstfy_v2_queues_"
 )
 
-// Record meta and update from redis periodically
-type meta struct {
+// Record queue and update from redis periodically
+type queue struct {
 	namespace string
 	queue     string
 }
 
-type MetaManager struct {
+type QueueManager struct {
 	redis      *RedisInstance
 	pubsub     *go_redis.PubSub
 	existCache map[string]map[string]bool
-	cache      []meta
+	cache      []queue
 	rwmu       sync.RWMutex
 	stop       chan bool
 }
 
-func NewMetaManager(redis *RedisInstance) (*MetaManager, error) {
-	m := &MetaManager{
+func NewQueueManager(redis *RedisInstance) (*QueueManager, error) {
+	m := &QueueManager{
 		redis:      redis,
 		existCache: make(map[string]map[string]bool),
-		cache:      make([]meta, 0),
+		cache:      make([]queue, 0),
 		stop:       make(chan bool),
 	}
 	if err := m.update(); err != nil {
@@ -46,7 +46,7 @@ func NewMetaManager(redis *RedisInstance) (*MetaManager, error) {
 	return m, nil
 }
 
-func (m *MetaManager) Exist(namespace, queue string) bool {
+func (m *QueueManager) Exist(namespace, queue string) bool {
 	m.rwmu.RLock()
 	defer m.rwmu.RUnlock()
 	if _, ok := m.existCache[namespace]; !ok {
@@ -55,30 +55,30 @@ func (m *MetaManager) Exist(namespace, queue string) bool {
 	return m.existCache[namespace][queue]
 }
 
-func (m *MetaManager) Add(namespace, queue string) error {
+func (m *QueueManager) Add(namespace, queue string) error {
 	// did not check exist, because add is rarely operation and update maybe late for a while
-	_, err := m.redis.Conn.HSet(dummyCtx, join(MetaPrefix, "ns"), namespace, 1).Result()
+	_, err := m.redis.Conn.HSet(dummyCtx, join(QueueManagerPrefix, "ns"), namespace, 1).Result()
 	if err != nil {
-		return fmt.Errorf("meta manager add meta ns error, %v", err)
+		return fmt.Errorf("queue manager add queue ns error, %v", err)
 	}
-	_, err = m.redis.Conn.HSet(dummyCtx, join(MetaPrefix, "ns", namespace), queue, 1).Result()
+	_, err = m.redis.Conn.HSet(dummyCtx, join(QueueManagerPrefix, "ns", namespace), queue, 1).Result()
 	if err != nil {
-		return fmt.Errorf("meta manager add meta queue error, %v", err)
+		return fmt.Errorf("queue manager add queue queue error, %v", err)
 	}
-	return m.publish()
+	return m.notify()
 }
 
-func (m *MetaManager) Remove(namespace, queue string) error {
+func (m *QueueManager) Remove(namespace, queue string) error {
 	// did not check exist, because remove is rarely operation and update maybe late for a while
-	_, err := m.redis.Conn.HDel(dummyCtx, join(MetaPrefix, "ns", namespace), queue).Result()
+	_, err := m.redis.Conn.HDel(dummyCtx, join(QueueManagerPrefix, "ns", namespace), queue).Result()
 	if err != nil {
-		return fmt.Errorf("meta manager remove meta queue error, %v", err)
+		return fmt.Errorf("queue manager remove queue queue error, %v", err)
 	}
-	return m.publish()
+	return m.notify()
 }
 
-func (m *MetaManager) listNamespaces() (namespaces []string, err error) {
-	val, err := m.redis.Conn.HGetAll(dummyCtx, join(MetaPrefix, "ns")).Result()
+func (m *QueueManager) listNamespaces() (namespaces []string, err error) {
+	val, err := m.redis.Conn.HGetAll(dummyCtx, join(QueueManagerPrefix, "ns")).Result()
 	if err != nil {
 		return nil, err
 	}
@@ -88,8 +88,8 @@ func (m *MetaManager) listNamespaces() (namespaces []string, err error) {
 	return namespaces, nil
 }
 
-func (m *MetaManager) listQueues(namespace string) (queues []string, err error) {
-	val, err := m.redis.Conn.HGetAll(dummyCtx, join(MetaPrefix, "ns", namespace)).Result()
+func (m *QueueManager) listQueues(namespace string) (queues []string, err error) {
+	val, err := m.redis.Conn.HGetAll(dummyCtx, join(QueueManagerPrefix, "ns", namespace)).Result()
 	if err != nil {
 		return nil, err
 	}
@@ -99,20 +99,20 @@ func (m *MetaManager) listQueues(namespace string) (queues []string, err error) 
 	return queues, nil
 }
 
-func (m *MetaManager) update() error {
+func (m *QueueManager) update() error {
 	namespaces, err := m.listNamespaces()
 	if err != nil {
-		return fmt.Errorf("meta manager list namsepace error, %v", err)
+		return fmt.Errorf("queue manager list namsepace error, %v", err)
 	}
 	existCache := make(map[string]map[string]bool)
-	cache := make([]meta, 0)
+	cache := make([]queue, 0)
 	for _, n := range namespaces {
 		queues, err := m.listQueues(n)
 		if err != nil {
-			return fmt.Errorf("meta manager list %s queue error, %v", n, err)
+			return fmt.Errorf("queue manager list %s queue error, %v", n, err)
 		}
 		for _, q := range queues {
-			m := meta{
+			m := queue{
 				namespace: n,
 				queue:     q,
 			}
@@ -139,52 +139,52 @@ func (m *MetaManager) update() error {
 	return nil
 }
 
-func (m *MetaManager) subscribe() error {
-	m.pubsub = m.redis.Conn.Subscribe(dummyCtx, MetaSubscribeChannel)
+func (m *QueueManager) subscribe() error {
+	m.pubsub = m.redis.Conn.Subscribe(dummyCtx, QueueManagerSubscribeChannel)
 	_, err := m.pubsub.Receive(dummyCtx)
 	if err != nil {
-		return fmt.Errorf("subscribe meta updata channel error, %v", err)
+		return fmt.Errorf("subscribe queue updata channel error, %v", err)
 	}
 	return nil
 }
 
-func (m *MetaManager) publish() error {
-	_, err := m.redis.Conn.Publish(dummyCtx, MetaSubscribeChannel, "update").Result()
+func (m *QueueManager) notify() error {
+	_, err := m.redis.Conn.Publish(dummyCtx, QueueManagerSubscribeChannel, "update").Result()
 	if err != nil {
-		return fmt.Errorf("meta manager publish update error, %v", err)
+		return fmt.Errorf("queue manager notify update error, %v", err)
 	}
 	return nil
 }
 
-func (m *MetaManager) watch() {
+func (m *QueueManager) watch() {
 	ch := m.pubsub.Channel()
 	for {
 		select {
 		case <-m.stop:
-			if err := m.pubsub.Unsubscribe(dummyCtx, MetaSubscribeChannel); err != nil {
+			if err := m.pubsub.Unsubscribe(dummyCtx, QueueManagerSubscribeChannel); err != nil {
 				logger.WithFields(logrus.Fields{
 					"error": err,
-				}).Error("meta manager unsubscribe error")
+				}).Error("queue manager unsubscribe error")
 			}
 			m.pubsub.Close()
-			logger.Info("meta watcher would be exited while the stop signal was received")
+			logger.Info("queue watcher would be exited while the stop signal was received")
 			return
 		case msg := <-ch:
 			if err := m.update(); err != nil {
 				logger.WithFields(logrus.Fields{
 					"error":   err,
 					"message": msg,
-				}).Error("update meta info error")
+				}).Error("update queue info error")
 			}
 		}
 	}
 }
 
-func (m *MetaManager) Close() {
+func (m *QueueManager) Close() {
 	close(m.stop)
 }
 
-func (m *MetaManager) Dump() (map[string][]string, error) {
+func (m *QueueManager) Dump() (map[string][]string, error) {
 	data := make(map[string][]string)
 	m.rwmu.RLock()
 	for n := range m.existCache {

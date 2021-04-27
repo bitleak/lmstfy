@@ -11,6 +11,7 @@ on:
   pull_request:     
     branches:
       - master
+      - v2
 
 jobs:
   lint-build-test:

@@ -4,6 +4,7 @@ go 1.15
 
 require (
 	github.com/BurntSushi/toml v0.3.1
+	github.com/Jeffail/tunny v0.0.0-20210126202424-1b37d6cb867a
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/gin-gonic/gin v1.6.3
 	github.com/go-redis/redis/v8 v8.6.0

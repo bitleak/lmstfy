@@ -2,6 +2,7 @@ package redis_v2
 
 import (
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"strconv"
 	"testing"
 	"time"
@@ -163,4 +164,90 @@ func TestTimerManager_Pump(t *testing.T) {
 	<-wait
 }
 
-// todo: benchmark test
+func BenchmarkTimerManager(b *testing.B) {
+	// Disable logging temporarily
+	logger.SetLevel(logrus.ErrorLevel)
+	defer logger.SetLevel(logrus.DebugLevel)
+
+	queueManager, err := NewQueueManager(R)
+	if err != nil {
+		b.Fatal("init queue manager error", err)
+		return
+	}
+	defer queueManager.Close()
+	err = queueManager.Add("ns-timer", "q3")
+	if err != nil {
+		b.Fatal("add queue error", err)
+		return
+	}
+	timerManager, err := NewTimerManager(queueManager, R)
+	if err != nil {
+		b.Fatal("init timer manager error", err)
+		return
+	}
+	defer timerManager.Close()
+
+	b.Run("Add", benchmarkTimerManager_Add(timerManager))
+
+	b.Run("Pop", benchmarkTimerManager_Pop(timerManager))
+}
+
+func benchmarkTimerManager_Add(tm *TimerManager) func(b *testing.B) {
+	return func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			job := engine.NewJob("ns-timer", "q3", []byte("hello msg 1"), 100, 0, 1)
+			tm.Add(job.Namespace(), job.Queue(), job.ID(), 1)
+		}
+	}
+}
+
+func benchmarkTimerManager_Pop(tm *TimerManager) func(b *testing.B) {
+	return func(b *testing.B) {
+		key := join(ReadyQueuePrefix, "ns-timer", "q3")
+		b.StopTimer()
+		for i := 0; i < b.N; i++ {
+			job := engine.NewJob("ns-timer", "q3", []byte("hello msg 1"), 100, 0, 1)
+			R.Conn.HMSet(dummyCtx, join(PoolPrefix, job.Namespace(), job.Queue(), job.ID()), "data", job.Body(), "tries", job.Tries())
+			tm.Add(job.Namespace(), job.Queue(), job.ID(), 0)
+		}
+		b.StartTimer()
+		for i := 0; i < b.N; i++ {
+			R.Conn.BRPop(dummyCtx, 5*time.Second, key)
+		}
+	}
+}
+
+// How long did it take to fire 10000 due jobs
+func BenchmarkTimerManager_Pump(b *testing.B) {
+	// Disable logging temporarily
+	logger.SetLevel(logrus.ErrorLevel)
+	defer logger.SetLevel(logrus.DebugLevel)
+
+	b.StopTimer()
+
+	queueManager, err := NewQueueManager(R)
+	if err != nil {
+		b.Fatal("init queue manager error", err)
+		return
+	}
+	defer queueManager.Close()
+	err = queueManager.Add("ns-timer", "q4")
+	if err != nil {
+		b.Fatal("add queue error", err)
+		return
+	}
+	timerManager, err := NewTimerManager(queueManager, R)
+	if err != nil {
+		b.Fatal("init timer manager error", err)
+		return
+	}
+	timerManager.Close()
+	for i := 0; i < 10000; i++ {
+		job := engine.NewJob("ns-timer", "q4", []byte("hello msg 1"), 100, 0, 1)
+		R.Conn.HMSet(dummyCtx, join(PoolPrefix, job.Namespace(), job.Queue(), job.ID()), "data", job.Body(), "tries", job.Tries())
+		timerManager.Add(job.Namespace(), job.Queue(), job.ID(), 1)
+	}
+
+	b.StartTimer()
+	timerManager.pump(queue{namespace: "ns-timer", queue: "q4"})
+}

@@ -117,7 +117,7 @@ func NewTimerManager(queueManager *QueueManager, redis *RedisInstance) (*TimerMa
 	if err != nil {
 		return nil, err
 	}
-	go tm.candidate()
+	go tm.heartbeat()
 	go tm.elect()
 	go tm.startPump()
 	return tm, nil
@@ -261,13 +261,12 @@ func (m *TimerManager) startPump() {
 	}
 }
 
-func (m *TimerManager) candidate() {
+func (m *TimerManager) heartbeat() {
 	ticker := time.NewTicker(TimerManagerInstanceCheckInterval * time.Second)
 	for {
 		select {
 		case <-ticker.C:
-			err := m.register()
-			if err != nil {
+			if err := m.register(); err != nil {
 				logger.WithFields(logrus.Fields{
 					"error":          err,
 					"timerManagerID": m.id,
@@ -275,8 +274,7 @@ func (m *TimerManager) candidate() {
 			}
 		case <-m.stop:
 			logger.Info("stop timer manager candidate")
-			err := m.unregister()
-			if err != nil {
+			if err := m.unregister(); err != nil {
 				logger.WithFields(logrus.Fields{
 					"error":          err,
 					"timerManagerID": m.id,
@@ -293,8 +291,7 @@ func (m *TimerManager) elect() {
 		select {
 		case now := <-ticker.C:
 			deadline := now.Unix()
-			err := m.calculateSequence(deadline)
-			if err != nil {
+			if err := m.calculateSequence(deadline); err != nil {
 				logger.WithFields(logrus.Fields{
 					"error":          err,
 					"timerManagerID": m.id,

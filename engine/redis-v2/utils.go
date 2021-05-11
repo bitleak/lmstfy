@@ -52,9 +52,7 @@ func getLocalIPv4() (net.IP, error) {
 			if ipv4 == nil {
 				continue
 			}
-			if ipv4[0] == 10 || (ipv4[0] == 172 && ipv4[1] >= 16 && ipv4[1] <= 31) || (ipv4[0] == 192 && ipv4[1] == 168) {
-				return ipv4, nil
-			}
+			return ipv4, nil
 		}
 	}
 	return nil, fmt.Errorf("no ip address satisfied requirement")

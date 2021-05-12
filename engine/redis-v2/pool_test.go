@@ -1,4 +1,4 @@
-package redis
+package redis_v2
 
 import (
 	"bytes"
@@ -43,9 +43,12 @@ func TestPool_Get(t *testing.T) {
 	p := NewPool(R)
 	job := engine.NewJob("ns-pool", "q4", []byte("hello msg 4"), 50, 0, 1)
 	p.Add(job)
-	body, ttl, err := p.Get(job.Namespace(), job.Queue(), job.ID())
+	body, tries, ttl, err := p.Get(job.Namespace(), job.Queue(), job.ID())
 	if err != nil {
 		t.Fatalf("Failed to get job: %s", err)
+	}
+	if tries != job.Tries() {
+		t.Fatal("Mismatched job tries")
 	}
 	if !bytes.Equal(body, []byte("hello msg 4")) {
 		t.Fatal("Mismatched job data")

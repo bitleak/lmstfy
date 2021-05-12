@@ -1,7 +1,6 @@
-package redis
+package redis_v2
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -75,42 +74,42 @@ func TestDeadLetter_Respawn(t *testing.T) {
 		t.Fatalf("Respawned job's TTL should be removed")
 	}
 
-	timer, err := NewTimer("ns-dead", R, time.Second)
-	if err != nil {
-		panic(fmt.Sprintf("Failed to new timer: %s", err))
-	}
-	defer timer.Shutdown()
-	q := NewQueue("ns-dead", "q3", R, timer)
-
 	count, err := dl.Respawn(2, 10)
 	if err != nil || count != 2 {
 		t.Fatalf("Failed to respawn two jobs: %s", err)
 	}
-	jobID, _, err := q.Poll(1, 1)
-	if err != nil || jobID != job1.ID() {
+	val, err := R.Conn.BRPop(dummyCtx, time.Second, join(ReadyQueuePrefix, dl.namespace, dl.queue)).Result()
+	if err != nil || len(val) == 0 {
+		t.Fatal("Failed to pop the job from ready queue")
+	}
+	if val[1] != job1.ID() {
 		t.Fatal("Expected to poll the first job respawned from deadletter")
 	}
+
 	// Ensure TTL is set
 	job1Key = PoolJobKey(job1)
 	job1TTL = R.Conn.TTL(dummyCtx, job1Key).Val()
 	if 10-job1TTL.Seconds() > 2 { // 2 seconds passed? no way.
 		t.Fatal("Deadletter job's TTL is not correct")
 	}
-	q.Poll(1, 1) // rm job2
+	R.Conn.BRPop(dummyCtx, time.Second, join(ReadyQueuePrefix, dl.namespace, dl.queue)) // rm job2
 
 	count, err = dl.Respawn(1, 10)
 	if err != nil || count != 1 {
 		t.Fatalf("Failed to respawn one jobs: %s", err)
 	}
-	jobID, _, err = q.Poll(1, 1)
-	if err != nil || jobID != job3.ID() {
-		t.Fatal("Expected to poll the second job respawned from deadletter")
+	val, err = R.Conn.BRPop(dummyCtx, time.Second, join(ReadyQueuePrefix, dl.namespace, dl.queue)).Result()
+	if err != nil || len(val) == 0 {
+		t.Fatal("Failed to pop the job from ready queue")
+	}
+	if val[1] != job3.ID() {
+		t.Fatal("Expected to poll the third job respawned from deadletter")
 	}
 
 	// Ensure TTL is set
-	job2Key := PoolJobKey(job2)
-	job2TTL := R.Conn.TTL(dummyCtx, job2Key).Val()
-	if 10-job2TTL.Seconds() > 2 {
+	job3Key := PoolJobKey(job3)
+	job3TTL := R.Conn.TTL(dummyCtx, job3Key).Val()
+	if 10-job3TTL.Seconds() > 2 {
 		t.Fatal("Deadletter job's TTL is not correct")
 	}
 }

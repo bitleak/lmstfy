@@ -1,4 +1,4 @@
-package redis
+package redis_v2
 
 import (
 	"errors"
@@ -19,12 +19,12 @@ local limit = tonumber(ARGV[1])
 local respawnTTL = tonumber(ARGV[2])
 
 for i = 1, limit do
-    local data = redis.call("RPOPLPUSH", deadletter, queue)
-	if data == false then
+    local jobID = redis.call("RPOPLPUSH", deadletter, queue)
+	if jobID == false then
 		return i - 1  -- deadletter is empty
 	end
     -- unpack the jobID, and set the TTL
-    local _, jobID = struct.unpack("HHc0", data)
+	redis.call("HSET", poolPrefix .. "/" .. jobID, "tries", "1")
     if respawnTTL > 0 then
 		redis.call("EXPIRE", poolPrefix .. "/" .. jobID, respawnTTL)
 	end
@@ -37,12 +37,11 @@ local poolPrefix = KEYS[2]
 local limit = tonumber(ARGV[1])
 
 for i = 1, limit do
-	local data = redis.call("RPOP", deadletter)
-	if data == false then
+	local jobID = redis.call("RPOP", deadletter)
+	if jobID == false then
 		return i - 1
 	end
-	-- unpack the jobID, and delete the job from the job pool
-	local _, jobID = struct.unpack("HHc0", data)
+	-- delete the job from the job pool
 	redis.call("DEL", poolPrefix .. "/" .. jobID)
 end
 return limit
@@ -96,22 +95,17 @@ func (dl *DeadLetter) Name() string {
 	return join(DeadLetterPrefix, dl.namespace, dl.queue)
 }
 
-// Add a job to dead letter. NOTE the data format is the same
-// as the ready queue (lua struct `HHc0`), by doing this we could directly pop
-// the dead job back to the ready queue.
-//
 // NOTE: this method is not called any where except in tests, but this logic is
 // implement in the timer's pump script. please refer to that.
 func (dl *DeadLetter) Add(jobID string) error {
-	val := structPack(1, jobID)
 	if err := dl.redis.Conn.Persist(dummyCtx, PoolJobKey2(dl.namespace, dl.queue, jobID)).Err(); err != nil {
 		return err
 	}
-	return dl.redis.Conn.LPush(dummyCtx, dl.Name(), val).Err()
+	return dl.redis.Conn.LPush(dummyCtx, dl.Name(), jobID).Err()
 }
 
 func (dl *DeadLetter) Peek() (size int64, jobID string, err error) {
-	val, err := dl.redis.Conn.LIndex(dummyCtx, dl.Name(), -1).Result()
+	jobID, err = dl.redis.Conn.LIndex(dummyCtx, dl.Name(), -1).Result()
 	switch err {
 	case nil:
 		// continue
@@ -119,10 +113,6 @@ func (dl *DeadLetter) Peek() (size int64, jobID string, err error) {
 		return 0, "", engine.ErrNotFound
 	default:
 		return 0, "", err
-	}
-	tries, jobID, err := structUnpack(val)
-	if err != nil || tries != 1 {
-		return 0, "", fmt.Errorf("failed to unpack data: %s", err)
 	}
 	size, err = dl.redis.Conn.LLen(dummyCtx, dl.Name()).Result()
 	if err != nil {
@@ -163,16 +153,12 @@ func (dl *DeadLetter) Delete(limit int64) (count int64, err error) {
 		}
 		return count, nil
 	} else if limit == 1 {
-		data, err := dl.redis.Conn.RPop(dummyCtx, dl.Name()).Result()
+		jobID, err := dl.redis.Conn.RPop(dummyCtx, dl.Name()).Result()
 		if err != nil {
 			if err == go_redis.Nil {
 				return 0, nil
 			}
 			return 0, err
-		}
-		_, jobID, err := structUnpack(data)
-		if err != nil {
-			return 1, err
 		}
 		err = dl.redis.Conn.Del(dummyCtx, PoolJobKey2(dl.namespace, dl.queue, jobID)).Err()
 		if err != nil {
@@ -187,13 +173,10 @@ func (dl *DeadLetter) Delete(limit int64) (count int64, err error) {
 func (dl *DeadLetter) Respawn(limit, ttlSecond int64) (count int64, err error) {
 	defer func() {
 		if err != nil && count != 0 {
-			metrics.deadletterRespawnJobs.WithLabelValues(dl.redis.Name).Add(float64(count))
+			//metrics.deadletterRespawnJobs.WithLabelValues(dl.redis.Name).Add(float64(count))
 		}
 	}()
-	queueName := (&QueueName{
-		Namespace: dl.namespace,
-		Queue:     dl.queue,
-	}).String()
+	queueName := join(ReadyQueuePrefix, dl.namespace, dl.queue)
 	poolPrefix := PoolJobKeyPrefix(dl.namespace, dl.queue)
 	if limit > 1 {
 		var batchSize = BatchSize
@@ -225,16 +208,16 @@ func (dl *DeadLetter) Respawn(limit, ttlSecond int64) (count int64, err error) {
 		}
 		return count, nil
 	} else if limit == 1 {
-		data, err := dl.redis.Conn.RPopLPush(dummyCtx, dl.Name(), queueName).Result()
+		jobID, err := dl.redis.Conn.RPopLPush(dummyCtx, dl.Name(), queueName).Result()
 		if err != nil {
 			if err == go_redis.Nil {
 				return 0, nil
 			}
 			return 0, err
 		}
-		_, jobID, err := structUnpack(data)
+		err = dl.redis.Conn.HSet(dummyCtx, PoolJobKey2(dl.namespace, dl.queue, jobID), PoolJobFieldTries, 1).Err()
 		if err != nil {
-			return 1, err
+			return 1, fmt.Errorf("failed to set job tries on respawned job[%s]: %s", jobID, err)
 		}
 		if ttlSecond > 0 {
 			err = dl.redis.Conn.Expire(dummyCtx, PoolJobKey2(dl.namespace, dl.queue, jobID), time.Duration(ttlSecond)*time.Second).Err()

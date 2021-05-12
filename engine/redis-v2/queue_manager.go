@@ -180,6 +180,14 @@ func (m *QueueManager) watch() {
 	}
 }
 
+func (m *QueueManager) Queues() []queue {
+	m.rwmu.RLock()
+	result := make([]queue, len(m.cache))
+	copy(result, m.cache)
+	m.rwmu.RUnlock()
+	return result
+}
+
 func (m *QueueManager) Close() {
 	close(m.stop)
 }

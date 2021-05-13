@@ -31,12 +31,12 @@ func PoolJobKey(j engine.Job) string {
 	return join(PoolPrefix, j.Namespace(), j.Queue(), j.ID())
 }
 
-func PoolJobKey2(namespace, queue, jobID string) string {
-	return join(PoolPrefix, namespace, queue, jobID)
+func PoolJobKey2(q queue, jobID string) string {
+	return join(PoolPrefix, q.namespace, q.queue, jobID)
 }
 
-func PoolJobKeyPrefix(namespace, queue string) string {
-	return join(PoolPrefix, namespace, queue)
+func PoolJobKey3(namespace, queue, jobID string) string {
+	return join(PoolPrefix, namespace, queue, jobID)
 }
 
 func (p *Pool) Add(j engine.Job) error {
@@ -60,7 +60,7 @@ func (p *Pool) Add(j engine.Job) error {
 
 func (p *Pool) Get(namespace, queue, jobID string) (body []byte, tries uint16, ttlSecond uint32, err error) {
 	pipeline := p.redis.Conn.Pipeline()
-	jobKey := join(PoolPrefix, namespace, queue, jobID)
+	jobKey := PoolJobKey3(namespace, queue, jobID)
 	getCmd := pipeline.HMGet(dummyCtx, jobKey, PoolJobFieldData, PoolJobFieldTries)
 	ttlCmd := pipeline.TTL(dummyCtx, jobKey)
 	_, err = pipeline.Exec(dummyCtx)
@@ -101,5 +101,5 @@ func (p *Pool) Get(namespace, queue, jobID string) (body []byte, tries uint16, t
 
 func (p *Pool) Delete(namespace, queue, jobID string) error {
 	//metrics.poolDeleteJobs.WithLabelValues(p.redis.Name).Inc()
-	return p.redis.Conn.Del(dummyCtx, join(PoolPrefix, namespace, queue, jobID)).Err()
+	return p.redis.Conn.Del(dummyCtx, PoolJobKey3(namespace, queue, jobID)).Err()
 }

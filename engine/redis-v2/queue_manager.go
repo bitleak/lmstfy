@@ -14,12 +14,6 @@ const (
 	QueueManagerPrefix           = "_lmstfy_v2_queues_"
 )
 
-// Record queue and update from redis periodically
-type queue struct {
-	namespace string
-	queue     string
-}
-
 type QueueManager struct {
 	redis      *RedisInstance
 	pubsub     *go_redis.PubSub

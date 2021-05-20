@@ -49,6 +49,10 @@ func setup() {
 		Name: "unittest",
 		Conn: conn,
 	}
+
+	if err = PreloadDeadLetterLuaScript(R); err != nil {
+		panic(fmt.Sprintf("Failed to preload deadletter lua script: %s", err))
+	}
 }
 
 func teardown() {

@@ -171,7 +171,7 @@ func (dl *DeadLetter) Delete(limit int64) (count int64, err error) {
 func (dl *DeadLetter) Respawn(limit, ttlSecond int64) (count int64, err error) {
 	defer func() {
 		if err != nil && count != 0 {
-			//metrics.deadletterRespawnJobs.WithLabelValues(dl.redis.Name).Add(float64(count))
+			metrics.deadletterRespawnJobs.WithLabelValues(dl.redis.Name).Add(float64(count))
 		}
 	}()
 	queueName := dl.queue.ReadyQueueString()

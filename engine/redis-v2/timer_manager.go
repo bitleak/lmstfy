@@ -123,12 +123,12 @@ func NewTimerManager(queueManager *QueueManager, redis *RedisInstance) (*TimerMa
 	return tm, nil
 }
 
-func (m *TimerManager) delayQueueName(namespace, queue string) string {
-	return fmt.Sprintf("%s/%s/%s", DelayQueuePrefix, namespace, queue)
+func (m *TimerManager) delayQueueName(ns, q string) string {
+	return (&queue{namespace: ns, queue: q}).DelayQueueString()
 }
 
 func (m *TimerManager) Add(namespace, queue, jobID string, delaySecond uint32) error {
-	//metrics.timerAddJobs.WithLabelValues(t.redis.Name).Inc()
+	metrics.timerAddJobs.WithLabelValues(m.redis.Name).Inc()
 	timestamp := time.Now().Unix() + int64(delaySecond)
 	return m.redis.Conn.ZAdd(dummyCtx, m.delayQueueName(namespace, queue), &redis.Z{Score: float64(timestamp), Member: []byte(jobID)}).Err()
 }
@@ -215,10 +215,10 @@ func (m *TimerManager) pump(i interface{}) interface{} {
 		}
 		n, _ := val.(int64)
 		logger.WithField("count", n).Debug("Due jobs")
-		//metrics.timerDueJobs.WithLabelValues(t.redis.Name).Add(float64(n))
+		metrics.timerDueJobs.WithLabelValues(m.redis.Name).Add(float64(n))
 		if n == BatchSize {
 			// There might have more expired jobs to pump
-			//metrics.timerFullBatches.WithLabelValues(t.redis.Name).Inc()
+			metrics.timerFullBatches.WithLabelValues(m.redis.Name).Inc()
 			continue
 		}
 		return nil
@@ -307,4 +307,20 @@ func (m *TimerManager) elect() {
 
 func (m *TimerManager) Close() {
 	close(m.stop)
+}
+
+type TimerSize struct {
+	queue queue
+	redis *RedisInstance
+}
+
+func NewTimerSize(ns, q string, redis *RedisInstance) *TimerSize {
+	return &TimerSize{
+		queue: queue{namespace: ns, queue: q},
+		redis: redis,
+	}
+}
+
+func (m *TimerSize) Size() (int64, error) {
+	return m.redis.Conn.ZCard(dummyCtx, m.queue.DelayQueueString()).Result()
 }

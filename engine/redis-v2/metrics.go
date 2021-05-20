@@ -1,7 +1,6 @@
-package redis
+package redis_v2
 
 import (
-	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -72,7 +71,7 @@ func setupMetrics() {
 		jobElapsedMS:          hv("job_elapsed_ms", "namespace", "queue"),
 		jobAckElapsedMS:       hv("job_ack_elapsed_ms", "namespace", "queue"),
 
-		timerSizes:      gv("timer_sizes"),
+		timerSizes:      gv("timer_sizes", "namespace", "queue"),
 		queueSizes:      gv("queue_sizes", "namespace", "queue"),
 		deadletterSizes: gv("deadletter_sizes", "namespace", "queue"),
 
@@ -141,22 +140,21 @@ type SizeProvider interface {
 
 type SizeMonitor struct {
 	redis     *RedisInstance
-	timer     *Timer
+	timer     *TimerManager
 	providers map[string]SizeProvider
 
 	rwmu sync.RWMutex
 }
 
-func NewSizeMonitor(redis *RedisInstance, timer *Timer, preloadData map[string][]string) *SizeMonitor {
+func NewSizeMonitor(redis *RedisInstance, timer *TimerManager) *SizeMonitor {
 	m := &SizeMonitor{
 		redis:     redis,
 		timer:     timer,
 		providers: make(map[string]SizeProvider),
 	}
-	for ns, queues := range preloadData {
-		for _, q := range queues {
-			m.MonitorIfNotExist(ns, q)
-		}
+
+	for _, queue := range timer.queueManager.Queues() {
+		m.MonitorIfNotExist(queue.namespace, queue.queue)
 	}
 	return m
 }
@@ -168,36 +166,43 @@ func (m *SizeMonitor) Loop() {
 	}
 }
 
-func (m *SizeMonitor) MonitorIfNotExist(namespace, queue string) {
-	qname := fmt.Sprintf("q/%s/%s", namespace, queue)
+func (m *SizeMonitor) MonitorIfNotExist(ns, q string) {
+	queue := &queue{
+		namespace: ns,
+		queue:     q,
+	}
 	m.rwmu.RLock()
-	if m.providers[qname] != nil { // queue and deadletter are monitored together, so only test queue
+	if m.providers[queue.ReadyQueueString()] != nil { // queue and deadletter are monitored together, so only test queue
 		m.rwmu.RUnlock()
 		return
 	}
 	m.rwmu.RUnlock()
-	dname := fmt.Sprintf("d/%s/%s", namespace, queue)
 	m.rwmu.Lock()
-	m.providers[qname] = NewQueue(namespace, queue, m.redis, nil)
-	m.providers[dname], _ = NewDeadLetter(namespace, queue, m.redis)
+	m.providers[queue.ReadyQueueString()] = NewQueue(ns, q, m.redis)
+	m.providers[queue.DeadletterString()], _ = NewDeadLetter(ns, q, m.redis)
+	m.providers[queue.DelayQueueString()] = NewTimerSize(ns, q, m.redis)
 	m.rwmu.Unlock()
 }
 
-func (m *SizeMonitor) Remove(namespace, queue string) {
-	qname := fmt.Sprintf("q/%s/%s", namespace, queue)
-	dname := fmt.Sprintf("d/%s/%s", namespace, queue)
+func (m *SizeMonitor) Remove(ns, q string) {
+	queue := &queue{
+		namespace: ns,
+		queue:     q,
+	}
 	m.rwmu.Lock()
-	delete(m.providers, qname)
-	delete(m.providers, dname)
-	metrics.queueSizes.DeleteLabelValues(m.redis.Name, namespace, queue)
-	metrics.deadletterSizes.DeleteLabelValues(m.redis.Name, namespace, queue)
+	delete(m.providers, queue.ReadyQueueString())
+	delete(m.providers, queue.DeadletterString())
+	delete(m.providers, queue.DelayQueueString())
+	metrics.queueSizes.DeleteLabelValues(m.redis.Name, ns, q)
+	metrics.deadletterSizes.DeleteLabelValues(m.redis.Name, ns, q)
+	metrics.timerSizes.DeleteLabelValues(m.redis.Name, ns, q)
 	m.rwmu.Unlock()
 }
 
 func (m *SizeMonitor) collect() {
-	s, err := m.timer.Size()
-	if err == nil {
-		metrics.timerSizes.WithLabelValues(m.redis.Name).Set(float64(s))
+	// note: didn't handle queue deleted
+	for _, queue := range m.timer.queueManager.Queues() {
+		m.MonitorIfNotExist(queue.namespace, queue.queue)
 	}
 	m.rwmu.RLock()
 	for k, p := range m.providers {
@@ -207,10 +212,12 @@ func (m *SizeMonitor) collect() {
 		}
 		splits := strings.SplitN(k, "/", 3)
 		switch splits[0] {
-		case "q":
+		case ReadyQueuePrefix:
 			metrics.queueSizes.WithLabelValues(m.redis.Name, splits[1], splits[2]).Set(float64(s))
-		case "d":
+		case DeadLetterPrefix:
 			metrics.deadletterSizes.WithLabelValues(m.redis.Name, splits[1], splits[2]).Set(float64(s))
+		case DelayQueuePrefix:
+			metrics.timerSizes.WithLabelValues(m.redis.Name, splits[1], splits[2]).Set(float64(s))
 		}
 	}
 	m.rwmu.RUnlock()

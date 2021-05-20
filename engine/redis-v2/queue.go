@@ -28,6 +28,10 @@ type queue struct {
 	queue     string
 }
 
+func (q *queue) DelayQueueString() string {
+	return join(DelayQueuePrefix, q.namespace, q.queue)
+}
+
 func (q *queue) ReadyQueueString() string {
 	return join(ReadyQueuePrefix, q.namespace, q.queue)
 }
@@ -83,7 +87,7 @@ func (q *Queue) Push(j engine.Job) error {
 		// Wrong queue for the job
 		return engine.ErrWrongQueue
 	}
-	//metrics.queueDirectPushJobs.WithLabelValues(q.redis.Name).Inc()
+	metrics.queueDirectPushJobs.WithLabelValues(q.redis.Name).Inc()
 	return q.redis.Conn.LPush(dummyCtx, q.Name(), j.ID()).Err()
 }
 
@@ -178,7 +182,7 @@ func popMultiQueues(redis *RedisInstance, queueNames []string) (string, string, 
 func PollQueues(redis *RedisInstance, queues []queue, timeoutSecond uint32) (q *queue, jobID string, err error) {
 	defer func() {
 		if jobID != "" {
-			//metrics.queuePopJobs.WithLabelValues(redis.Name).Inc()
+			metrics.queuePopJobs.WithLabelValues(redis.Name).Inc()
 		}
 	}()
 

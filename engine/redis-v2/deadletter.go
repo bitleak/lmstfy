@@ -73,17 +73,15 @@ func PreloadDeadLetterLuaScript(redis *RedisInstance) error {
 
 // DeadLetter is where dead job will be buried, the job can be respawned into ready queue
 type DeadLetter struct {
-	redis     *RedisInstance
-	namespace string
-	queue     string
+	redis *RedisInstance
+	queue queue
 }
 
 // NewDeadLetter return an instance of DeadLetter storage
-func NewDeadLetter(namespace, queue string, redis *RedisInstance) (*DeadLetter, error) {
+func NewDeadLetter(ns, q string, redis *RedisInstance) (*DeadLetter, error) {
 	dl := &DeadLetter{
-		redis:     redis,
-		namespace: namespace,
-		queue:     queue,
+		redis: redis,
+		queue: queue{namespace: ns, queue: q},
 	}
 	if respawnDeadletterSHA == "" || deleteDeadletterSHA == "" {
 		return nil, errors.New("dead letter's lua script is not preloaded")
@@ -92,13 +90,13 @@ func NewDeadLetter(namespace, queue string, redis *RedisInstance) (*DeadLetter, 
 }
 
 func (dl *DeadLetter) Name() string {
-	return join(DeadLetterPrefix, dl.namespace, dl.queue)
+	return dl.queue.DeadletterString()
 }
 
 // NOTE: this method is not called any where except in tests, but this logic is
 // implement in the timer's pump script. please refer to that.
 func (dl *DeadLetter) Add(jobID string) error {
-	if err := dl.redis.Conn.Persist(dummyCtx, PoolJobKey2(dl.namespace, dl.queue, jobID)).Err(); err != nil {
+	if err := dl.redis.Conn.Persist(dummyCtx, PoolJobKey2(dl.queue, jobID)).Err(); err != nil {
 		return err
 	}
 	return dl.redis.Conn.LPush(dummyCtx, dl.Name(), jobID).Err()
@@ -123,7 +121,7 @@ func (dl *DeadLetter) Peek() (size int64, jobID string, err error) {
 
 func (dl *DeadLetter) Delete(limit int64) (count int64, err error) {
 	if limit > 1 {
-		poolPrefix := PoolJobKeyPrefix(dl.namespace, dl.queue)
+		poolPrefix := dl.queue.PoolPrefixString()
 		var batchSize int64 = 100
 		if batchSize > limit {
 			batchSize = limit
@@ -160,7 +158,7 @@ func (dl *DeadLetter) Delete(limit int64) (count int64, err error) {
 			}
 			return 0, err
 		}
-		err = dl.redis.Conn.Del(dummyCtx, PoolJobKey2(dl.namespace, dl.queue, jobID)).Err()
+		err = dl.redis.Conn.Del(dummyCtx, PoolJobKey2(dl.queue, jobID)).Err()
 		if err != nil {
 			return 1, fmt.Errorf("failed to delete job data: %s", err)
 		}
@@ -176,8 +174,8 @@ func (dl *DeadLetter) Respawn(limit, ttlSecond int64) (count int64, err error) {
 			//metrics.deadletterRespawnJobs.WithLabelValues(dl.redis.Name).Add(float64(count))
 		}
 	}()
-	queueName := join(ReadyQueuePrefix, dl.namespace, dl.queue)
-	poolPrefix := PoolJobKeyPrefix(dl.namespace, dl.queue)
+	queueName := dl.queue.ReadyQueueString()
+	poolPrefix := dl.queue.PoolPrefixString()
 	if limit > 1 {
 		var batchSize = BatchSize
 		if batchSize > limit {
@@ -215,12 +213,12 @@ func (dl *DeadLetter) Respawn(limit, ttlSecond int64) (count int64, err error) {
 			}
 			return 0, err
 		}
-		err = dl.redis.Conn.HSet(dummyCtx, PoolJobKey2(dl.namespace, dl.queue, jobID), PoolJobFieldTries, 1).Err()
+		err = dl.redis.Conn.HSet(dummyCtx, PoolJobKey2(dl.queue, jobID), PoolJobFieldTries, 1).Err()
 		if err != nil {
 			return 1, fmt.Errorf("failed to set job tries on respawned job[%s]: %s", jobID, err)
 		}
 		if ttlSecond > 0 {
-			err = dl.redis.Conn.Expire(dummyCtx, PoolJobKey2(dl.namespace, dl.queue, jobID), time.Duration(ttlSecond)*time.Second).Err()
+			err = dl.redis.Conn.Expire(dummyCtx, PoolJobKey2(dl.queue, jobID), time.Duration(ttlSecond)*time.Second).Err()
 		}
 		if err != nil {
 			return 1, fmt.Errorf("failed to set TTL on respawned job[%s]: %s", jobID, err)

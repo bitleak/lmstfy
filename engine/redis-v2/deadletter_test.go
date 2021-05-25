@@ -78,7 +78,7 @@ func TestDeadLetter_Respawn(t *testing.T) {
 	if err != nil || count != 2 {
 		t.Fatalf("Failed to respawn two jobs: %s", err)
 	}
-	val, err := R.Conn.BRPop(dummyCtx, time.Second, join(ReadyQueuePrefix, dl.namespace, dl.queue)).Result()
+	val, err := R.Conn.BRPop(dummyCtx, time.Second, dl.queue.ReadyQueueString()).Result()
 	if err != nil || len(val) == 0 {
 		t.Fatal("Failed to pop the job from ready queue")
 	}
@@ -92,13 +92,13 @@ func TestDeadLetter_Respawn(t *testing.T) {
 	if 10-job1TTL.Seconds() > 2 { // 2 seconds passed? no way.
 		t.Fatal("Deadletter job's TTL is not correct")
 	}
-	R.Conn.BRPop(dummyCtx, time.Second, join(ReadyQueuePrefix, dl.namespace, dl.queue)) // rm job2
+	R.Conn.BRPop(dummyCtx, time.Second, dl.queue.ReadyQueueString()) // rm job2
 
 	count, err = dl.Respawn(1, 10)
 	if err != nil || count != 1 {
 		t.Fatalf("Failed to respawn one jobs: %s", err)
 	}
-	val, err = R.Conn.BRPop(dummyCtx, time.Second, join(ReadyQueuePrefix, dl.namespace, dl.queue)).Result()
+	val, err = R.Conn.BRPop(dummyCtx, time.Second, dl.queue.ReadyQueueString()).Result()
 	if err != nil || len(val) == 0 {
 		t.Fatal("Failed to pop the job from ready queue")
 	}

@@ -42,7 +42,7 @@ func PoolJobKey3(namespace, queue, jobID string) string {
 func (p *Pool) Add(j engine.Job) error {
 	body := j.Body()
 	jobKey := PoolJobKey(j)
-	//metrics.poolAddJobs.WithLabelValues(p.redis.Name).Inc()
+	metrics.poolAddJobs.WithLabelValues(p.redis.Name).Inc()
 	// HSetNX return OK(true) if key didn't exist before.
 	pipeline := p.redis.Conn.Pipeline()
 	dataCmd := pipeline.HSetNX(dummyCtx, jobKey, PoolJobFieldData, body)
@@ -90,7 +90,7 @@ func (p *Pool) Get(namespace, queue, jobID string) (body []byte, tries uint16, t
 			// OR GET cmd would fail.
 			ttl = 0
 		}
-		//metrics.poolGetJobs.WithLabelValues(p.redis.Name).Inc()
+		metrics.poolGetJobs.WithLabelValues(p.redis.Name).Inc()
 		return []byte(data), uint16(tries), uint32(ttl), nil
 	case go_redis.Nil:
 		return nil, 0, 0, engine.ErrNotFound
@@ -100,6 +100,6 @@ func (p *Pool) Get(namespace, queue, jobID string) (body []byte, tries uint16, t
 }
 
 func (p *Pool) Delete(namespace, queue, jobID string) error {
-	//metrics.poolDeleteJobs.WithLabelValues(p.redis.Name).Inc()
+	metrics.poolDeleteJobs.WithLabelValues(p.redis.Name).Inc()
 	return p.redis.Conn.Del(dummyCtx, PoolJobKey3(namespace, queue, jobID)).Err()
 }

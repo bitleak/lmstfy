@@ -68,6 +68,8 @@ func (e *Engine) Publish(namespace, queue string, body []byte, ttlSecond, delayS
 			metrics.publishQueueJobs.WithLabelValues(e.redis.Name, namespace, queue).Inc()
 		}
 	}()
+
+	// todo: only check queue exist in publish, because I didn't have a good idea to check this currently.
 	if !e.queues.Exist(namespace, queue) {
 		return "", fmt.Errorf("namespace: %s, queue: %s not exist", namespace, queue)
 	}

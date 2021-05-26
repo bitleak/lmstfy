@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"testing"
+	"time"
 )
 
 func TestEngine_Publish(t *testing.T) {
@@ -12,6 +13,11 @@ func TestEngine_Publish(t *testing.T) {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
 	defer e.Shutdown()
+	err = e.(*Engine).queues.Add("ns-engine", "q1")
+	if err != nil {
+		t.Fatalf("Failed to add queue: %s", err)
+	}
+	time.Sleep(100 * time.Millisecond)
 	body := []byte("hello msg 1")
 	jobID, err := e.Publish("ns-engine", "q1", body, 10, 2, 1)
 	t.Log(jobID)
@@ -33,6 +39,11 @@ func TestEngine_Consume(t *testing.T) {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
 	defer e.Shutdown()
+	err = e.(*Engine).queues.Add("ns-engine", "q2")
+	if err != nil {
+		t.Fatalf("Failed to add queue: %s", err)
+	}
+	time.Sleep(100 * time.Millisecond)
 	body := []byte("hello msg 2")
 	jobID, err := e.Publish("ns-engine", "q2", body, 10, 2, 1)
 	t.Log(jobID)
@@ -72,6 +83,11 @@ func TestEngine_Consume2(t *testing.T) {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
 	defer e.Shutdown()
+	err = e.(*Engine).queues.Add("ns-engine", "q3")
+	if err != nil {
+		t.Fatalf("Failed to add queue: %s", err)
+	}
+	time.Sleep(100 * time.Millisecond)
 	body := []byte("hello msg 3")
 	_, err = e.Publish("ns-engine", "q3", []byte("delay msg"), 10, 5, 1)
 	jobID, err := e.Publish("ns-engine", "q3", body, 10, 2, 1)
@@ -96,6 +112,15 @@ func TestEngine_ConsumeMulti(t *testing.T) {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
 	defer e.Shutdown()
+	err = e.(*Engine).queues.Add("ns-engine", "q4")
+	if err != nil {
+		t.Fatalf("Failed to add queue: %s", err)
+	}
+	err = e.(*Engine).queues.Add("ns-engine", "q5")
+	if err != nil {
+		t.Fatalf("Failed to add queue: %s", err)
+	}
+	time.Sleep(100 * time.Millisecond)
 	body := []byte("hello msg 4")
 	jobID, err := e.Publish("ns-engine", "q4", body, 10, 3, 1)
 	if err != nil {
@@ -135,6 +160,11 @@ func TestEngine_Peek(t *testing.T) {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
 	defer e.Shutdown()
+	err = e.(*Engine).queues.Add("ns-engine", "q6")
+	if err != nil {
+		t.Fatalf("Failed to add queue: %s", err)
+	}
+	time.Sleep(100 * time.Millisecond)
 	body := []byte("hello msg 6")
 	jobID, err := e.Publish("ns-engine", "q6", body, 10, 0, 1)
 	if err != nil {
@@ -155,6 +185,11 @@ func TestEngine_BatchConsume(t *testing.T) {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
 	defer e.Shutdown()
+	err = e.(*Engine).queues.Add("ns-engine", "q7")
+	if err != nil {
+		t.Fatalf("Failed to add queue: %s", err)
+	}
+	time.Sleep(100 * time.Millisecond)
 	body := []byte("hello msg 7")
 	jobID, err := e.Publish("ns-engine", "q7", body, 10, 3, 1)
 	t.Log(jobID)

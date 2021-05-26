@@ -7,6 +7,7 @@ import (
 	"time"
 
 	go_redis "github.com/go-redis/redis/v8"
+	"github.com/sirupsen/logrus"
 
 	"github.com/bitleak/lmstfy/engine"
 	"github.com/bitleak/lmstfy/uuid"
@@ -24,8 +25,8 @@ type RedisInstance struct {
 type Engine struct {
 	redis   *RedisInstance
 	pool    *Pool
-	timer   *Timer
-	meta    *MetaManager
+	timer   *TimerManager
+	queues  *QueueManager
 	monitor *SizeMonitor
 }
 
@@ -41,22 +42,21 @@ func NewEngine(redisName string, conn *go_redis.Client) (engine.Engine, error) {
 		return nil, err
 	}
 	go RedisInstanceMonitor(redis)
-	meta := NewMetaManager(redis)
-	timer, err := NewTimer("timer_set", redis, time.Second)
+	queues, err := NewQueueManager(redis)
 	if err != nil {
 		return nil, err
 	}
-	metadata, err := meta.Dump()
+	timer, err := NewTimerManager(queues, redis)
 	if err != nil {
 		return nil, err
 	}
-	monitor := NewSizeMonitor(redis, timer, metadata)
+	monitor := NewSizeMonitor(redis, timer)
 	go monitor.Loop()
 	return &Engine{
 		redis:   redis,
 		pool:    NewPool(redis),
 		timer:   timer,
-		meta:    meta,
+		queues:  queues,
 		monitor: monitor,
 	}, nil
 }
@@ -68,7 +68,9 @@ func (e *Engine) Publish(namespace, queue string, body []byte, ttlSecond, delayS
 			metrics.publishQueueJobs.WithLabelValues(e.redis.Name, namespace, queue).Inc()
 		}
 	}()
-	e.meta.RecordIfNotExist(namespace, queue)
+	if !e.queues.Exist(namespace, queue) {
+		return "", fmt.Errorf("namespace: %s, queue: %s not exist", namespace, queue)
+	}
 	e.monitor.MonitorIfNotExist(namespace, queue)
 	job := engine.NewJob(namespace, queue, body, ttlSecond, delaySecond, tries)
 	if tries == 0 {
@@ -81,14 +83,14 @@ func (e *Engine) Publish(namespace, queue string, body []byte, ttlSecond, delayS
 	}
 
 	if delaySecond == 0 {
-		q := NewQueue(namespace, queue, e.redis, e.timer)
-		err = q.Push(job, tries)
+		q := NewQueue(namespace, queue, e.redis)
+		err = q.Push(job)
 		if err != nil {
 			err = fmt.Errorf("queue: %s", err)
 		}
 		return job.ID(), err
 	}
-	err = e.timer.Add(namespace, queue, job.ID(), delaySecond, tries)
+	err = e.timer.Add(namespace, queue, job.ID(), delaySecond)
 	if err != nil {
 		err = fmt.Errorf("timer: %s", err)
 	}
@@ -139,14 +141,14 @@ func (e *Engine) consumeMulti(namespace string, queues []string, ttrSecond, time
 			metrics.consumeQueueJobs.WithLabelValues(e.redis.Name, namespace, job.Queue()).Inc()
 		}
 	}()
-	queueNames := make([]QueueName, len(queues))
+	queueNames := make([]queue, len(queues))
 	for i, q := range queues {
-		queueNames[i].Namespace = namespace
-		queueNames[i].Queue = q
+		queueNames[i].namespace = namespace
+		queueNames[i].queue = q
 	}
 	for {
 		startTime := time.Now().Unix()
-		queueName, jobID, tries, err := PollQueues(e.redis, e.timer, queueNames, timeoutSecond, ttrSecond)
+		queueName, jobID, err := PollQueues(e.redis, queueNames, timeoutSecond)
 		if err != nil {
 			return nil, fmt.Errorf("queue: %s", err)
 		}
@@ -154,10 +156,28 @@ func (e *Engine) consumeMulti(namespace string, queues []string, ttrSecond, time
 			return nil, nil
 		}
 		endTime := time.Now().Unix()
-		body, ttl, err := e.pool.Get(namespace, queueName.Queue, jobID)
+		// note: maybe do tries-- in pool.Get and we need another function pool.Peek
+		body, tries, ttl, err := e.pool.Get(queueName.namespace, queueName.queue, jobID)
 		switch err {
 		case nil:
-			// no-op
+			if tries <= 0 {
+				logger.WithFields(logrus.Fields{
+					"jobID":     jobID,
+					"ttr":       ttrSecond,
+					"namespace": queueName.namespace,
+					"queue":     queueName.queue,
+				}).Error("Job with tries == 0 appeared")
+				return nil, fmt.Errorf("Job %s with tries == 0 appeared", jobID)
+			}
+			tries--
+			err = e.timer.Add(queueName.namespace, queueName.queue, jobID, ttrSecond)
+			if err != nil {
+				return nil, fmt.Errorf("timer: %s", err)
+			}
+			err = e.pool.ConsumeTries(queueName.namespace, queueName.queue, jobID)
+			if err != nil {
+				return nil, fmt.Errorf("pool: %s", err)
+			}
 		case engine.ErrNotFound:
 			timeoutSecond = timeoutSecond - uint32(endTime-startTime)
 			if timeoutSecond > 0 {
@@ -175,8 +195,8 @@ func (e *Engine) consumeMulti(namespace string, queues []string, ttrSecond, time
 		default:
 			return nil, fmt.Errorf("pool: %s", err)
 		}
-		job = engine.NewJobWithID(namespace, queueName.Queue, body, ttl, tries, jobID)
-		metrics.jobElapsedMS.WithLabelValues(e.redis.Name, namespace, queueName.Queue).Observe(float64(job.ElapsedMS()))
+		job = engine.NewJobWithID(queueName.namespace, queueName.queue, body, ttl, tries, jobID)
+		metrics.jobElapsedMS.WithLabelValues(e.redis.Name, queueName.namespace, queueName.queue).Observe(float64(job.ElapsedMS()))
 		return job, nil
 	}
 }
@@ -194,8 +214,8 @@ func (e *Engine) Peek(namespace, queue, optionalJobID string) (job engine.Job, e
 	jobID := optionalJobID
 	var tries uint16
 	if optionalJobID == "" {
-		q := NewQueue(namespace, queue, e.redis, e.timer)
-		jobID, tries, err = q.Peek()
+		q := NewQueue(namespace, queue, e.redis)
+		jobID, err = q.Peek()
 		switch err {
 		case nil:
 			// continue
@@ -205,7 +225,7 @@ func (e *Engine) Peek(namespace, queue, optionalJobID string) (job engine.Job, e
 			return nil, fmt.Errorf("failed to peek queue: %s", err)
 		}
 	}
-	body, ttl, err := e.pool.Get(namespace, queue, jobID)
+	body, tries, ttl, err := e.pool.Get(namespace, queue, jobID)
 	// Tricky: we shouldn't return the not found error when the job was not found,
 	// since the job may expired(TTL was reached) and it would confuse the user, so
 	// we return the nil job instead of the not found error here. But if the `optionalJobID`
@@ -221,15 +241,22 @@ func (e *Engine) Peek(namespace, queue, optionalJobID string) (job engine.Job, e
 }
 
 func (e *Engine) Size(namespace, queue string) (size int64, err error) {
-	q := NewQueue(namespace, queue, e.redis, e.timer)
+	q := NewQueue(namespace, queue, e.redis)
 	return q.Size()
 }
 
 func (e *Engine) Destroy(namespace, queue string) (count int64, err error) {
-	e.meta.Remove(namespace, queue)
+	q := NewQueue(namespace, queue, e.redis)
+	count, err = q.Destroy()
+	if err != nil {
+		return
+	}
+	err = e.queues.Remove(namespace, queue)
+	if err != nil {
+		return
+	}
 	e.monitor.Remove(namespace, queue)
-	q := NewQueue(namespace, queue, e.redis, e.timer)
-	return q.Destroy()
+	return
 }
 
 func (e *Engine) PeekDeadLetter(namespace, queue string) (size int64, jobID string, err error) {
@@ -266,11 +293,12 @@ func (e *Engine) SizeOfDeadLetter(namespace, queue string) (size int64, err erro
 }
 
 func (e *Engine) Shutdown() {
-	e.timer.Shutdown()
+	e.timer.Close()
+	e.queues.Close()
 }
 
 func (e *Engine) DumpInfo(out io.Writer) error {
-	metadata, err := e.meta.Dump()
+	metadata, err := e.queues.Dump()
 	if err != nil {
 		return err
 	}

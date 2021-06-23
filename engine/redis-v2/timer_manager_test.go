@@ -36,7 +36,7 @@ func TestTimerManager_Candidate(t *testing.T) {
 			t.Fatal("timer manager register has no effect")
 			return
 		}
-		time.Sleep(TimerManagerInstanceCheckInterval * time.Second)
+		time.Sleep(TimerManagerInstanceCheckInterval)
 	}
 }
 
@@ -47,13 +47,17 @@ func TestTimerManager_Elect(t *testing.T) {
 		return
 	}
 	defer queueManager.Close()
+	_, err = R.Conn.Del(dummyCtx, TimerManagerInstanceSetKey).Result() // delete history for test
+	if err != nil {
+		t.Fatal("clean queue manager history error", err)
+		return
+	}
 	timerManager, err := NewTimerManager(queueManager, R)
 	if err != nil {
 		t.Fatal("init timer manager error", err)
 		return
 	}
 	defer timerManager.Close()
-
 	if timerManager.sequence != TimerManagerMasterSequence {
 		t.Fatal("expect timer manager first sequence number is 0, but got", timerManager.sequence)
 		return
@@ -71,7 +75,7 @@ func TestTimerManager_Elect(t *testing.T) {
 		t.Fatal("expect timer manager 2 sequence number is 1, but got", timerManager2.sequence)
 		return
 	}
-	time.Sleep(TimerManagerInstanceCheckInterval * time.Second)
+	time.Sleep(TimerManagerInstanceCheckInterval)
 	if timerManager.sequence != TimerManagerMasterSequence {
 		t.Fatal("expect timer manager sequence number is 0, but got", timerManager.sequence)
 		return
@@ -80,7 +84,7 @@ func TestTimerManager_Elect(t *testing.T) {
 	// add an early dummy timer manager manual
 	R.Conn.HSet(dummyCtx, TimerManagerInstanceSetKey, fmt.Sprintf("{%d}-{dummyManager}-{%s}",
 		time.Now().Add(-time.Minute).UnixNano()/int64(time.Millisecond), uuid.GenUniqueID()), time.Now().Unix()+3)
-	time.Sleep(TimerManagerInstanceCheckInterval*time.Second + 100*time.Millisecond)
+	time.Sleep(TimerManagerInstanceCheckInterval + 100*time.Millisecond)
 
 	if timerManager.sequence != 1 {
 		t.Fatal("expect timer manager 1 sequence number is 1, but got", timerManager.sequence)
@@ -91,7 +95,7 @@ func TestTimerManager_Elect(t *testing.T) {
 		return
 	}
 
-	time.Sleep(2 * TimerManagerInstanceCheckInterval * time.Second)
+	time.Sleep(2 * TimerManagerInstanceCheckInterval)
 	if timerManager.sequence != 0 {
 		t.Fatal("expect timer manager 1 sequence number is 0, but got", timerManager.sequence)
 		return
@@ -249,5 +253,5 @@ func BenchmarkTimerManager_Pump(b *testing.B) {
 	}
 
 	b.StartTimer()
-	timerManager.pump(queue{namespace: "ns-timer", queue: "q4"})
+	timerManager.pumpQueue(queue{namespace: "ns-timer", queue: "q4"})
 }

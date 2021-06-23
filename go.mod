@@ -13,6 +13,7 @@ require (
 	github.com/magiconair/properties v1.8.1
 	github.com/mitchellh/go-homedir v0.0.0-20180523094522-3864e76763d9
 	github.com/mitchellh/mapstructure v1.2.2 // indirect
+	github.com/oif/gokit v0.16.0
 	github.com/oklog/ulid v0.3.0
 	github.com/pelletier/go-toml v1.7.0 // indirect
 	github.com/prometheus/client_golang v1.0.0

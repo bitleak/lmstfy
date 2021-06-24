@@ -51,11 +51,11 @@ func (m *QueueManager) Exist(namespace, queue string) bool {
 
 func (m *QueueManager) Add(namespace, queue string) error {
 	// did not check exist, because add is rarely operation and update maybe late for a while
-	_, err := m.redis.Conn.HSet(dummyCtx, join(QueueManagerPrefix, "ns"), namespace, 1).Result()
+	_, err := m.redis.Conn.HSet(dummyCtx, m.namespaceSetKey(), namespace, 1).Result()
 	if err != nil {
 		return fmt.Errorf("queue manager add queue ns error, %v", err)
 	}
-	_, err = m.redis.Conn.HSet(dummyCtx, join(QueueManagerPrefix, "ns", namespace), queue, 1).Result()
+	_, err = m.redis.Conn.HSet(dummyCtx, m.queueSetKey(namespace), queue, 1).Result()
 	if err != nil {
 		return fmt.Errorf("queue manager add queue queue error, %v", err)
 	}
@@ -64,7 +64,7 @@ func (m *QueueManager) Add(namespace, queue string) error {
 
 func (m *QueueManager) Remove(namespace, queue string) error {
 	// did not check exist, because remove is rarely operation and update maybe late for a while
-	_, err := m.redis.Conn.HDel(dummyCtx, join(QueueManagerPrefix, "ns", namespace), queue).Result()
+	_, err := m.redis.Conn.HDel(dummyCtx, m.queueSetKey(namespace), queue).Result()
 	if err != nil {
 		return fmt.Errorf("queue manager remove queue queue error, %v", err)
 	}
@@ -72,7 +72,7 @@ func (m *QueueManager) Remove(namespace, queue string) error {
 }
 
 func (m *QueueManager) listNamespaces() (namespaces []string, err error) {
-	val, err := m.redis.Conn.HGetAll(dummyCtx, join(QueueManagerPrefix, "ns")).Result()
+	val, err := m.redis.Conn.HGetAll(dummyCtx, m.namespaceSetKey()).Result()
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +83,7 @@ func (m *QueueManager) listNamespaces() (namespaces []string, err error) {
 }
 
 func (m *QueueManager) listQueues(namespace string) (queues []string, err error) {
-	val, err := m.redis.Conn.HGetAll(dummyCtx, join(QueueManagerPrefix, "ns", namespace)).Result()
+	val, err := m.redis.Conn.HGetAll(dummyCtx, m.queueSetKey(namespace)).Result()
 	if err != nil {
 		return nil, err
 	}
@@ -156,9 +156,7 @@ func (m *QueueManager) watch() {
 		select {
 		case <-m.stop:
 			if err := m.pubsub.Unsubscribe(dummyCtx, QueueManagerSubscribeChannel); err != nil {
-				logger.WithFields(logrus.Fields{
-					"error": err,
-				}).Error("queue manager unsubscribe error")
+				logger.WithError(err).Error("queue manager unsubscribe error")
 			}
 			m.pubsub.Close()
 			logger.Info("queue watcher would be exited while the stop signal was received")
@@ -168,10 +166,18 @@ func (m *QueueManager) watch() {
 				logger.WithFields(logrus.Fields{
 					"error":   err,
 					"message": msg,
-				}).Error("update queue info error")
+				}).Error("queue manager update queue info error")
 			}
 		}
 	}
+}
+
+func (m *QueueManager) namespaceSetKey() string {
+	return join(QueueManagerPrefix, "ns")
+}
+
+func (m *QueueManager) queueSetKey(namespace string) string {
+	return join(QueueManagerPrefix, "ns", namespace)
 }
 
 func (m *QueueManager) Queues() []queue {
@@ -183,7 +189,9 @@ func (m *QueueManager) Queues() []queue {
 }
 
 func (m *QueueManager) Close() {
-	close(m.stop)
+	if m.stop != nil {
+		close(m.stop)
+	}
 }
 
 func (m *QueueManager) Dump() (map[string][]string, error) {

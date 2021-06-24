@@ -124,7 +124,8 @@ func (q *Queue) Destroy() (count int64, err error) {
 		if err != nil {
 			if isLuaScriptGone(err) {
 				if err := PreloadDeadLetterLuaScript(q.redis); err != nil {
-					logger.WithField("err", err).Error("Failed to load deadletter lua script")
+					logger.WithError(err).Error("Failed to load deadletter lua script")
+					return count, err
 				}
 				continue
 			}
@@ -132,7 +133,7 @@ func (q *Queue) Destroy() (count int64, err error) {
 		}
 		n, _ := val.(int64)
 		count += n
-		if n < BatchSize { // Dead letter is empty
+		if n < BatchSize { // Queue is empty
 			break
 		}
 	}
@@ -204,12 +205,12 @@ func PollQueues(redis *RedisInstance, queues []queue, timeoutSecond uint32) (q *
 		logger.Debug("Job not found")
 		return nil, "", nil
 	default:
-		logger.WithField("err", err).Error("Failed to pop job from queue")
+		logger.WithError(err).Error("Failed to pop job from queue")
 		return nil, "", err
 	}
 	q = &queue{}
 	if err := q.Decode(val[0]); err != nil {
-		logger.WithField("err", err).Error("Failed to decode queue name")
+		logger.WithError(err).Error("Failed to decode queue name")
 		return nil, "", err
 	}
 	jobID = val[1]

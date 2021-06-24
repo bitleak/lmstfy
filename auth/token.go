@@ -6,11 +6,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/go-redis/redis/v8"
+	go_redis "github.com/go-redis/redis/v8"
 
 	"github.com/bitleak/lmstfy/config"
 	"github.com/bitleak/lmstfy/engine"
-	"github.com/bitleak/lmstfy/helper"
+	"github.com/bitleak/lmstfy/helper/redis"
 )
 
 var (
@@ -25,7 +25,7 @@ var ErrPoolNotExist error = errors.New("the pool was not exists")
 var ErrTokenExist error = errors.New("the token has already existed")
 
 type TokenManager struct {
-	cli   *redis.Client
+	cli   *go_redis.Client
 	cache map[string]bool // Caching {pool+namespace+token} => bool
 	rwmu  sync.RWMutex
 }
@@ -58,7 +58,7 @@ func cacheKey(pool, namespace, token string) string {
 	return b.String()
 }
 
-func NewTokenManager(cli *redis.Client) *TokenManager {
+func NewTokenManager(cli *go_redis.Client) *TokenManager {
 	return &TokenManager{
 		cli:   cli,
 		cache: make(map[string]bool),
@@ -142,7 +142,7 @@ var _tokenManager *TokenManager
 // Setup config auth redis client and token manager
 func Setup(conf *config.Config) error {
 	redisConf := conf.AdminRedis
-	cli := helper.NewRedisClient(&redisConf, nil)
+	cli := redis.NewClient(&redisConf, nil)
 	if cli.Ping(dummyCtx).Err() != nil {
 		return errors.New("can not connect to admin redis")
 	}

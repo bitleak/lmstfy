@@ -11,7 +11,7 @@ import (
 	"github.com/bitleak/lmstfy/auth"
 	"github.com/bitleak/lmstfy/config"
 	redis_engine "github.com/bitleak/lmstfy/engine/redis"
-	"github.com/bitleak/lmstfy/helper"
+	"github.com/bitleak/lmstfy/helper/redis"
 	"github.com/bitleak/lmstfy/server/handlers"
 	"github.com/bitleak/lmstfy/throttler"
 
@@ -52,7 +52,7 @@ func setup() {
 	level, _ := logrus.ParseLevel(CONF.LogLevel)
 	logger.SetLevel(level)
 
-	conn := helper.NewRedisClient(&CONF.AdminRedis, nil)
+	conn := redis.NewClient(&CONF.AdminRedis, nil)
 	err := conn.Ping(dummyCtx).Err()
 	if err != nil {
 		panic(fmt.Sprintf("Failed to ping: %s", err))
@@ -63,7 +63,7 @@ func setup() {
 	}
 
 	for _, poolConf := range CONF.Pool {
-		conn := helper.NewRedisClient(&poolConf, nil)
+		conn := redis.NewClient(&poolConf, nil)
 		err := conn.Ping(dummyCtx).Err()
 		if err != nil {
 			panic(fmt.Sprintf("Failed to ping: %s", err))

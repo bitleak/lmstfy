@@ -3,8 +3,6 @@ package redis_v2
 import (
 	"errors"
 	"fmt"
-	"time"
-
 	"github.com/bitleak/lmstfy/engine"
 
 	go_redis "github.com/go-redis/redis/v8"
@@ -65,7 +63,7 @@ func PreloadDeadLetterLuaScript(redis *RedisInstance) error {
 
 	sha, err = redis.Conn.ScriptLoad(dummyCtx, luaDeleteDeadletterScript).Result()
 	if err != nil {
-		return fmt.Errorf("failed to preload luascript: %s", err)
+		return fmt.Errorf("failed to preload lua script: %s", err)
 	}
 	deleteDeadletterSHA = sha
 	return nil
@@ -112,7 +110,7 @@ func (dl *DeadLetter) Peek() (size int64, jobID string, err error) {
 	default:
 		return 0, "", err
 	}
-	size, err = dl.redis.Conn.LLen(dummyCtx, dl.Name()).Result()
+	size, err = dl.Size()
 	if err != nil {
 		return 0, "", err
 	}
@@ -120,55 +118,50 @@ func (dl *DeadLetter) Peek() (size int64, jobID string, err error) {
 }
 
 func (dl *DeadLetter) Delete(limit int64) (count int64, err error) {
-	if limit > 1 {
-		poolPrefix := dl.queue.PoolPrefixString()
-		var batchSize int64 = 100
-		if batchSize > limit {
-			batchSize = limit
-		}
-		for {
-			val, err := dl.redis.Conn.EvalSha(dummyCtx, deleteDeadletterSHA, []string{dl.Name(), poolPrefix}, batchSize).Result()
-			if err != nil {
-				if isLuaScriptGone(err) {
-					if err := PreloadDeadLetterLuaScript(dl.redis); err != nil {
-						logger.WithField("err", err).Error("Failed to load deadletter lua script")
-					}
-					continue
-				}
-				return count, err
-			}
-			n, _ := val.(int64)
-			count += n
-			if n < batchSize { // Dead letter is empty
-				break
-			}
-			if count >= limit {
-				break
-			}
-			if limit-count < batchSize {
-				batchSize = limit - count // This is the last batch, we should't respawn jobs exceeding the limit.
-			}
-		}
-		return count, nil
-	} else if limit == 1 {
-		jobID, err := dl.redis.Conn.RPop(dummyCtx, dl.Name()).Result()
-		if err != nil {
-			if err == go_redis.Nil {
-				return 0, nil
-			}
-			return 0, err
-		}
-		err = dl.redis.Conn.Del(dummyCtx, PoolJobKey2(dl.queue, jobID)).Err()
-		if err != nil {
-			return 1, fmt.Errorf("failed to delete job data: %s", err)
-		}
-		return 1, nil
-	} else {
+	if limit <= 0 {
 		return 0, nil
 	}
+	// Note: we can also use rpop+del to delete deadletter when limit == 1, but may cause some data lose control.
+	// Delete is a rarely method, use lua script to handle it maybe just so so.
+	poolPrefix := dl.queue.PoolPrefixString()
+	var batchSize = BatchSize
+	if batchSize > limit {
+		batchSize = limit
+	}
+	for {
+		val, err := dl.redis.Conn.EvalSha(dummyCtx, deleteDeadletterSHA, []string{dl.Name(), poolPrefix}, batchSize).Result()
+		if err != nil {
+			if isLuaScriptGone(err) {
+				if err := PreloadDeadLetterLuaScript(dl.redis); err != nil {
+					logger.WithError(err).Error("Failed to load deadletter lua script")
+					// endless-loop if not return
+					return count, err
+				}
+				continue
+			}
+			return count, err
+		}
+		n, _ := val.(int64)
+		count += n
+		if n < batchSize { // Dead letter is empty
+			break
+		}
+		if count >= limit {
+			break
+		}
+		if limit-count < batchSize {
+			batchSize = limit - count // This is the last batch, we should't respawn jobs exceeding the limit.
+		}
+	}
+	return count, nil
 }
 
 func (dl *DeadLetter) Respawn(limit, ttlSecond int64) (count int64, err error) {
+	if limit <= 0 {
+		return 0, nil
+	}
+	// Note: we can also use rpoplpush+hset+expire to respawn deadletter when limit == 1, but may cause some data lose control.
+	// Respawn is a rarely method, use lua script to handle it maybe just so so.
 	defer func() {
 		if err != nil && count != 0 {
 			metrics.deadletterRespawnJobs.WithLabelValues(dl.redis.Name).Add(float64(count))
@@ -176,57 +169,36 @@ func (dl *DeadLetter) Respawn(limit, ttlSecond int64) (count int64, err error) {
 	}()
 	queueName := dl.queue.ReadyQueueString()
 	poolPrefix := dl.queue.PoolPrefixString()
-	if limit > 1 {
-		var batchSize = BatchSize
-		if batchSize > limit {
-			batchSize = limit
-		}
-		for {
-			val, err := dl.redis.Conn.EvalSha(dummyCtx, respawnDeadletterSHA, []string{dl.Name(), queueName, poolPrefix}, batchSize, ttlSecond).Result() // Respawn `batchSize` jobs at a time
-			if err != nil {
-				if isLuaScriptGone(err) {
-					if err := PreloadDeadLetterLuaScript(dl.redis); err != nil {
-						logger.WithField("err", err).Error("Failed to load deadletter lua script")
-					}
-					continue
-				}
-				return 0, err
-			}
-			n, _ := val.(int64)
-			count += n
-			if n < batchSize { // Dead letter is empty
-				break
-			}
-			if count >= limit {
-				break
-			}
-			if limit-count < batchSize {
-				batchSize = limit - count // This is the last batch, we should't respawn jobs exceeding the limit.
-			}
-		}
-		return count, nil
-	} else if limit == 1 {
-		jobID, err := dl.redis.Conn.RPopLPush(dummyCtx, dl.Name(), queueName).Result()
-		if err != nil {
-			if err == go_redis.Nil {
-				return 0, nil
-			}
-			return 0, err
-		}
-		err = dl.redis.Conn.HSet(dummyCtx, PoolJobKey2(dl.queue, jobID), PoolJobFieldTries, 1).Err()
-		if err != nil {
-			return 1, fmt.Errorf("failed to set job tries on respawned job[%s]: %s", jobID, err)
-		}
-		if ttlSecond > 0 {
-			err = dl.redis.Conn.Expire(dummyCtx, PoolJobKey2(dl.queue, jobID), time.Duration(ttlSecond)*time.Second).Err()
-		}
-		if err != nil {
-			return 1, fmt.Errorf("failed to set TTL on respawned job[%s]: %s", jobID, err)
-		}
-		return 1, nil
-	} else {
-		return 0, nil
+	var batchSize = BatchSize
+	if batchSize > limit {
+		batchSize = limit
 	}
+	for {
+		val, err := dl.redis.Conn.EvalSha(dummyCtx, respawnDeadletterSHA, []string{dl.Name(), queueName, poolPrefix}, batchSize, ttlSecond).Result() // Respawn `batchSize` jobs at a time
+		if err != nil {
+			if isLuaScriptGone(err) {
+				if err := PreloadDeadLetterLuaScript(dl.redis); err != nil {
+					logger.WithError(err).Error("Failed to load deadletter lua script")
+					// endless-loop if not return
+					return count, err
+				}
+				continue
+			}
+			return count, err
+		}
+		n, _ := val.(int64)
+		count += n
+		if n < batchSize { // Dead letter is empty
+			break
+		}
+		if count >= limit {
+			break
+		}
+		if limit-count < batchSize {
+			batchSize = limit - count // This is the last batch, we should't respawn jobs exceeding the limit.
+		}
+	}
+	return count, nil
 }
 
 func (dl *DeadLetter) Size() (size int64, err error) {

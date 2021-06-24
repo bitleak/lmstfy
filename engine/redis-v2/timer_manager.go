@@ -6,18 +6,19 @@ import (
 
 	"github.com/Jeffail/tunny"
 	"github.com/go-redis/redis/v8"
+	"github.com/oif/gokit/wait"
 	"github.com/sirupsen/logrus"
 )
 
 const (
 	luaCalculateSequenceScript = `
-local instances_set_key = KEYS[1]
+local instancesSetKey = KEYS[1]
 local now = tonumber(ARGV[1])
-local instances = redis.call("HGETALL", instances_set_key)
+local instances = redis.call("HGETALL", instancesSetKey)
 local result = {}
 for i = 1, #instances, 2 do
 	if now > tonumber(instances[i + 1]) then
-		redis.call("HDEL", instances_set_key, instances[i])
+		redis.call("HDEL", instancesSetKey, instances[i])
 	else
 		table.insert(result, instances[i])
 	end
@@ -26,38 +27,35 @@ table.sort(result)
 return result
 `
 	luaPumpQueueScript = `
-local delay_queue_prefix = KEYS[1]
-local output_queue_prefix = KEYS[2]
-local pool_prefix = KEYS[3]
-local output_deadletter_prefix = KEYS[4]
-local ns = ARGV[1]
-local q = ARGV[2]
-local now = ARGV[3]
-local limit = ARGV[4]
+local delayQueue = KEYS[1]
+local readyQueue = KEYS[2]
+local poolPrefix = KEYS[3]
+local deadletter = KEYS[4]
+local now = ARGV[1]
+local limit = ARGV[2]
 
-local delay_queue = table.concat({delay_queue_prefix, ns, q}, "/")
-local expiredMembers = redis.call("ZRANGEBYSCORE", delay_queue, 0, now, "LIMIT", 0, limit)
+local expiredMembers = redis.call("ZRANGEBYSCORE", delayQueue, 0, now, "LIMIT", 0, limit)
 
 if #expiredMembers == 0 then
 	return 0
 end
 
-for _,job_id in ipairs(expiredMembers) do
-	local job_key = table.concat({pool_prefix, ns, q, job_id}, "/")
-	if redis.call("EXISTS", job_key) > 0 then
-		local tries = tonumber(redis.call("HGET", job_key, "tries"))
+for _,jobID in ipairs(expiredMembers) do
+	local jobKey = table.concat({poolPrefix, jobID}, "/")
+	if redis.call("EXISTS", jobKey) > 0 then
 		-- only pump job to ready queue/dead letter if the job did not expire
+		local tries = tonumber(redis.call("HGET", jobKey, "tries"))
 		if tries == 0 then
 			-- no more tries, move to dead letter
-			redis.call("PERSIST", table.concat({pool_prefix, ns, q, job_id}, "/"))  -- remove ttl
-			redis.call("LPUSH", table.concat({output_deadletter_prefix, ns, q}, "/"), job_id)
+			redis.call("PERSIST", jobKey)  -- remove ttl
+			redis.call("LPUSH", deadletter, jobID)
 		elseif tries ~= nil then
 			-- move to ready queue
-			redis.call("LPUSH", table.concat({output_queue_prefix, ns, q}, "/"), job_id)
+			redis.call("LPUSH", readyQueue, jobID)
 		end
 	end
 end
-redis.call("ZREM", delay_queue, unpack(expiredMembers))
+redis.call("ZREM", delayQueue, unpack(expiredMembers))
 return #expiredMembers
 `
 )
@@ -65,8 +63,8 @@ return #expiredMembers
 const (
 	TimerManagerInstanceSetKey = "_lmstfy_v2_timer_manager_set_"
 
-	TimerManagerInstanceRegisterTTL   = 6
-	TimerManagerInstanceCheckInterval = 2
+	TimerManagerInstanceRegisterTTL   = 6 * time.Second
+	TimerManagerInstanceCheckInterval = 2 * time.Second
 
 	TimerManagerNoRoleSequence = -1
 	TimerManagerMasterSequence = 0
@@ -82,7 +80,7 @@ type TimerManager struct {
 	id            string
 	queueManager  *QueueManager
 	redis         *RedisInstance
-	stop          chan bool
+	stop          chan struct{}
 
 	_calculateSequenceLuaSha1 string
 	_pumpQueueSHA             string
@@ -94,13 +92,13 @@ func NewTimerManager(queueManager *QueueManager, redis *RedisInstance) (*TimerMa
 		return nil, err
 	}
 	tm := &TimerManager{
-		sequence:     -1,
+		sequence:     TimerManagerNoRoleSequence,
 		id:           id,
 		queueManager: queueManager,
 		redis:        redis,
-		stop:         make(chan bool),
+		stop:         make(chan struct{}),
 	}
-	tm.pool = tunny.NewFunc(TimerManagerDefaultPoolSize, tm.pump)
+	tm.pool = tunny.NewFunc(TimerManagerDefaultPoolSize, tm.pumpQueue)
 	err = tm.preloadCalculateSequenceLuaScript()
 	if err != nil {
 		return nil, err
@@ -117,9 +115,9 @@ func NewTimerManager(queueManager *QueueManager, redis *RedisInstance) (*TimerMa
 	if err != nil {
 		return nil, err
 	}
-	go tm.heartbeat()
-	go tm.elect()
-	go tm.startPump()
+	go wait.Keep(tm.heartbeat, TimerManagerInstanceCheckInterval, true, tm.stop)
+	go wait.Keep(tm.elect, TimerManagerInstanceCheckInterval, true, tm.stop)
+	go wait.Keep(tm.pump, time.Second, true, tm.stop)
 	return tm, nil
 }
 
@@ -135,7 +133,7 @@ func (m *TimerManager) Add(namespace, queue, jobID string, delaySecond uint32) e
 
 // Register register timer manager to a redis set, key is time manager id, value is register expired time
 func (m *TimerManager) register() error {
-	_, err := m.redis.Conn.HSet(dummyCtx, TimerManagerInstanceSetKey, m.id, time.Now().Unix()+TimerManagerInstanceRegisterTTL).Result()
+	_, err := m.redis.Conn.HSet(dummyCtx, TimerManagerInstanceSetKey, m.id, time.Now().Add(TimerManagerInstanceRegisterTTL).Unix()).Result()
 	return err
 }
 
@@ -180,7 +178,7 @@ func (m *TimerManager) calculateSequence(deadline int64) error {
 	}
 	instances, ok := val.([]interface{})
 	if !ok {
-		return fmt.Errorf("invalid sequence calculation, result must be an slice")
+		return fmt.Errorf("invalid sequence calculation, result must be a slice")
 	}
 	for seq, instance := range instances {
 		if instance.(string) == m.id {
@@ -193,15 +191,15 @@ func (m *TimerManager) calculateSequence(deadline int64) error {
 	return nil
 }
 
-func (m *TimerManager) pump(i interface{}) interface{} {
+func (m *TimerManager) pumpQueue(i interface{}) interface{} {
 	q := i.(queue)
 	for {
-		val, err := m.redis.Conn.EvalSha(dummyCtx, m._pumpQueueSHA, []string{DelayQueuePrefix, ReadyQueuePrefix, PoolPrefix, DeadLetterPrefix}, q.namespace, q.queue, time.Now().Unix(), BatchSize).Result()
+		val, err := m.redis.Conn.EvalSha(dummyCtx, m._pumpQueueSHA, []string{q.DelayQueueString(), q.ReadyQueueString(), q.PoolPrefixString(), q.DeadletterString()}, time.Now().Unix(), BatchSize).Result()
 		if err != nil {
 			if isLuaScriptGone(err) { // when redis restart, the script needs to be uploaded again
 				err := m.preloadPumpQueueLuaScript()
 				if err != nil {
-					logger.WithField("err", err).Error("Failed to reload script")
+					logger.WithError(err).Error("timer manager load pump lua script error")
 					return err
 				}
 				continue
@@ -225,88 +223,63 @@ func (m *TimerManager) pump(i interface{}) interface{} {
 	}
 }
 
-func (m *TimerManager) startPump() {
-	ticker := time.NewTicker(time.Second)
-	for {
-		select {
-		case <-ticker.C:
-			instanceCount := m.instanceCount
-			seq := m.sequence
-			if seq == TimerManagerNoRoleSequence {
-				continue
-			}
-			queues := m.queueManager.Queues()
-			queuesLen := len(queues)
-			startIdx := 0
-			step := 1
-			poolSize := queuesLen / step / TimerManagerPumpGoroutineRatio
+func (m *TimerManager) pump() {
+	instanceCount := m.instanceCount
+	seq := m.sequence
+	if seq == TimerManagerNoRoleSequence {
+		return
+	}
+	queues := m.queueManager.Queues()
+	queuesLen := len(queues)
+	startIdx := 0
+	step := 1
+	poolSize := queuesLen / step / TimerManagerPumpGoroutineRatio
 
-			if instanceCount > 2 && seq != TimerManagerMasterSequence {
-				// if we have only two or less instances, every instance will be master.
-				// otherwise, sequence 0 will be master, other instance divide queues equally
-				startIdx = seq - 1
-				step = instanceCount - 1
-				poolSize = queuesLen / step / TimerManagerPumpGoroutineRatio
-			}
-			if poolSize > m.pool.GetSize() {
-				m.pool.SetSize(poolSize)
-			}
-			for i := startIdx; i < queuesLen; i = i + step {
-				m.pool.Process(queues[i])
-			}
-		case <-m.stop:
-			logger.Info("stop timer manager pump")
-			return
-		}
+	if instanceCount > 2 && seq != TimerManagerMasterSequence {
+		// if we have only two or less instances, every instance will be master.
+		// otherwise, sequence 0 will be master, other instance divide queues equally
+		startIdx = seq - 1
+		step = instanceCount - 1
+		poolSize = queuesLen / step / TimerManagerPumpGoroutineRatio
+	}
+	if poolSize > m.pool.GetSize() {
+		m.pool.SetSize(poolSize)
+	}
+	for i := startIdx; i < queuesLen; i = i + step {
+		m.pool.Process(queues[i])
 	}
 }
 
 func (m *TimerManager) heartbeat() {
-	ticker := time.NewTicker(TimerManagerInstanceCheckInterval * time.Second)
-	for {
-		select {
-		case <-ticker.C:
-			if err := m.register(); err != nil {
-				logger.WithFields(logrus.Fields{
-					"error":          err,
-					"timerManagerID": m.id,
-				}).Error("register timer manager error")
-			}
-		case <-m.stop:
-			logger.Info("stop timer manager candidate")
-			if err := m.unregister(); err != nil {
-				logger.WithFields(logrus.Fields{
-					"error":          err,
-					"timerManagerID": m.id,
-				}).Error("unregister timer manager error")
-			}
-			return
-		}
+	if err := m.register(); err != nil {
+		logger.WithFields(logrus.Fields{
+			"error":          err,
+			"timerManagerID": m.id,
+		}).Error("timer manager heartbeat error")
 	}
 }
 
 func (m *TimerManager) elect() {
-	ticker := time.NewTicker(TimerManagerInstanceCheckInterval * time.Second)
-	for {
-		select {
-		case now := <-ticker.C:
-			deadline := now.Unix()
-			if err := m.calculateSequence(deadline); err != nil {
-				logger.WithFields(logrus.Fields{
-					"error":          err,
-					"timerManagerID": m.id,
-					"deadline":       deadline,
-				}).Error("unregister timer manager error")
-			}
-		case <-m.stop:
-			logger.Info("stop timer manager elect")
-			return
-		}
+	deadline := time.Now().Unix()
+	if err := m.calculateSequence(deadline); err != nil {
+		logger.WithFields(logrus.Fields{
+			"error":          err,
+			"timerManagerID": m.id,
+			"deadline":       deadline,
+		}).Error("timer manager elect error")
 	}
 }
 
 func (m *TimerManager) Close() {
-	close(m.stop)
+	if m.stop != nil {
+		close(m.stop)
+	}
+	if err := m.unregister(); err != nil {
+		logger.WithFields(logrus.Fields{
+			"error":          err,
+			"timerManagerID": m.id,
+		}).Error("unregister timer manager error")
+	}
 }
 
 type TimerSize struct {

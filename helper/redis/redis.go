@@ -1,15 +1,16 @@
-package helper
+package redis
 
 import (
 	"strings"
 
 	"github.com/bitleak/lmstfy/config"
-	"github.com/bitleak/lmstfy/engine/redis/hooks"
+	"github.com/bitleak/lmstfy/helper/redis/hooks"
+
 	"github.com/go-redis/redis/v8"
 )
 
-// NewRedisClient wrap the standalone and sentinel client
-func NewRedisClient(conf *config.RedisConf, opt *redis.Options) (client *redis.Client) {
+// NewClient wrap the standalone and sentinel client
+func NewClient(conf *config.RedisConf, opt *redis.Options) (client *redis.Client) {
 	if opt == nil {
 		opt = &redis.Options{}
 	}

@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/go-redis/redis/v8"
+	go_redis "github.com/go-redis/redis/v8"
 	"github.com/sirupsen/logrus"
 
 	"github.com/bitleak/lmstfy/config"
 	"github.com/bitleak/lmstfy/engine"
-	"github.com/bitleak/lmstfy/helper"
+	"github.com/bitleak/lmstfy/helper/redis"
 )
 
 const MaxRedisConnections = 5000
@@ -28,13 +28,13 @@ func Setup(conf *config.Config, l *logrus.Logger) error {
 		if poolConf.PoolSize == 0 {
 			poolConf.PoolSize = MaxRedisConnections
 		}
-		opt := &redis.Options{}
+		opt := &go_redis.Options{}
 		// By Default, the timeout for RW is 3 seconds, we might get few error
 		// when redis server is doing AOF rewrite. We prefer data integrity over speed.
 		opt.ReadTimeout = 30 * time.Second
 		opt.WriteTimeout = 30 * time.Second
 		opt.MinIdleConns = 10
-		cli := helper.NewRedisClient(&poolConf, opt)
+		cli := redis.NewClient(&poolConf, opt)
 		if cli.Ping(dummyCtx).Err() != nil {
 			return fmt.Errorf("redis server %s was not alive", poolConf.Addr)
 		}

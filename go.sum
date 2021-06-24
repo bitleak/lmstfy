@@ -90,6 +90,8 @@ github.com/modern-go/reflect2 v1.0.1/go.mod h1:bx2lNnkwVCuqBIxFjflWJWanXIb3Rllmb
 github.com/mwitkow/go-conntrack v0.0.0-20161129095857-cc309e4a2223/go.mod h1:qRWi+5nqEBWmkhHvq77mSJWrCKwh8bxhgT7d/eI7P4U=
 github.com/nxadm/tail v1.4.4 h1:DQuhQpB1tVlglWS2hLQ5OV6B5r8aGxSrPc5Qo6uTN78=
 github.com/nxadm/tail v1.4.4/go.mod h1:kenIhsEOeOJmVchQTgglprH7qJGnHDVpk1VPCcaMI8A=
+github.com/oif/gokit v0.16.0 h1:QRzGG22UpkSh1VehDrK8Dr2bnzg19zA0u9Bg83ode3Q=
+github.com/oif/gokit v0.16.0/go.mod h1:dUDGtGL3EH4fDwDqXbTpX8N33jBED6MekJk4Aozmm7o=
 github.com/oklog/ulid v0.3.0 h1:yEMMWFnYiPX/ytx1StIE0E1a35sm8MmWD/uSL9ZtKhg=
 github.com/oklog/ulid v0.3.0/go.mod h1:CirwcVhetQ6Lv90oh/F+FBtV6XMibvdAFo93nm5qn4U=
 github.com/onsi/ginkgo v1.6.0/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=

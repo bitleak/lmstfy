@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/bitleak/lmstfy/config"
-	"github.com/bitleak/lmstfy/helper"
+	"github.com/bitleak/lmstfy/helper/redis"
 )
 
 var (
@@ -49,7 +49,7 @@ func setup() {
 
 	// Flush redis DB
 	for _, poolConf := range CONF.Pool {
-		conn := helper.NewRedisClient(&poolConf, nil)
+		conn := redis.NewClient(&poolConf, nil)
 		err := conn.Ping(ctx).Err()
 		if err != nil {
 			panic(fmt.Sprintf("Failed to ping: %s", err))

@@ -9,11 +9,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-redis/redis/v8"
+	go_redis "github.com/go-redis/redis/v8"
 	"github.com/sirupsen/logrus"
 
 	"github.com/bitleak/lmstfy/config"
-	"github.com/bitleak/lmstfy/helper"
+	"github.com/bitleak/lmstfy/helper/redis"
 )
 
 const (
@@ -57,7 +57,7 @@ type TokenLimiter struct {
 
 // Throttler is the QPS throttler for publish/consume
 type Throttler struct {
-	redisCli *redis.Client
+	redisCli *go_redis.Client
 	mu       sync.RWMutex
 	cache    map[string]*Limiter
 	stop     chan bool
@@ -288,7 +288,7 @@ func GetThrottler() *Throttler {
 
 // Setup create new throttler
 func Setup(conf *config.RedisConf, logger *logrus.Logger) error {
-	cli := helper.NewRedisClient(conf, nil)
+	cli := redis.NewClient(conf, nil)
 	sha1, err := cli.ScriptLoad(dummyCtx, throttleIncrLuaScript).Result()
 	if err != nil {
 		return fmt.Errorf("load the throttle incr script: %s", err.Error())

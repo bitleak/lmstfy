@@ -2,13 +2,15 @@ package auth
 
 import (
 	"fmt"
-	"github.com/bitleak/lmstfy/config"
-	"github.com/bitleak/lmstfy/engine"
-	"github.com/bitleak/lmstfy/engine/redis"
-	"github.com/bitleak/lmstfy/helper"
-	go_redis "github.com/go-redis/redis/v8"
 	"os"
 	"testing"
+
+	"github.com/bitleak/lmstfy/config"
+	"github.com/bitleak/lmstfy/engine"
+	redis_engine "github.com/bitleak/lmstfy/engine/redis"
+	"github.com/bitleak/lmstfy/helper/redis"
+
+	go_redis "github.com/go-redis/redis/v8"
 )
 
 var (
@@ -37,7 +39,7 @@ func setup() {
 		panic(fmt.Sprintf("Failed to setup auth testcase: %s", err))
 	}
 
-	adminRedis = helper.NewRedisClient(&conf.AdminRedis, nil)
+	adminRedis = redis.NewClient(&conf.AdminRedis, nil)
 	err := adminRedis.Ping(dummyCtx).Err()
 	if err != nil {
 		panic(fmt.Sprintf("Failed to ping: %s", err))
@@ -85,7 +87,7 @@ func TestTokenManager_New(t *testing.T) {
 	}
 
 	// New token in default pool
-	engine.Register(engine.KindRedis, config.DefaultPoolName, &redis.Engine{})
+	engine.Register(engine.KindRedis, config.DefaultPoolName, &redis_engine.Engine{})
 	tk, err := GetTokenManager().New("", "test-ns", "test-new-token", "")
 	if err != nil {
 		t.Fatalf("Expected new token return nil, but got %v", err)
@@ -108,14 +110,14 @@ func TestTokenManager_New(t *testing.T) {
 		t.Fatalf("Expected check token cache exist, but not exist")
 	}
 
-	engine.Register(engine.KindRedis, config.DefaultPoolName, &redis.Engine{})
+	engine.Register(engine.KindRedis, config.DefaultPoolName, &redis_engine.Engine{})
 	_, err = GetTokenManager().New("", "test-ns", "test-new-token", "")
 	if err != ErrTokenExist {
 		t.Fatalf("Expected new token return token exsit error, but got %v", err)
 	}
 
 	// New token in custom pool
-	engine.Register(engine.KindRedis, "test-pool", &redis.Engine{})
+	engine.Register(engine.KindRedis, "test-pool", &redis_engine.Engine{})
 	tk, err = GetTokenManager().New("test-pool", "test-ns", "test-new-token", "")
 	if err != nil {
 		t.Fatalf("Expected new token return nil, but got %v", err)
@@ -127,7 +129,7 @@ func TestTokenManager_New(t *testing.T) {
 }
 
 func TestTokenManager_Exist(t *testing.T) {
-	engine.Register(engine.KindRedis, config.DefaultPoolName, &redis.Engine{})
+	engine.Register(engine.KindRedis, config.DefaultPoolName, &redis_engine.Engine{})
 	tk, err := GetTokenManager().New("", "test-ns", "test-exist-token", "")
 	if err != nil {
 		t.Fatalf("Expected new token return nil, but got %v", err)
@@ -165,7 +167,7 @@ func TestTokenManager_Exist(t *testing.T) {
 }
 
 func TestTokenManager_Delete(t *testing.T) {
-	engine.Register(engine.KindRedis, config.DefaultPoolName, &redis.Engine{})
+	engine.Register(engine.KindRedis, config.DefaultPoolName, &redis_engine.Engine{})
 	tk, err := GetTokenManager().New("", "test-ns", "test-delete-token", "")
 	if err != nil {
 		t.Fatalf("Expected new token return nil, but got %v", err)
@@ -194,7 +196,7 @@ func TestTokenManager_Delete(t *testing.T) {
 }
 
 func TestTokenManager_List(t *testing.T) {
-	engine.Register(engine.KindRedis, config.DefaultPoolName, &redis.Engine{})
+	engine.Register(engine.KindRedis, config.DefaultPoolName, &redis_engine.Engine{})
 	tk, err := GetTokenManager().New("", "test-ns", "test-list-token", "")
 	if err != nil {
 		t.Fatalf("Expected new token return nil, but got %v", err)
@@ -210,7 +212,7 @@ func TestTokenManager_List(t *testing.T) {
 		t.Fatalf("Expected list token contains test-list-token")
 	}
 
-	engine.Register(engine.KindRedis, "test-pool", &redis.Engine{})
+	engine.Register(engine.KindRedis, "test-pool", &redis_engine.Engine{})
 	tk, err = GetTokenManager().New("test-pool", "test-ns", "test-list-token", "")
 	if err != nil {
 		t.Fatalf("Expected new token return nil, but got %v", err)

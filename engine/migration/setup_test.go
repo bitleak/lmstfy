@@ -8,8 +8,9 @@ import (
 
 	"github.com/bitleak/lmstfy/config"
 	"github.com/bitleak/lmstfy/engine"
-	"github.com/bitleak/lmstfy/engine/redis"
-	"github.com/bitleak/lmstfy/helper"
+	redis_engine "github.com/bitleak/lmstfy/engine/redis"
+	"github.com/bitleak/lmstfy/helper/redis"
+
 	"github.com/sirupsen/logrus"
 )
 
@@ -39,11 +40,11 @@ PLEASE setup env LMSTFY_TEST_CONFIG to the config file first
 }
 
 func setup() {
-	if err := redis.Setup(CONF, logger); err != nil {
+	if err := redis_engine.Setup(CONF, logger); err != nil {
 		panic(fmt.Sprintf("Failed to setup redis engine: %s", err))
 	}
 	for _, poolConf := range CONF.Pool {
-		conn := helper.NewRedisClient(&poolConf, nil)
+		conn := redis.NewClient(&poolConf, nil)
 		err := conn.Ping(dummyCtx).Err()
 		if err != nil {
 			panic(fmt.Sprintf("Failed to ping: %s", err))

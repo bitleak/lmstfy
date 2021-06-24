@@ -51,7 +51,6 @@ func NewEngine(redisName string, conn *go_redis.Client) (engine.Engine, error) {
 		return nil, err
 	}
 	monitor := NewSizeMonitor(redis, timer)
-	go monitor.Loop()
 	return &Engine{
 		redis:   redis,
 		pool:    NewPool(redis),
@@ -297,6 +296,7 @@ func (e *Engine) SizeOfDeadLetter(namespace, queue string) (size int64, err erro
 func (e *Engine) Shutdown() {
 	e.timer.Close()
 	e.queues.Close()
+	e.monitor.Close()
 }
 
 func (e *Engine) DumpInfo(out io.Writer) error {

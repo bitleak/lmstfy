@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/oif/gokit/wait"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -143,7 +144,8 @@ type SizeMonitor struct {
 	timer     *TimerManager
 	providers map[string]SizeProvider
 
-	rwmu sync.RWMutex
+	stopCh chan struct{}
+	rwmu   sync.RWMutex
 }
 
 func NewSizeMonitor(redis *RedisInstance, timer *TimerManager) *SizeMonitor {
@@ -151,19 +153,14 @@ func NewSizeMonitor(redis *RedisInstance, timer *TimerManager) *SizeMonitor {
 		redis:     redis,
 		timer:     timer,
 		providers: make(map[string]SizeProvider),
+		stopCh:    make(chan struct{}),
 	}
 
 	for _, queue := range timer.queueManager.Queues() {
 		m.MonitorIfNotExist(queue.namespace, queue.queue)
 	}
+	go wait.Keep(m.collect, 5*time.Second, true, m.stopCh)
 	return m
-}
-
-func (m *SizeMonitor) Loop() {
-	for {
-		time.Sleep(5 * time.Second)
-		m.collect()
-	}
 }
 
 func (m *SizeMonitor) MonitorIfNotExist(ns, q string) {
@@ -221,6 +218,12 @@ func (m *SizeMonitor) collect() {
 		}
 	}
 	m.rwmu.RUnlock()
+}
+
+func (m *SizeMonitor) Close() {
+	if m.stopCh != nil {
+		close(m.stopCh)
+	}
 }
 
 func init() {

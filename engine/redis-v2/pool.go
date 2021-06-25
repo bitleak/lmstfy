@@ -2,6 +2,8 @@ package redis_v2
 
 import (
 	"errors"
+	"fmt"
+	"github.com/sirupsen/logrus"
 	"strconv"
 	"time"
 
@@ -78,9 +80,17 @@ func (p *Pool) Get(namespace, queue, jobID string) (body []byte, tries uint16, t
 		if !ok {
 			return nil, 0, 0, errors.New("tries should be string")
 		}
-		tries, err := strconv.ParseUint(triesStr, 10, 16)
+		tries, err := strconv.ParseInt(triesStr, 10, 16)
 		if err != nil {
 			return nil, 0, 0, errors.New("tries convert string to uint16 error")
+		}
+		if tries < 0 {
+			logger.WithFields(logrus.Fields{
+				"jobID":     jobID,
+				"namespace": namespace,
+				"queue":     queue,
+			}).Error("Job with tries < 0 appeared")
+			return nil, 0, 0, fmt.Errorf("job %s with tries < 0 appeared", jobID)
 		}
 		ttl := int64(ttlCmd.Val().Seconds())
 		if ttl < 0 {

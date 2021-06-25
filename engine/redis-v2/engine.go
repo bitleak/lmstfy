@@ -6,11 +6,9 @@ import (
 	"io"
 	"time"
 
-	go_redis "github.com/go-redis/redis/v8"
-	"github.com/sirupsen/logrus"
-
 	"github.com/bitleak/lmstfy/engine"
 	"github.com/bitleak/lmstfy/uuid"
+	go_redis "github.com/go-redis/redis/v8"
 )
 
 type RedisInstance struct {
@@ -160,15 +158,9 @@ func (e *Engine) consumeMulti(namespace string, queues []string, ttrSecond, time
 		body, tries, ttl, err := e.pool.Get(queueName.namespace, queueName.queue, jobID)
 		switch err {
 		case nil:
-			if tries < 0 {
-				logger.WithFields(logrus.Fields{
-					"jobID":     jobID,
-					"ttr":       ttrSecond,
-					"namespace": queueName.namespace,
-					"queue":     queueName.queue,
-				}).Error("Job with tries < 0 appeared")
-				return nil, fmt.Errorf("job %s with tries < 0 appeared", jobID)
-			}
+			job = engine.NewJobWithID(queueName.namespace, queueName.queue, body, ttl, tries, jobID)
+			metrics.jobElapsedMS.WithLabelValues(e.redis.Name, queueName.namespace, queueName.queue).Observe(float64(job.ElapsedMS()))
+			return job, nil
 		case engine.ErrNotFound:
 			timeoutSecond = timeoutSecond - uint32(endTime-startTime)
 			if timeoutSecond > 0 {
@@ -186,9 +178,6 @@ func (e *Engine) consumeMulti(namespace string, queues []string, ttrSecond, time
 		default:
 			return nil, fmt.Errorf("pool: %s", err)
 		}
-		job = engine.NewJobWithID(queueName.namespace, queueName.queue, body, ttl, tries, jobID)
-		metrics.jobElapsedMS.WithLabelValues(e.redis.Name, queueName.namespace, queueName.queue).Observe(float64(job.ElapsedMS()))
-		return job, nil
 	}
 }
 

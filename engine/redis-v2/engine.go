@@ -149,7 +149,7 @@ func (e *Engine) consumeMulti(namespace string, queues []string, ttrSecond, time
 	}
 	for {
 		startTime := time.Now().Unix()
-		queueName, jobID, err := PollQueues(e.redis, queueNames, timeoutSecond)
+		queueName, jobID, err := PollQueues(e.redis, queueNames, ttrSecond, timeoutSecond)
 		if err != nil {
 			return nil, fmt.Errorf("queue: %s", err)
 		}
@@ -157,27 +157,17 @@ func (e *Engine) consumeMulti(namespace string, queues []string, ttrSecond, time
 			return nil, nil
 		}
 		endTime := time.Now().Unix()
-		// note: maybe do tries-- in pool.Get and we need another function pool.Peek
 		body, tries, ttl, err := e.pool.Get(queueName.namespace, queueName.queue, jobID)
 		switch err {
 		case nil:
-			if tries <= 0 {
+			if tries < 0 {
 				logger.WithFields(logrus.Fields{
 					"jobID":     jobID,
 					"ttr":       ttrSecond,
 					"namespace": queueName.namespace,
 					"queue":     queueName.queue,
-				}).Error("Job with tries == 0 appeared")
-				return nil, fmt.Errorf("Job %s with tries == 0 appeared", jobID)
-			}
-			tries--
-			err = e.timer.Add(queueName.namespace, queueName.queue, jobID, ttrSecond)
-			if err != nil {
-				return nil, fmt.Errorf("timer: %s", err)
-			}
-			err = e.pool.ConsumeTries(queueName.namespace, queueName.queue, jobID)
-			if err != nil {
-				return nil, fmt.Errorf("pool: %s", err)
+				}).Error("Job with tries < 0 appeared")
+				return nil, fmt.Errorf("job %s with tries < 0 appeared", jobID)
 			}
 		case engine.ErrNotFound:
 			timeoutSecond = timeoutSecond - uint32(endTime-startTime)

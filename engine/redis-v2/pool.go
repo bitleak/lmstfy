@@ -103,8 +103,3 @@ func (p *Pool) Delete(namespace, queue, jobID string) error {
 	metrics.poolDeleteJobs.WithLabelValues(p.redis.Name).Inc()
 	return p.redis.Conn.Del(dummyCtx, PoolJobKey3(namespace, queue, jobID)).Err()
 }
-
-func (p *Pool) ConsumeTries(namespace, queue, jobID string) error {
-	jobKey := PoolJobKey3(namespace, queue, jobID)
-	return p.redis.Conn.HIncrBy(dummyCtx, jobKey, PoolJobFieldTries, -1).Err()
-}

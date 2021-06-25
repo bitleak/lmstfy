@@ -50,7 +50,7 @@ func TestEngine_Consume(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to publish: %s", err)
 	}
-	job, err := e.Consume("ns-engine", []string{"q2"}, 3, 3)
+	job, err := e.Consume("ns-engine", []string{"q2"}, 3, 10)
 	if err != nil {
 		t.Fatalf("Failed to consume: %s", err)
 	}

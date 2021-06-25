@@ -94,7 +94,6 @@ func TestPopMultiQueues(t *testing.T) {
 	p.Add(job)
 	q.Push(job)
 
-	time.Sleep(10 * time.Second)
 	gotQueueName, gotVal, err = popMultiQueues(R, queueNames, 2)
 	if err != nil {
 		t.Fatalf("nil err was expected, but got %s", err.Error())
@@ -112,6 +111,77 @@ func TestPopMultiQueues(t *testing.T) {
 	q.Push(job)
 
 	gotQueueName, gotVal, err = popMultiQueues(R, []string{queueNames[2]}, 2)
+	if err != nil {
+		t.Fatalf("redis nil err was expected, but got %s", err.Error())
+	}
+	if gotQueueName != q.queue.Encode() {
+		t.Fatalf("invalid queueName name, %s was expected but got %s", q.queue.Encode(), gotQueueName)
+	}
+}
+
+func TestBpopMultiQueues(t *testing.T) {
+	namespace := "ns-queueName"
+	queues := make([]queue, 3)
+	queueNames := make([]string, 3)
+	for i, queueName := range []string{"q9", "q10", "q11"} {
+		queues[i] = queue{namespace: namespace, queue: queueName}
+		queueNames[i] = queues[i].Encode()
+	}
+	gotQueueName, gotVal, err := bpopMultiQueues(R, queueNames, 2, 2)
+	if err != redis.Nil {
+		t.Fatalf("redis nil err was expected, but got %v", err)
+	}
+	if gotQueueName != "" || gotVal != "" || err != redis.Nil {
+		t.Fatal("queueName name and value should be empty")
+	}
+
+	// block consume return immediately
+	queueName := "q9"
+	q := NewQueue(namespace, queueName, R)
+	p := NewPool(R)
+	msg := "hello msg 9"
+	job := engine.NewJob(namespace, queueName, []byte(msg), 30, 0, 2)
+	p.Add(job)
+	q.Push(job)
+	gotQueueName, gotVal, err = bpopMultiQueues(R, queueNames, 2, 3)
+	if err != nil {
+		t.Fatalf("nil err was expected, but got %s", err.Error())
+	}
+	if gotQueueName != q.queue.Encode() {
+		t.Fatalf("invalid queueName name, %s was expected but got %s", q.queue.Encode(), gotQueueName)
+	}
+
+	queueName = "q10"
+	q = NewQueue(namespace, queueName, R)
+	p = NewPool(R)
+	msg = "hello msg 10"
+	job = engine.NewJob(namespace, queueName, []byte(msg), 30, 0, 2)
+	go func() {
+		time.Sleep(time.Second)
+		p.Add(job)
+		q.Push(job)
+	}()
+
+	gotQueueName, gotVal, err = bpopMultiQueues(R, queueNames, 2, 3)
+	if err != nil {
+		t.Fatalf("nil err was expected, but got %s", err.Error())
+	}
+	if gotQueueName != q.queue.Encode() {
+		t.Fatalf("invalid queueName name, %s was expected but got %s", q.queue.Encode(), gotQueueName)
+	}
+
+	// single queue condition
+	queueName = "q11"
+	job = engine.NewJob(namespace, queueName, []byte(msg), 30, 0, 2)
+	p = NewPool(R)
+	q = NewQueue(namespace, queueName, R)
+	go func() {
+		time.Sleep(time.Second)
+		p.Add(job)
+		q.Push(job)
+	}()
+
+	gotQueueName, gotVal, err = bpopMultiQueues(R, []string{queueNames[2]}, 2, 3)
 	if err != nil {
 		t.Fatalf("redis nil err was expected, but got %s", err.Error())
 	}

@@ -1,6 +1,7 @@
 package redis_v2
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"time"
@@ -149,6 +150,37 @@ func PreloadQueueLuaScript(redis *RedisInstance) error {
 	return nil
 }
 
+func bpopMultiQueues(redis *RedisInstance, queueNames []string, timeoutSecond uint32) (string, string, error) {
+	queueName, jobID, err := popMultiQueues(redis, queueNames)
+	switch err {
+	case nil:
+		return queueName, jobID, nil
+	case go_redis.Nil:
+	// continue
+	default:
+		return "", "", err
+	}
+	ticker := time.NewTicker(time.Second)
+	ctx, cancel := context.WithTimeout(context.TODO(), time.Duration(timeoutSecond)*time.Second+time.Millisecond*100) // extra 100ms for last rpop
+	defer cancel()
+	for {
+		select {
+		case <-ticker.C:
+			queueName, jobID, err := popMultiQueues(redis, queueNames)
+			switch err {
+			case nil:
+				return queueName, jobID, nil
+			case go_redis.Nil:
+			// continue
+			default:
+				return "", "", err
+			}
+		case <-ctx.Done():
+			return "", "", go_redis.Nil
+		}
+	}
+}
+
 func popMultiQueues(redis *RedisInstance, queueNames []string) (string, string, error) {
 	if len(queueNames) == 1 {
 		val, err := redis.Conn.RPop(dummyCtx, queueNames[0]).Result()
@@ -187,16 +219,15 @@ func PollQueues(redis *RedisInstance, queues []queue, timeoutSecond uint32) (q *
 		}
 	}()
 
-	var val []string
+	var queueName string
 	keys := make([]string, len(queues))
 	for i, k := range queues {
 		keys[i] = k.ReadyQueueString()
 	}
-	if timeoutSecond > 0 { // Blocking poll
-		val, err = redis.Conn.BRPop(dummyCtx, time.Duration(timeoutSecond)*time.Second, keys...).Result()
-	} else { // Non-Blocking fetch
-		val = make([]string, 2) // Just to be coherent with BRPop return values
-		val[0], val[1], err = popMultiQueues(redis, keys)
+	if timeoutSecond <= 0 {
+		queueName, jobID, err = popMultiQueues(redis, keys)
+	} else {
+		queueName, jobID, err = bpopMultiQueues(redis, keys, timeoutSecond)
 	}
 	switch err {
 	case nil:
@@ -208,12 +239,12 @@ func PollQueues(redis *RedisInstance, queues []queue, timeoutSecond uint32) (q *
 		logger.WithError(err).Error("Failed to pop job from queue")
 		return nil, "", err
 	}
+
 	q = &queue{}
-	if err := q.Decode(val[0]); err != nil {
+	if err := q.Decode(queueName); err != nil {
 		logger.WithError(err).Error("Failed to decode queue name")
 		return nil, "", err
 	}
-	jobID = val[1]
 	// we have no tries in queues, we need do tries-- and put job into queue in engine
 	// Note: if we do tries-- in pump and use rpoplpush and brpoplpush in poll we can do this atomic.
 	// But we can't support blocking poll multi queues.

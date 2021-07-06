@@ -50,7 +50,7 @@ func TestEngine_Consume(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to publish: %s", err)
 	}
-	job, err := e.Consume("ns-engine", []string{"q2"}, 3, 3)
+	job, err := e.Consume("ns-engine", []string{"q2"}, 3, 10)
 	if err != nil {
 		t.Fatalf("Failed to consume: %s", err)
 	}
@@ -68,6 +68,27 @@ func TestEngine_Consume(t *testing.T) {
 		t.Fatalf("Failed to publish: %s", err)
 	}
 	job, err = e.Consume("ns-engine", []string{"q2"}, 3, 0)
+	if err != nil {
+		t.Fatalf("Failed to consume: %s", err)
+	}
+	if !bytes.Equal(body, job.Body()) || jobID != job.ID() {
+		t.Fatalf("Mistmatched job data")
+	}
+
+	// Consume job that's was retried
+	jobID, err = e.Publish("ns-engine", "q2", body, 10, 0, 2)
+	t.Log(jobID)
+	if err != nil {
+		t.Fatalf("Failed to publish: %s", err)
+	}
+	job, err = e.Consume("ns-engine", []string{"q2"}, 2, 0)
+	if err != nil {
+		t.Fatalf("Failed to consume: %s", err)
+	}
+	if !bytes.Equal(body, job.Body()) || jobID != job.ID() {
+		t.Fatalf("Mistmatched job data")
+	}
+	job, err = e.Consume("ns-engine", []string{"q2"}, 2, 4)
 	if err != nil {
 		t.Fatalf("Failed to consume: %s", err)
 	}

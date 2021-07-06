@@ -1,8 +1,10 @@
 package redis_v2
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/bitleak/lmstfy/engine"
@@ -11,13 +13,26 @@ import (
 
 const (
 	luaRPOPMultiQueuesScript = `
-	for _, queue in ipairs(KEYS) do
-		local v = redis.call("RPOP", queue)
-		if v ~= false then
-			return {queue, v}
+local readyQueuePrefix = KEYS[1]
+local delayQueuePrefix = KEYS[2]
+local poolPrefix = KEYS[3]
+local nextRetryTime = tonumber(KEYS[4])
+for _, queueName in ipairs(ARGV) do
+	local jobID = redis.call("RPOP", table.concat({readyQueuePrefix, queueName}, "/"))
+	if jobID ~= false then
+		local jobKey = table.concat({poolPrefix, queueName, jobID}, "/")
+		if redis.call("EXISTS", jobKey) > 0 then
+			-- add to delay queue anyway, so we can handle job which tries == 0 in the same code 
+			redis.call("ZADD",table.concat({delayQueuePrefix, queueName}, "/"), nextRetryTime, jobID)
+			local tries = tonumber(redis.call("HINCRBY", jobKey, "tries", -1))
+			if tries >= 0 then
+				-- tries < 0 shouldn't exist, except job was deleted before consume. Drop this job
+				return {queueName, jobID}
+			end
 		end
 	end
-	return {"", ""}
+end
+return {"", ""}
 `
 )
 
@@ -44,13 +59,17 @@ func (q *queue) PoolPrefixString() string {
 	return join(PoolPrefix, q.namespace, q.queue)
 }
 
+func (q *queue) Encode() string {
+	return join(q.namespace, q.queue)
+}
+
 func (q *queue) Decode(str string) error {
-	splits := splits(3, str)
-	if len(splits) != 3 || (splits[0] != ReadyQueuePrefix && splits[0] != DeadLetterPrefix && splits[0] != PoolPrefix) {
+	splits := splits(2, str)
+	if len(splits) != 2 {
 		return errors.New("invalid format")
 	}
-	q.namespace = splits[1]
-	q.queue = splits[2]
+	q.namespace = splits[0]
+	q.queue = splits[1]
 	return nil
 }
 
@@ -93,8 +112,8 @@ func (q *Queue) Push(j engine.Job) error {
 
 // Pop a job. If the tries > 0, add job to the "in-flight" timer with timestamp
 // set to `TTR + now()`; Or we might just move the job to "dead-letter".
-func (q *Queue) Poll(timeoutSecond uint32) (jobID string, err error) {
-	_, jobID, err = PollQueues(q.redis, []queue{q.queue}, timeoutSecond)
+func (q *Queue) Poll(timeoutSecond, ttrSecond uint32) (jobID string, err error) {
+	_, jobID, err = PollQueues(q.redis, []queue{q.queue}, timeoutSecond, ttrSecond)
 	return jobID, err
 }
 
@@ -149,12 +168,41 @@ func PreloadQueueLuaScript(redis *RedisInstance) error {
 	return nil
 }
 
-func popMultiQueues(redis *RedisInstance, queueNames []string) (string, string, error) {
-	if len(queueNames) == 1 {
-		val, err := redis.Conn.RPop(dummyCtx, queueNames[0]).Result()
-		return queueNames[0], val, err
+func bpopMultiQueues(redis *RedisInstance, queueNames []string, ttrSecond, timeoutSecond uint32) (string, string, error) {
+	queueName, jobID, err := popMultiQueues(redis, queueNames, ttrSecond)
+	switch err {
+	case nil:
+		return queueName, jobID, nil
+	case go_redis.Nil:
+	// continue
+	default:
+		return "", "", err
 	}
-	vals, err := redis.Conn.EvalSha(dummyCtx, rpopMultiQueuesSHA, queueNames).Result()
+	ticker := time.NewTicker(time.Second)
+	ctx, cancel := context.WithTimeout(context.TODO(), time.Duration(timeoutSecond)*time.Second+time.Millisecond*100) // extra 100ms for last rpop
+	defer cancel()
+	for {
+		select {
+		case <-ticker.C:
+			queueName, jobID, err := popMultiQueues(redis, queueNames, ttrSecond)
+			switch err {
+			case nil:
+				return queueName, jobID, nil
+			case go_redis.Nil:
+			// continue
+			default:
+				return "", "", err
+			}
+		case <-ctx.Done():
+			return "", "", go_redis.Nil
+		}
+	}
+}
+
+func popMultiQueues(redis *RedisInstance, queueNames []string, ttrSecond uint32) (string, string, error) {
+	vals, err := redis.Conn.EvalSha(dummyCtx, rpopMultiQueuesSHA,
+		[]string{ReadyQueuePrefix, DelayQueuePrefix, PoolPrefix, strconv.FormatInt(time.Now().Unix()+int64(ttrSecond), 10)},
+		queueNames).Result()
 	if err != nil && isLuaScriptGone(err) {
 		if err = PreloadQueueLuaScript(redis); err != nil {
 			return "", "", err
@@ -180,23 +228,22 @@ func popMultiQueues(redis *RedisInstance, queueNames []string) (string, string, 
 }
 
 // Poll from multiple queues using blocking method; OR pop a job from one queue using non-blocking method
-func PollQueues(redis *RedisInstance, queues []queue, timeoutSecond uint32) (q *queue, jobID string, err error) {
+func PollQueues(redis *RedisInstance, queues []queue, ttrSecond, timeoutSecond uint32) (q *queue, jobID string, err error) {
 	defer func() {
 		if jobID != "" {
 			metrics.queuePopJobs.WithLabelValues(redis.Name).Inc()
 		}
 	}()
 
-	var val []string
+	var queueName string
 	keys := make([]string, len(queues))
 	for i, k := range queues {
-		keys[i] = k.ReadyQueueString()
+		keys[i] = k.Encode()
 	}
-	if timeoutSecond > 0 { // Blocking poll
-		val, err = redis.Conn.BRPop(dummyCtx, time.Duration(timeoutSecond)*time.Second, keys...).Result()
-	} else { // Non-Blocking fetch
-		val = make([]string, 2) // Just to be coherent with BRPop return values
-		val[0], val[1], err = popMultiQueues(redis, keys)
+	if timeoutSecond <= 0 {
+		queueName, jobID, err = popMultiQueues(redis, keys, ttrSecond)
+	} else {
+		queueName, jobID, err = bpopMultiQueues(redis, keys, ttrSecond, timeoutSecond)
 	}
 	switch err {
 	case nil:
@@ -208,14 +255,11 @@ func PollQueues(redis *RedisInstance, queues []queue, timeoutSecond uint32) (q *
 		logger.WithError(err).Error("Failed to pop job from queue")
 		return nil, "", err
 	}
+
 	q = &queue{}
-	if err := q.Decode(val[0]); err != nil {
+	if err := q.Decode(queueName); err != nil {
 		logger.WithError(err).Error("Failed to decode queue name")
 		return nil, "", err
 	}
-	jobID = val[1]
-	// we have no tries in queues, we need do tries-- and put job into queue in engine
-	// Note: if we do tries-- in pump and use rpoplpush and brpoplpush in poll we can do this atomic.
-	// But we can't support blocking poll multi queues.
 	return q, jobID, nil
 }

@@ -45,7 +45,7 @@ for _,jobID in ipairs(expiredMembers) do
 	if redis.call("EXISTS", jobKey) > 0 then
 		-- only pump job to ready queue/dead letter if the job did not expire
 		local tries = tonumber(redis.call("HGET", jobKey, "tries"))
-		if tries == 0 then
+		if tries <= 0 then
 			-- no more tries, move to dead letter
 			redis.call("PERSIST", jobKey)  -- remove ttl
 			redis.call("LPUSH", deadletter, jobID)

@@ -26,3 +26,6 @@ Addr = "localhost:6381"
 [Pool.sentinel]
 Addr = "localhost:26379"
 MasterName = "mymaster"
+
+[Pool.test_v2]
+Addr = "localhost:6380"

@@ -28,6 +28,7 @@ Addr = "localhost:6379"
 # Password = foobared
 # DB = 0
 #MigrateTo = "migrate" # When migration is enabled, all PUBLISH will go to `migrate` pool. and `default` will be drained
+#EngineVersion = "redis_v2" # Use Lmstfy v2 engine
 #[Pool.migrate]
 #Addr = "localhost:6389"
 

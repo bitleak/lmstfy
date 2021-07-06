@@ -24,10 +24,14 @@ func PrometheusMetrics(c *gin.Context) {
 	promhttp.Handler().ServeHTTP(c.Writer, c.Request)
 }
 
-// GET /pools/
+// GET /pools/?&kind=
 func ListPools(c *gin.Context) {
-	// TODO: support kind
-	c.IndentedJSON(http.StatusOK, engine.GetPools())
+	kind := c.DefaultQuery("kind", engine.KindRedis)
+	if err := engine.ValidateKind(kind); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.IndentedJSON(http.StatusOK, engine.GetPoolsByKind(kind))
 }
 
 // GET /token/:namespace
@@ -256,11 +260,16 @@ func PProf(c *gin.Context) {
 	}
 }
 
-// GET /info?pool=
+// GET /info?pool=&kind=
 // List all namespaces and queues
 func EngineMetaInfo(c *gin.Context) {
 	logger := GetHTTPLogger(c)
-	e := engine.GetEngineByKind(engine.KindRedis, c.Query("pool"))
+	kind := c.DefaultQuery("kind", engine.KindRedis)
+	if err := engine.ValidateKind(kind); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	e := engine.GetEngineByKind(kind, c.Query("pool"))
 	if e == nil {
 		return
 	}
@@ -268,7 +277,7 @@ func EngineMetaInfo(c *gin.Context) {
 	if err != nil {
 		logger.WithFields(logrus.Fields{
 			"error": err,
-			"kind":  engine.KindRedis,
+			"kind":  kind,
 			"pool":  c.Query("pool"),
 		}).Error("dump engine meta info error")
 		return

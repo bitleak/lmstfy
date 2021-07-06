@@ -14,8 +14,8 @@ func Setup(conf *config.Config, l *logrus.Logger) error {
 	logger = l
 	for redisPool, poolConf := range conf.Pool {
 		if poolConf.MigrateTo != "" {
-			oldEngine := engine.GetEngineByKind(engine.KindRedis, redisPool)
-			newEngine := engine.GetEngineByKind(engine.KindRedis, poolConf.MigrateTo)
+			oldEngine := engine.GetEngine(redisPool)
+			newEngine := engine.GetEngine(poolConf.MigrateTo)
 			if newEngine == nil {
 				return fmt.Errorf("invalid pool [%s] to migrate to", poolConf.MigrateTo)
 			}

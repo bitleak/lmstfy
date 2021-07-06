@@ -1,13 +1,27 @@
 package engine
 
-import "github.com/bitleak/lmstfy/config"
+import (
+	"fmt"
+
+	"github.com/bitleak/lmstfy/config"
+)
 
 const (
 	KindRedis     = "redis"
+	KindRedisV2   = "redis_v2"
 	KindMigration = "migration"
 )
 
 var engines = make(map[string]map[string]Engine)
+
+func ValidateKind(kind string) error {
+	switch kind {
+	case KindRedis, KindRedisV2, KindMigration:
+		return nil
+	default:
+		return fmt.Errorf("invalid engine kind: %s", kind)
+	}
+}
 
 func GetEngineByKind(kind, pool string) Engine {
 	if pool == "" {
@@ -32,10 +46,6 @@ func GetPoolsByKind(kind string) []string {
 	return pools
 }
 
-func GetPools() []string {
-	return GetPoolsByKind(KindRedis)
-}
-
 func ExistsPool(pool string) bool {
 	if pool == "" {
 		pool = config.DefaultPoolName
@@ -48,6 +58,10 @@ func GetEngine(pool string) Engine {
 		pool = config.DefaultPoolName
 	}
 	e := GetEngineByKind(KindMigration, pool)
+	if e != nil {
+		return e
+	}
+	e = GetEngineByKind(KindRedisV2, pool)
 	if e != nil {
 		return e
 	}

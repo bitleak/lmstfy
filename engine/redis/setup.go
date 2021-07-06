@@ -2,7 +2,6 @@ package redis
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -25,27 +24,26 @@ var (
 func Setup(conf *config.Config, l *logrus.Logger) error {
 	logger = l
 	for name, poolConf := range conf.Pool {
-		if poolConf.PoolSize == 0 {
-			poolConf.PoolSize = MaxRedisConnections
+		if poolConf.EngineKing == "" || poolConf.EngineKing == engine.KindRedis {
+			if poolConf.PoolSize == 0 {
+				poolConf.PoolSize = MaxRedisConnections
+			}
+			opt := &go_redis.Options{}
+			// By Default, the timeout for RW is 3 seconds, we might get few error
+			// when redis server is doing AOF rewrite. We prefer data integrity over speed.
+			opt.ReadTimeout = 30 * time.Second
+			opt.WriteTimeout = 30 * time.Second
+			opt.MinIdleConns = 10
+			cli := redis.NewClient(&poolConf, opt)
+			if cli.Ping(dummyCtx).Err() != nil {
+				return fmt.Errorf("redis server %s was not alive", poolConf.Addr)
+			}
+			e, err := NewEngine(name, cli)
+			if err != nil {
+				return fmt.Errorf("setup engine error: %s", err)
+			}
+			engine.Register(engine.KindRedis, name, e)
 		}
-		opt := &go_redis.Options{}
-		// By Default, the timeout for RW is 3 seconds, we might get few error
-		// when redis server is doing AOF rewrite. We prefer data integrity over speed.
-		opt.ReadTimeout = 30 * time.Second
-		opt.WriteTimeout = 30 * time.Second
-		opt.MinIdleConns = 10
-		cli := redis.NewClient(&poolConf, opt)
-		if cli.Ping(dummyCtx).Err() != nil {
-			return fmt.Errorf("redis server %s was not alive", poolConf.Addr)
-		}
-		e, err := NewEngine(name, cli)
-		if err != nil {
-			return fmt.Errorf("setup engine error: %s", err)
-		}
-		engine.Register(engine.KindRedis, name, e)
-	}
-	if engine.GetEngineByKind(engine.KindRedis, "") == nil {
-		return errors.New("default redis engine not found")
 	}
 	return nil
 }

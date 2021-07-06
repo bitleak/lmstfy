@@ -10,7 +10,7 @@ GET /pools/
 
 #### Request Query
 
-no parameter
+- kind: optional, Default: "redis"
 
 ### Create Token 
 
@@ -50,6 +50,7 @@ GET /info
 ```
 
 #### Request Query
+- kind: optional, Default: "redis"
 - pool: optional, 默认 "default"
 
 ### Get Prometheus Metrics 

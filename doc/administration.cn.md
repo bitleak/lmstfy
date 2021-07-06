@@ -10,7 +10,7 @@ GET /pools/
 
 #### Request Query
 
-不需要参数
+- kind: optional, 默认 "redis"
 
 ### 创建 `token`
 
@@ -50,6 +50,7 @@ GET /info
 ```
 
 #### Request Query
+- kind: optional, 默认 "redis"
 - pool: optional, 默认 "default"
 
 ### 获取 prometheus 监控指标 

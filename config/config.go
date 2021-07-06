@@ -47,11 +47,12 @@ type Config struct {
 type RedisPool map[string]RedisConf
 
 type RedisConf struct {
-	Addr      string
-	Password  string
-	DB        int
-	PoolSize  int
-	MigrateTo string // If this is not empty, all the PUBLISH will go to that pool
+	Addr       string
+	Password   string
+	DB         int
+	PoolSize   int
+	MigrateTo  string // If this is not empty, all the PUBLISH will go to that pool
+	EngineKing string
 
 	mode       int
 	MasterName string

@@ -43,6 +43,16 @@ GET /token/:namespace
 #### Request Query
 - pool: optional, 默认 "default"
 
+### 创建v2版本 `queue`
+
+```
+POST /queue/:namespace/:queue
+```
+
+#### Request Query
+
+- pool: optional, 默认 "default"
+
 ### 列出所有 `namespace` 和 `queue`
 
 ```

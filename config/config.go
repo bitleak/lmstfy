@@ -52,7 +52,7 @@ type RedisConf struct {
 	DB         int
 	PoolSize   int
 	MigrateTo  string // If this is not empty, all the PUBLISH will go to that pool
-	EngineKing string
+	EngineKind string
 
 	mode       int
 	MasterName string

@@ -272,6 +272,10 @@ func (e *Engine) SizeOfDeadLetter(namespace, queue string) (size int64, err erro
 	return dl.Size()
 }
 
+func (e *Engine) RegisterQueue(namespace, queue string) error {
+	return e.queues.Add(namespace, queue)
+}
+
 func (e *Engine) Shutdown() {
 	e.timer.Close()
 	e.queues.Close()

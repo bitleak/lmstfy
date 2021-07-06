@@ -174,3 +174,20 @@ func TestDeleteTokenLimiter(t *testing.T) {
 		t.Fatal("the token's limiter was expected to be deleted")
 	}
 }
+
+func TestRegisterQueue(t *testing.T) {
+	query := url.Values{}
+	query.Add("pool", "test_v2")
+	targetUrl := fmt.Sprintf("http://localhost/queue/test_ns/test_queue?%s", query.Encode())
+	req, err := http.NewRequest("POST", targetUrl, nil)
+	if err != nil {
+		t.Fatalf("Failed to create request")
+	}
+	c, e, resp := ginTest(req)
+	e.POST("/queue/:namespace/:queue", handlers.ValidateParams, handlers.CheckPoolExists, handlers.RegisterQueue)
+	e.HandleContext(c)
+	if resp.Code != http.StatusCreated {
+		t.Logf(resp.Body.String())
+		t.Fatal("Failed to register queue")
+	}
+}

@@ -13,7 +13,7 @@ func TestEngine_Publish(t *testing.T) {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
 	defer e.Shutdown()
-	err = e.(*Engine).queues.Add("ns-engine", "q1")
+	err = e.(*Engine).RegisterQueue("ns-engine", "q1")
 	if err != nil {
 		t.Fatalf("Failed to add queue: %s", err)
 	}
@@ -39,7 +39,7 @@ func TestEngine_Consume(t *testing.T) {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
 	defer e.Shutdown()
-	err = e.(*Engine).queues.Add("ns-engine", "q2")
+	err = e.(*Engine).RegisterQueue("ns-engine", "q2")
 	if err != nil {
 		t.Fatalf("Failed to add queue: %s", err)
 	}
@@ -104,7 +104,7 @@ func TestEngine_Consume2(t *testing.T) {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
 	defer e.Shutdown()
-	err = e.(*Engine).queues.Add("ns-engine", "q3")
+	err = e.(*Engine).RegisterQueue("ns-engine", "q3")
 	if err != nil {
 		t.Fatalf("Failed to add queue: %s", err)
 	}
@@ -133,11 +133,11 @@ func TestEngine_ConsumeMulti(t *testing.T) {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
 	defer e.Shutdown()
-	err = e.(*Engine).queues.Add("ns-engine", "q4")
+	err = e.(*Engine).RegisterQueue("ns-engine", "q4")
 	if err != nil {
 		t.Fatalf("Failed to add queue: %s", err)
 	}
-	err = e.(*Engine).queues.Add("ns-engine", "q5")
+	err = e.(*Engine).RegisterQueue("ns-engine", "q5")
 	if err != nil {
 		t.Fatalf("Failed to add queue: %s", err)
 	}
@@ -181,7 +181,7 @@ func TestEngine_Peek(t *testing.T) {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
 	defer e.Shutdown()
-	err = e.(*Engine).queues.Add("ns-engine", "q6")
+	err = e.(*Engine).RegisterQueue("ns-engine", "q6")
 	if err != nil {
 		t.Fatalf("Failed to add queue: %s", err)
 	}
@@ -206,7 +206,7 @@ func TestEngine_BatchConsume(t *testing.T) {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
 	defer e.Shutdown()
-	err = e.(*Engine).queues.Add("ns-engine", "q7")
+	err = e.(*Engine).RegisterQueue("ns-engine", "q7")
 	if err != nil {
 		t.Fatalf("Failed to add queue: %s", err)
 	}

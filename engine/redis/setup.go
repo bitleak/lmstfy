@@ -24,7 +24,7 @@ var (
 func Setup(conf *config.Config, l *logrus.Logger) error {
 	logger = l
 	for name, poolConf := range conf.Pool {
-		if poolConf.EngineKing == "" || poolConf.EngineKing == engine.KindRedis {
+		if poolConf.EngineKind == "" || poolConf.EngineKind == engine.KindRedis {
 			if poolConf.PoolSize == 0 {
 				poolConf.PoolSize = MaxRedisConnections
 			}

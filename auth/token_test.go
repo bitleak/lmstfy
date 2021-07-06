@@ -82,7 +82,7 @@ func TestCacheKey(t *testing.T) {
 
 func TestTokenManager_New(t *testing.T) {
 	_, err := GetTokenManager().New("", "test-ns", "test-new-token", "")
-	if err != ErrPoolNotExist {
+	if err != engine.ErrPoolNotExist {
 		t.Fatalf("Expected new token return pool not exist error, but got %v", err)
 	}
 
@@ -161,7 +161,7 @@ func TestTokenManager_Exist(t *testing.T) {
 
 	// Check pool not exist
 	_, err = GetTokenManager().Exist("not-exist", "test-ns", tk)
-	if err != ErrPoolNotExist {
+	if err != engine.ErrPoolNotExist {
 		t.Fatalf("Expected exist token return pool not exist error, but got %v", err)
 	}
 }
@@ -190,7 +190,7 @@ func TestTokenManager_Delete(t *testing.T) {
 	}
 
 	err = GetTokenManager().Delete("not-exist", "test-ns", tk)
-	if err != ErrPoolNotExist {
+	if err != engine.ErrPoolNotExist {
 		t.Fatalf("Expected delete token return pool not exist error, but got %v", err)
 	}
 }
@@ -230,7 +230,7 @@ func TestTokenManager_List(t *testing.T) {
 
 	// List tokens in not exist pool
 	_, err = GetTokenManager().List("not-exist", "test-ns")
-	if err != ErrPoolNotExist {
+	if err != engine.ErrPoolNotExist {
 		t.Fatalf("Expected list token return pool not exist error, but got %v", err)
 	}
 }

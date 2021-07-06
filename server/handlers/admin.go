@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	redis_v2 "github.com/bitleak/lmstfy/engine/redis-v2"
 	"math"
 	"net/http"
 	"net/http/pprof"
@@ -24,7 +25,7 @@ func PrometheusMetrics(c *gin.Context) {
 	promhttp.Handler().ServeHTTP(c.Writer, c.Request)
 }
 
-// GET /pools/?&kind=
+// GET /pools/?kind=
 func ListPools(c *gin.Context) {
 	kind := c.DefaultQuery("kind", engine.KindRedis)
 	if err := engine.ValidateKind(kind); err != nil {
@@ -39,7 +40,7 @@ func ListTokens(c *gin.Context) {
 	tm := auth.GetTokenManager()
 	tokens, err := tm.List(c.Query("pool"), c.Param("namespace"))
 	if err != nil {
-		if err == auth.ErrPoolNotExist {
+		if err == engine.ErrPoolNotExist {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		} else {
 			logger := GetHTTPLogger(c)
@@ -94,7 +95,7 @@ func NewToken(c *gin.Context) {
 	tm := auth.GetTokenManager()
 	token, err := tm.New(pool, namespace, rawToken, desc)
 	if err != nil {
-		if err == auth.ErrPoolNotExist || err == auth.ErrTokenExist {
+		if err == engine.ErrPoolNotExist || err == auth.ErrTokenExist {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		} else {
 			logger := GetHTTPLogger(c)
@@ -117,7 +118,7 @@ func DeleteToken(c *gin.Context) {
 	pool, token := parseToken(c.Param("token"))
 	namespace := c.Param("namespace")
 	if err := tm.Delete(pool, namespace, token); err != nil {
-		if err == auth.ErrPoolNotExist {
+		if err == engine.ErrPoolNotExist {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		} else {
 			logger.WithFields(logrus.Fields{
@@ -238,6 +239,31 @@ func SetLimiter(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"limiter": limiter})
+}
+
+// POST /queue/:namespace/:queue?pool=
+func RegisterQueue(c *gin.Context) {
+	logger := GetHTTPLogger(c)
+	pool := c.Query("pool")
+	namespace := c.Param("namespace")
+	queue := c.Param("queue")
+	e := engine.GetEngineByKind(engine.KindRedisV2, pool)
+	if e == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": engine.ErrPoolNotExist.Error()})
+		return
+	}
+	err := e.(*redis_v2.Engine).RegisterQueue(namespace, queue)
+	if err != nil {
+		logger.WithFields(logrus.Fields{
+			"pool":      pool,
+			"namespace": namespace,
+			"queue":     queue,
+			"err":       err,
+		}).Error("Failed to register queue")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"namespace": namespace, "queue": queue})
 }
 
 // GET /version

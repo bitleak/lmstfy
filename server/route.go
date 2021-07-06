@@ -66,14 +66,17 @@ func SetupAdminRoutes(e *gin.Engine, accounts gin.Accounts) {
 	tokenGroup := e.Group("/token")
 	{
 		tokenGroup.Use(basicAuthMiddleware)
-		tokenGroup.GET("/:namespace", handlers.ListTokens)
-		tokenGroup.POST("/:namespace", handlers.NewToken)
+		tokenGroup.GET("/:namespace", handlers.CheckPoolExists, handlers.ListTokens)
+		tokenGroup.POST("/:namespace", handlers.CheckPoolExists, handlers.NewToken)
 		tokenGroup.DELETE("/:namespace/:token", handlers.DeleteToken)
 		tokenGroup.GET("/:namespace/:token/limit", handlers.GetLimiter)
 		tokenGroup.POST("/:namespace/:token/limit", handlers.AddLimiter)
 		tokenGroup.PUT("/:namespace/:token/limit", handlers.SetLimiter)
 		tokenGroup.DELETE("/:namespace/:token/limit", handlers.DeleteLimiter)
 	}
+
+	// register queue api
+	e.POST("/queue/:namespace/:queue", basicAuthMiddleware, handlers.ValidateParams, handlers.CheckPoolExists, handlers.RegisterQueue)
 
 	e.Any("/debug/pprof/*profile", handlers.PProf)
 	e.GET("/accesslog", handlers.GetAccessLogStatus)

@@ -19,8 +19,6 @@ var (
 
 const TokenPrefix = "tk"
 
-var ErrPoolNotExist error = errors.New("the pool was not exists")
-
 // ErrTokenExist means the user-defined has already existed
 var ErrTokenExist error = errors.New("the token has already existed")
 
@@ -71,8 +69,8 @@ func (tm *TokenManager) isDefaultPool(pool string) bool {
 
 // New would create the token in pool
 func (tm *TokenManager) New(pool, namespace, token, description string) (string, error) {
-	if exists := engine.ExistsPool(pool); !exists {
-		return "", ErrPoolNotExist
+	if err := engine.CheckPoolExist(pool); err != nil {
+		return "", err
 	}
 	ok, err := tm.cli.HSetNX(dummyCtx, tokenKey(pool, namespace), token, description).Result()
 	if err != nil {
@@ -91,8 +89,8 @@ func (tm *TokenManager) New(pool, namespace, token, description string) (string,
 }
 
 func (tm *TokenManager) Exist(pool, namespace, token string) (exist bool, err error) {
-	if exists := engine.ExistsPool(pool); !exists {
-		return false, ErrPoolNotExist
+	if err := engine.CheckPoolExist(pool); err != nil {
+		return false, err
 	}
 	tm.rwmu.RLock()
 	if tm.cache[cacheKey(pool, namespace, token)] {
@@ -110,8 +108,8 @@ func (tm *TokenManager) Exist(pool, namespace, token string) (exist bool, err er
 }
 
 func (tm *TokenManager) Delete(pool, namespace, token string) error {
-	if exists := engine.ExistsPool(pool); !exists {
-		return ErrPoolNotExist
+	if err := engine.CheckPoolExist(pool); err != nil {
+		return err
 	}
 	tm.rwmu.Lock()
 	delete(tm.cache, cacheKey(pool, namespace, token))
@@ -120,8 +118,8 @@ func (tm *TokenManager) Delete(pool, namespace, token string) error {
 }
 
 func (tm *TokenManager) List(pool, namespace string) (tokens map[string]string, err error) {
-	if exists := engine.ExistsPool(pool); !exists {
-		return nil, ErrPoolNotExist
+	if err := engine.CheckPoolExist(pool); err != nil {
+		return nil, err
 	}
 	val, err := tm.cli.HGetAll(dummyCtx, tokenKey(pool, namespace)).Result()
 	if err != nil {

@@ -11,6 +11,7 @@ import (
 	"github.com/bitleak/lmstfy/auth"
 	"github.com/bitleak/lmstfy/config"
 	redis_engine "github.com/bitleak/lmstfy/engine/redis"
+	redis_engine_v2 "github.com/bitleak/lmstfy/engine/redis-v2"
 	"github.com/bitleak/lmstfy/helper/redis"
 	"github.com/bitleak/lmstfy/server/handlers"
 	"github.com/bitleak/lmstfy/throttler"
@@ -74,6 +75,9 @@ func setup() {
 		}
 	}
 
+	if err := redis_engine_v2.Setup(CONF, logger); err != nil {
+		panic(fmt.Sprintf("Failed to setup redis engine: %s", err))
+	}
 	if err := redis_engine.Setup(CONF, logger); err != nil {
 		panic(fmt.Sprintf("Failed to setup redis engine: %s", err))
 	}

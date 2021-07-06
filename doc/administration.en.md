@@ -43,6 +43,16 @@ GET /token/:namespace
 #### Request Query
 - pool: optional, Default: "default"
 
+### Register v2 version `queue`
+
+```
+POST /queue/:namespace/:queue
+```
+
+#### Request Query
+
+- pool: optional, Default: "default"
+
 ### List Namespace And Queue
 
 ```

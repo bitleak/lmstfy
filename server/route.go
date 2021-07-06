@@ -67,7 +67,7 @@ func SetupAdminRoutes(e *gin.Engine, accounts gin.Accounts) {
 	{
 		tokenGroup.Use(basicAuthMiddleware)
 		tokenGroup.GET("/:namespace", handlers.CheckPoolExists, handlers.ListTokens)
-		tokenGroup.POST("/:namespace", handlers.CheckPoolExists, handlers.NewToken)
+		tokenGroup.POST("/:namespace", handlers.NewToken)
 		tokenGroup.DELETE("/:namespace/:token", handlers.DeleteToken)
 		tokenGroup.GET("/:namespace/:token/limit", handlers.GetLimiter)
 		tokenGroup.POST("/:namespace/:token/limit", handlers.AddLimiter)

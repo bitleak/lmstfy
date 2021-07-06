@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	redis_v2 "github.com/bitleak/lmstfy/engine/redis-v2"
 	"math"
 	"net/http"
 	"net/http/pprof"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/bitleak/lmstfy/auth"
 	"github.com/bitleak/lmstfy/engine"
+	redis_v2 "github.com/bitleak/lmstfy/engine/redis-v2"
 	"github.com/bitleak/lmstfy/server/middleware"
 	"github.com/bitleak/lmstfy/throttler"
 	"github.com/bitleak/lmstfy/uuid"
@@ -40,17 +40,13 @@ func ListTokens(c *gin.Context) {
 	tm := auth.GetTokenManager()
 	tokens, err := tm.List(c.Query("pool"), c.Param("namespace"))
 	if err != nil {
-		if err == engine.ErrPoolNotExist {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		} else {
-			logger := GetHTTPLogger(c)
-			logger.WithFields(logrus.Fields{
-				"pool":      c.Query("pool"),
-				"namespace": c.Param("namespace"),
-				"err":       err,
-			}).Error("Failed to list the token")
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
-		}
+		logger := GetHTTPLogger(c)
+		logger.WithFields(logrus.Fields{
+			"pool":      c.Query("pool"),
+			"namespace": c.Param("namespace"),
+			"err":       err,
+		}).Error("Failed to list the token")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
 	c.IndentedJSON(http.StatusOK, gin.H{"tokens": tokens})

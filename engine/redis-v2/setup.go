@@ -3,7 +3,6 @@ package redis_v2
 import (
 	"context"
 	"fmt"
-
 	"time"
 
 	go_redis "github.com/go-redis/redis/v8"

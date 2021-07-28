@@ -252,8 +252,9 @@ func (t *Throttler) updateLimiters() {
 		}
 		newCache[token] = &limiter
 	}
-	// unnecessary to lock the cache here
+	t.mu.Lock()
 	t.cache = newCache
+	t.mu.Unlock()
 }
 
 func (t *Throttler) asyncLoop() {

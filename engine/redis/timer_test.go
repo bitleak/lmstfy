@@ -30,24 +30,35 @@ func TestTimer_Tick(t *testing.T) {
 	pool := NewPool(R)
 	pool.Add(job)
 	timer.Add(job.Namespace(), job.Queue(), job.ID(), 3, 1)
-	wait := make(chan struct{})
+	errChan := make(chan error, 1)
 	go func() {
+		var err error = nil
 		defer func() {
-			wait <- struct{}{}
+			// BRPop could panic
+			if r := recover(); r != nil {
+				err = fmt.Errorf("recover with panic %v", r)
+			}
+			errChan <- err
 		}()
 		val, err := R.Conn.BRPop(dummyCtx, 5*time.Second, join(QueuePrefix, "ns-timer", "q2")).Result()
 		if err != nil || len(val) == 0 {
-			t.Fatal("Failed to pop the job from target queue")
+			err = fmt.Errorf("Failed to pop the job from target queue")
+			return
 		}
 		tries, jobID, err := structUnpack(val[1])
 		if err != nil {
-			t.Fatalf("Failed to decode the job pop from queue")
+			err = fmt.Errorf("Failed to decode the job pop from queue")
+			return
 		}
 		if tries != 1 || jobID != job.ID() {
-			t.Fatal("Job data mismatched")
+			err = fmt.Errorf("Job data mismatched")
+			return
 		}
 	}()
-	<-wait
+	err = <-errChan
+	if err != nil {
+		t.Error(err)
+	}
 }
 
 func BenchmarkTimer(b *testing.B) {

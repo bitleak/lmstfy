@@ -41,14 +41,14 @@ var (
 	dummyCtx = context.TODO()
 )
 
-// Limit is the detail limit of the token
+// Limiter is the detail limit of the token
 type Limiter struct {
 	Read     int64 `json:"read"`
 	Write    int64 `json:"write"`
 	Interval int64 `json:"interval"`
 }
 
-// TokenLimit is limit of the token
+// TokenLimiter is limit of the token
 type TokenLimiter struct {
 	Namespace string  `json:"namespace"`
 	Token     string  `json:"token"`
@@ -103,7 +103,7 @@ func (t *Throttler) RemedyLimiter(pool, namespace, token string, isRead bool) er
 	return err
 }
 
-// GetAll return all limiters
+// GetAll returns all limiters
 func (t *Throttler) GetAll(forceUpdate bool) []TokenLimiter {
 	var token string
 	limiters := make([]TokenLimiter, 0)
@@ -130,7 +130,7 @@ func (t *Throttler) GetAll(forceUpdate bool) []TokenLimiter {
 	return limiters
 }
 
-// IsReachLimit check whether the read or write op was reached limit
+// IsReachRateLimit checks whether the read or write op reached limit
 func (t *Throttler) IsReachRateLimit(pool, namespace, token string, isRead bool) (bool, error) {
 	limiter := t.Get(pool, namespace, token)
 	if limiter == nil {
@@ -160,8 +160,8 @@ func (t *Throttler) IsReachRateLimit(pool, namespace, token string, isRead bool)
 	return val.(int64) > limiter.Write, nil
 }
 
-// Add would add the token into the throttler,
-// return error if the token has already exists
+// Add adds the token into the throttler,
+// returns error if the token has already existed
 func (t *Throttler) Add(pool, namespace, token string, limiter *Limiter) error {
 	if err := limiter.validate(); err != nil {
 		return err
@@ -195,7 +195,7 @@ func (t *Throttler) Get(pool, namespace, token string) *Limiter {
 	return nil
 }
 
-// Set would set the token into the throttler
+// Set the token into the throttler
 func (t *Throttler) Set(pool, namespace, token string, limiter *Limiter) error {
 	if err := limiter.validate(); err != nil {
 		return err
@@ -216,7 +216,7 @@ func (t *Throttler) Set(pool, namespace, token string, limiter *Limiter) error {
 	return nil
 }
 
-// Delete would the token from the throttler
+// Delete the token from the throttler
 func (t *Throttler) Delete(pool, namespace, token string) error {
 	tokenLimitKey := t.buildLimitKey(pool, namespace, token)
 	_, err := t.redisCli.HDel(dummyCtx, throttlerRedisKey, tokenLimitKey).Result()
@@ -229,7 +229,7 @@ func (t *Throttler) Delete(pool, namespace, token string) error {
 	return nil
 }
 
-// Shutdown would stop the throttler async update goroutine
+// Shutdown stops the throttler async update goroutine
 func (t *Throttler) Shutdown() {
 	close(t.stop)
 	t.redisCli.Close()
@@ -252,8 +252,9 @@ func (t *Throttler) updateLimiters() {
 		}
 		newCache[token] = &limiter
 	}
-	// unnecessary to lock the cache here
+	t.mu.Lock()
 	t.cache = newCache
+	t.mu.Unlock()
 }
 
 func (t *Throttler) asyncLoop() {
@@ -273,20 +274,20 @@ func (t *Throttler) asyncLoop() {
 
 func (l *Limiter) validate() error {
 	if l.Interval <= 0 {
-		return errors.New("limiter interval should be >= 0")
+		return errors.New("limiter interval should be > 0")
 	}
-	if l.Read == 0 && l.Write == 0 {
-		return errors.New("the read and write of limiter can't be 0 at the same time")
+	if l.Read <= 0 && l.Write <= 0 {
+		return errors.New("the read and write of limiter can't be <= 0 at the same time")
 	}
 	return nil
 }
 
-// GetThrottler return the global throttler
+// GetThrottler returns the global throttler
 func GetThrottler() *Throttler {
 	return _throttler
 }
 
-// Setup create new throttler
+// Setup creates a new throttler
 func Setup(conf *config.RedisConf, logger *logrus.Logger) error {
 	cli := helper.NewRedisClient(conf, nil)
 	sha1, err := cli.ScriptLoad(dummyCtx, throttleIncrLuaScript).Result()

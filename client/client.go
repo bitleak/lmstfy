@@ -16,12 +16,13 @@ import (
 )
 
 type Job struct {
-	Namespace string `json:"namespace"`
-	Queue     string `json:"queue"`
-	Data      []byte `json:"data"`
-	ID        string `json:"job_id"`
-	TTL       int64  `json:"ttl"`
-	ElapsedMS int64  `json:"elapsed_ms"`
+	Namespace   string `json:"namespace"`
+	Queue       string `json:"queue"`
+	Data        []byte `json:"data"`
+	ID          string `json:"job_id"`
+	TTL         int64  `json:"ttl"`
+	ElapsedMS   int64  `json:"elapsed_ms"`
+	RemainTries int64  `json:"remain_tries"`
 }
 
 type LmstfyClient struct {

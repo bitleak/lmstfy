@@ -6,7 +6,7 @@ require (
 	github.com/BurntSushi/toml v0.3.1
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/gin-gonic/gin v1.6.3
-	github.com/go-redis/redis/v8 v8.6.0
+	github.com/go-redis/redis/v8 v8.11.2
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/magiconair/properties v1.8.1

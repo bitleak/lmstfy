@@ -92,7 +92,6 @@ Detailed internal implementation looks like:
 * [Throttler API](https://github.com/bitleak/lmstfy/blob/master/doc/throttler.en.md)
 * [Administration API Chinese](https://github.com/bitleak/lmstfy/blob/master/doc/administration.cn.md)
 * [Throttler API Chinese](https://github.com/bitleak/lmstfy/blob/master/doc/throttler.cn.md)
-* [Pusher API Chinese](https://github.com/bitleak/lmstfy/blob/master/doc/pusher.cn.md)
 * [Grafana](https://grafana.com/grafana/dashboards/12748)
 
 ## License

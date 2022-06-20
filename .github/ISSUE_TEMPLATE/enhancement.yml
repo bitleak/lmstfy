@@ -1,0 +1,37 @@
+name: Enhancement
+description: Add new feature, improve code, document, and more
+labels: [ "enhancement" ]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you very much for your enhancement for LMSTFY!
+  - type: checkboxes
+    attributes:
+      label: Search before asking
+      description: >
+        Please make sure to search in the [issues](https://github.com/bitleak/lmstfy/issues) first to see whether the same issue was reported already.
+      options:
+        - label: >
+            I had searched in the [issues](/https://github.com/bitleak/lmstfy/issues) and found no similar issues.
+          required: true
+  - type: textarea
+    attributes:
+      label: Motivation
+      description: Describe the motivation you'd like to make this enhancement.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Solution
+      description: Describe the proposed solution and add related materials like links if any.
+  - type: checkboxes
+    attributes:
+      label: Are you willing to submit a PR?
+      description: >
+        We very much look forward to developers or users to help solve LMSTFY problems together. If you are willing to submit a PR to fix this problem, please tick it.
+      options:
+        - label: I'm willing to submit a PR!
+  - type: markdown
+    attributes:
+      value: "Thanks for completing our form!"

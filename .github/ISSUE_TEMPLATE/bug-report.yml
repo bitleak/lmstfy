@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thank you very much for submitting feedback to  LMSTFY.
+        Thank you very much for submitting feedback to LMSTFY.
 
         If it is an idea or help wanted, please go to:
         1. [Github Discussion](https://github.com/bitleak/lmstfy/discussions).

@@ -160,7 +160,7 @@ func main() {
 		panic(fmt.Sprintf("Failed to setup logger: %s", err))
 	}
 	maxprocs.Logger(func(format string, args ...interface{}) {
-		errorLogger.Infof(format, args)
+		errorLogger.Infof(format, args...)
 	})
 	registerSignal(shutdown, func() {
 		log.ReopenLogs(conf.LogDir, accessLogger, errorLogger)

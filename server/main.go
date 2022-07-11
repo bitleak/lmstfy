@@ -10,6 +10,8 @@ import (
 	"os/signal"
 	"syscall"
 
+	_ "go.uber.org/automaxprocs"
+
 	"github.com/bitleak/lmstfy/auth"
 	"github.com/bitleak/lmstfy/config"
 	"github.com/bitleak/lmstfy/engine/migration"

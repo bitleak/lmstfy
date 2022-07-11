@@ -10,8 +10,6 @@ import (
 	"os/signal"
 	"syscall"
 
-	_ "go.uber.org/automaxprocs"
-
 	"github.com/bitleak/lmstfy/auth"
 	"github.com/bitleak/lmstfy/config"
 	"github.com/bitleak/lmstfy/engine/migration"
@@ -23,6 +21,7 @@ import (
 	"github.com/bitleak/lmstfy/version"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"go.uber.org/automaxprocs/maxprocs"
 )
 
 type optionFlags struct {
@@ -160,6 +159,9 @@ func main() {
 	if err != nil {
 		panic(fmt.Sprintf("Failed to setup logger: %s", err))
 	}
+	maxprocs.Logger(func(format string, args ...interface{}) {
+		errorLogger.Infof(format, args)
+	})
 	registerSignal(shutdown, func() {
 		log.ReopenLogs(conf.LogDir, accessLogger, errorLogger)
 	})

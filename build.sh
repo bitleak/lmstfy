@@ -34,7 +34,7 @@ if test -z "$TARGET_ARCH"; then
             TARGET_ARCH=amd64
             ;;
         arm*)
-            TARGET_ARCH=arm
+            TARGET_ARCH=arm64
             ;;
         ppc64*)
             TARGET_ARCH=ppc64

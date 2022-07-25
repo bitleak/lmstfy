@@ -22,6 +22,11 @@ const (
 	sentinelMode
 )
 
+const (
+	ValidRedisMaxMemPolicy = "noeviction"
+	ValidRedisAppendOnly   = "yes"
+)
+
 type Config struct {
 	Host            string
 	Port            int
@@ -55,6 +60,10 @@ type RedisConf struct {
 
 	mode       int
 	MasterName string
+
+	// MaxMemPolicy and AppendOnly shall be checked to make sure that data is persistent
+	MaxMemPolicy string
+	AppendOnly   string
 }
 
 func detectRedisMode(rc *RedisConf) (int, error) {
@@ -98,7 +107,36 @@ func (rc *RedisConf) validate() error {
 	if rc.IsSentinel() && rc.MasterName == "" {
 		return errors.New("the master name must not be empty in sentinel mode")
 	}
+	if rc.MaxMemPolicy != ValidRedisMaxMemPolicy {
+		return errors.New("valid maxmempolicy config value must be noeviction, but get " + rc.MaxMemPolicy)
+	}
+	if rc.AppendOnly != ValidRedisAppendOnly {
+		return errors.New("valid appendonly value must be yes, but get " + rc.AppendOnly)
+	}
 	return nil
+}
+
+func processRedisDataPersistConf(rc *RedisConf) {
+	// the sentinel addrs would be split with comma
+	addrs := strings.Split(rc.Addr, ",")
+	cli := redis.NewClient(&redis.Options{
+		Addr:     addrs[0],
+		Password: rc.Password,
+		PoolSize: 1,
+	})
+	defer cli.Close()
+	memPolVal, err := cli.ConfigGet(context.Background(), "maxmemory-policy").Result()
+	if err != nil || memPolVal == nil || len(memPolVal) < 2 {
+		rc.MaxMemPolicy = ""
+	}
+	rc.MaxMemPolicy = memPolVal[1].(string)
+
+	aofVal, err := cli.ConfigGet(context.Background(), "appendonly").Result()
+	if err != nil || aofVal == nil || len(aofVal) < 2 {
+		rc.AppendOnly = ""
+	}
+	rc.AppendOnly = aofVal[1].(string)
+	return
 }
 
 // IsSentinel return whether the pool was running in sentinel mode
@@ -139,6 +177,7 @@ func MustLoad(path string) (*Config, error) {
 		if poolConf.mode, err = detectRedisMode(&poolConf); err != nil {
 			return nil, fmt.Errorf("failed to get redis mode in pool(%s): %s", name, err)
 		}
+		processRedisDataPersistConf(&poolConf)
 		conf.Pool[name] = poolConf
 		if err := poolConf.validate(); err != nil {
 			return nil, fmt.Errorf("invalid config in pool(%s): %s", name, err)
@@ -147,6 +186,7 @@ func MustLoad(path string) (*Config, error) {
 	if conf.AdminRedis.mode, err = detectRedisMode(&conf.AdminRedis); err != nil {
 		return nil, fmt.Errorf("failed to get reedis mode in admin pool: %s", err)
 	}
+	processRedisDataPersistConf(&conf.AdminRedis)
 	if err := conf.AdminRedis.validate(); err != nil {
 		return nil, fmt.Errorf("invalid config in admin redis: %s", err)
 	}

@@ -10,15 +10,18 @@ services:
 
   redis:
     image: redis:4
+    command: redis-server --appendonly yes
     ports:
       - "6379:6379"
 
   redis_1:
     image: redis:4
+    command: redis-server --appendonly yes
     ports:
       - "6380:6379"
 
   redis_2:
     image: redis:4
+    command: redis-server --appendonly yes
     ports:
       - "6381:6379"

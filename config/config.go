@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"strings"
 
@@ -23,8 +24,8 @@ const (
 )
 
 const (
-	ValidRedisMaxMemPolicy = "noeviction"
-	ValidRedisAppendOnly   = "yes"
+	ValidRedisMaxMemPolicyValue = "noeviction"
+	ValidRedisAOFEnabledValue   = "1"
 )
 
 type Config struct {
@@ -63,7 +64,7 @@ type RedisConf struct {
 
 	// MaxMemPolicy and AppendOnly shall be checked to make sure that data is persistent
 	MaxMemPolicy string
-	AppendOnly   string
+	AofEnabled   string
 }
 
 func detectRedisMode(rc *RedisConf) (int, error) {
@@ -107,36 +108,68 @@ func (rc *RedisConf) validate() error {
 	if rc.IsSentinel() && rc.MasterName == "" {
 		return errors.New("the master name must not be empty in sentinel mode")
 	}
-	if rc.MaxMemPolicy != ValidRedisMaxMemPolicy {
+	if rc.MaxMemPolicy != ValidRedisMaxMemPolicyValue {
 		return errors.New("valid maxmempolicy config value must be noeviction, but get " + rc.MaxMemPolicy)
 	}
-	if rc.AppendOnly != ValidRedisAppendOnly {
-		return errors.New("valid appendonly value must be yes, but get " + rc.AppendOnly)
+	if rc.AofEnabled != ValidRedisAOFEnabledValue {
+		return errors.New("valid aof_enabled config value must be 1, but get " + rc.AofEnabled)
 	}
 	return nil
 }
 
 func processRedisDataPersistConf(rc *RedisConf) {
-	// the sentinel addrs would be split with comma
-	addrs := strings.Split(rc.Addr, ",")
+	addr := rc.Addr
+	if rc.IsSentinel() {
+		addrs := strings.Split(addr, ",")
+		sentinel := redis.NewSentinelClient(&redis.Options{
+			Addr: addrs[0],
+		})
+		val, err := sentinel.GetMasterAddrByName(context.Background(), rc.MasterName).Result()
+		if err != nil || len(val) < 2 {
+			rc.AofEnabled = "0"
+			rc.MaxMemPolicy = ""
+			sentinel.Close()
+			return
+		}
+		addr = net.JoinHostPort(val[0], val[1])
+		sentinel.Close()
+	}
 	cli := redis.NewClient(&redis.Options{
-		Addr:     addrs[0],
+		Addr:     addr,
 		Password: rc.Password,
 		PoolSize: 1,
 	})
-	defer cli.Close()
-	memPolVal, err := cli.ConfigGet(context.Background(), "maxmemory-policy").Result()
-	if err != nil || memPolVal == nil || len(memPolVal) < 2 {
-		rc.MaxMemPolicy = ""
-	}
-	rc.MaxMemPolicy = memPolVal[1].(string)
-
-	aofVal, err := cli.ConfigGet(context.Background(), "appendonly").Result()
-	if err != nil || aofVal == nil || len(aofVal) < 2 {
-		rc.AppendOnly = ""
-	}
-	rc.AppendOnly = aofVal[1].(string)
+	memPolVal, aofval := getRedisDataPersistInfo(cli)
+	rc.MaxMemPolicy = memPolVal
+	rc.AofEnabled = aofval
+	cli.Close()
 	return
+}
+
+func getRedisDataPersistInfo(cli *redis.Client) (string, string) {
+	ctx := context.Background()
+	var memPolVal, aofVal string
+	memPolStr, err := cli.Info(ctx, "memory").Result()
+	if err == nil {
+		lines := strings.Split(memPolStr, "\r\n")
+		for _, line := range lines {
+			fields := strings.Split(line, ":")
+			if len(fields) == 2 && fields[0] == "maxmemory_policy" {
+				memPolVal = fields[1]
+			}
+		}
+	}
+	aofStr, err := cli.Info(ctx, "persistence").Result()
+	if err == nil {
+		lines := strings.Split(aofStr, "\r\n")
+		for _, line := range lines {
+			fields := strings.Split(line, ":")
+			if len(fields) == 2 && fields[0] == "aof_enabled" {
+				aofVal = fields[1]
+			}
+		}
+	}
+	return memPolVal, aofVal
 }
 
 // IsSentinel return whether the pool was running in sentinel mode

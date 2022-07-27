@@ -18,10 +18,6 @@ func TestConfig_Validate(t *testing.T) {
 		t.Fatalf("validate db error was expected, but got nil")
 	}
 	conf.DB = 0
-	conf.mode = sentinelMode
-	if err := conf.validate(); err == nil {
-		t.Fatalf("no master name error was expected, but got nil")
-	}
 	conf.MasterName = "test"
 	if err := conf.validate(); err != nil {
 		t.Fatalf("no error was expected, but got %v", err)

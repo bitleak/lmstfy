@@ -45,10 +45,6 @@ type RedisConf struct {
 	MigrateTo string // If this is not empty, all the PUBLISH will go to that pool
 
 	MasterName string
-
-	// MaxMemPolicy and AppendOnly shall be checked to make sure that data is persistent
-	MaxMemPolicy string
-	AofEnabled   string
 }
 
 func (rc *RedisConf) validate() error {

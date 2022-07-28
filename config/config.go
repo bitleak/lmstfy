@@ -1,25 +1,16 @@
 package config
 
 import (
-	"context"
 	"errors"
 	"fmt"
-	"net"
 	"os"
-	"strings"
 
 	"github.com/BurntSushi/toml"
-	"github.com/go-redis/redis/v8"
 	"github.com/sirupsen/logrus"
 )
 
 const (
 	DefaultPoolName = "default"
-)
-
-const (
-	ValidRedisMaxMemPolicyValue = "noeviction"
-	ValidRedisAOFEnabledValue   = "1"
 )
 
 type Config struct {
@@ -67,68 +58,7 @@ func (rc *RedisConf) validate() error {
 	if rc.DB < 0 {
 		return errors.New("the pool db must be greater than 0 or equal to 0")
 	}
-	if rc.MaxMemPolicy != ValidRedisMaxMemPolicyValue {
-		return errors.New("valid maxmempolicy config value must be noeviction, but get " + rc.MaxMemPolicy)
-	}
-	if rc.AofEnabled != ValidRedisAOFEnabledValue {
-		return errors.New("valid aof_enabled config value must be 1, but get " + rc.AofEnabled)
-	}
 	return nil
-}
-
-func processRedisDataPersistConf(rc *RedisConf) {
-	addr := rc.Addr
-	if rc.IsSentinel() {
-		addrs := strings.Split(addr, ",")
-		sentinel := redis.NewSentinelClient(&redis.Options{
-			Addr: addrs[0],
-		})
-		val, err := sentinel.GetMasterAddrByName(context.Background(), rc.MasterName).Result()
-		if err != nil || len(val) < 2 {
-			rc.AofEnabled = "0"
-			rc.MaxMemPolicy = ""
-			sentinel.Close()
-			return
-		}
-		addr = net.JoinHostPort(val[0], val[1])
-		sentinel.Close()
-	}
-	cli := redis.NewClient(&redis.Options{
-		Addr:     addr,
-		Password: rc.Password,
-		PoolSize: 1,
-	})
-	memPolVal, aofval := getRedisDataPersistInfo(cli)
-	rc.MaxMemPolicy = memPolVal
-	rc.AofEnabled = aofval
-	cli.Close()
-	return
-}
-
-func getRedisDataPersistInfo(cli *redis.Client) (string, string) {
-	ctx := context.Background()
-	var memPolVal, aofVal string
-	memPolStr, err := cli.Info(ctx, "memory").Result()
-	if err == nil {
-		lines := strings.Split(memPolStr, "\r\n")
-		for _, line := range lines {
-			fields := strings.Split(line, ":")
-			if len(fields) == 2 && fields[0] == "maxmemory_policy" {
-				memPolVal = fields[1]
-			}
-		}
-	}
-	aofStr, err := cli.Info(ctx, "persistence").Result()
-	if err == nil {
-		lines := strings.Split(aofStr, "\r\n")
-		for _, line := range lines {
-			fields := strings.Split(line, ":")
-			if len(fields) == 2 && fields[0] == "aof_enabled" {
-				aofVal = fields[1]
-			}
-		}
-	}
-	return memPolVal, aofVal
 }
 
 // IsSentinel return whether the pool was running in sentinel mode
@@ -166,13 +96,10 @@ func MustLoad(path string) (*Config, error) {
 		return nil, errors.New("default redis pool not found")
 	}
 	for name, poolConf := range conf.Pool {
-		processRedisDataPersistConf(&poolConf)
-		conf.Pool[name] = poolConf
 		if err := poolConf.validate(); err != nil {
 			return nil, fmt.Errorf("invalid config in pool(%s): %s", name, err)
 		}
 	}
-	processRedisDataPersistConf(&conf.AdminRedis)
 	if err := conf.AdminRedis.validate(); err != nil {
 		return nil, fmt.Errorf("invalid config in admin redis: %s", err)
 	}

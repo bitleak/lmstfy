@@ -14,6 +14,7 @@ import (
 	"github.com/bitleak/lmstfy/config"
 	"github.com/bitleak/lmstfy/engine/migration"
 	redis_engine "github.com/bitleak/lmstfy/engine/redis"
+	"github.com/bitleak/lmstfy/helper"
 	"github.com/bitleak/lmstfy/log"
 	"github.com/bitleak/lmstfy/server/handlers"
 	"github.com/bitleak/lmstfy/server/middleware"
@@ -144,6 +145,18 @@ func removePidFile() {
 	os.Remove(Flags.PidFile)
 }
 
+func postValidateConfig(ctx context.Context, conf *config.Config) error {
+	for name, poolConf := range conf.Pool {
+		if err := helper.ValidateRedisConfig(ctx, &poolConf); err != nil {
+			return fmt.Errorf("validate pool[%s] err: %w", name, err)
+		}
+	}
+	if err := helper.ValidateRedisConfig(ctx, &conf.AdminRedis); err != nil {
+		return fmt.Errorf("validate admin redis err: %w", err)
+	}
+	return nil
+}
+
 func main() {
 	parseFlags()
 	if Flags.ShowVersion {
@@ -152,6 +165,9 @@ func main() {
 	}
 	conf, err := config.MustLoad(Flags.ConfFile)
 	if err != nil {
+		panic(fmt.Sprintf("Failed to load config file: %s", err))
+	}
+	if err := postValidateConfig(context.Background(), conf); err != nil {
 		panic(fmt.Sprintf("Failed to load config file: %s", err))
 	}
 	shutdown := make(chan struct{})

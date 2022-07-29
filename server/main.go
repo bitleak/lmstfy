@@ -168,7 +168,7 @@ func main() {
 		panic(fmt.Sprintf("Failed to load config file: %s", err))
 	}
 	if err := postValidateConfig(context.Background(), conf); err != nil {
-		panic(fmt.Sprintf("Failed to load config file: %s", err))
+		panic(fmt.Sprintf("Failed to post validate the config file: %s", err))
 	}
 	shutdown := make(chan struct{})
 	accessLogger, errorLogger, err := log.SetupLogger(conf.LogFormat, conf.LogDir, conf.LogLevel, Flags.BackTrackLevel)

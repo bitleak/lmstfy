@@ -4,6 +4,8 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	redis_engine "github.com/bitleak/lmstfy/engine/redis"
+	redis_engine_v2 "github.com/bitleak/lmstfy/engine/redisv2"
 	"io"
 	"net/http"
 	"os"
@@ -13,7 +15,6 @@ import (
 	"github.com/bitleak/lmstfy/auth"
 	"github.com/bitleak/lmstfy/config"
 	"github.com/bitleak/lmstfy/engine/migration"
-	redis_engine "github.com/bitleak/lmstfy/engine/redis"
 	"github.com/bitleak/lmstfy/helper"
 	"github.com/bitleak/lmstfy/log"
 	"github.com/bitleak/lmstfy/server/handlers"
@@ -183,6 +184,9 @@ func main() {
 	})
 	if err := redis_engine.Setup(conf, errorLogger); err != nil {
 		panic(fmt.Sprintf("Failed to setup redis engine: %s", err))
+	}
+	if err := redis_engine_v2.Setup(conf, errorLogger); err != nil {
+		panic(fmt.Sprintf("Failed to setup redis engine v2: %s", err))
 	}
 	if err := migration.Setup(conf, errorLogger); err != nil {
 		panic(fmt.Sprintf("Failed to setup migration engine: %s", err))

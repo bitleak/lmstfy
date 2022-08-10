@@ -1,7 +1,6 @@
 package redis
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"time"
@@ -12,11 +11,12 @@ import (
 )
 
 const (
-	MaxQueueLength     = 10000
-	StreamReadCount    = 1
-	ConsumerGroup      = "lmstfy_group"
-	ConsumerName       = "lmstfy_consumer"
-	StreamMessageField = "jobinfo"
+	MaxQueueLength       = 10000
+	StreamReadCount      = 1
+	StreamNoBlockingFlag = -1
+	ConsumerGroup        = "lmstfy_group"
+	ConsumerName         = "lmstfy_consumer"
+	StreamMessageField   = "jobinfo"
 )
 
 type QueueName struct {
@@ -29,7 +29,9 @@ func (k *QueueName) String() string {
 }
 
 func (k *QueueName) Decode(str string) error {
+	fmt.Printf("decode queue name from stream:%s", str)
 	splits := splits(3, str)
+	fmt.Printf("decode splits:%v", splits)
 	if len(splits) != 3 || splits[0] != QueuePrefix {
 		return errors.New("invalid format")
 	}
@@ -48,7 +50,9 @@ type Queue struct {
 }
 
 func NewQueue(namespace, queue string, redis *RedisInstance) *Queue {
-	timerName := GetTimersetKey(namespace, queue)
+	// create consumer group for queue
+	redis.Conn.XGroupCreateMkStream(dummyCtx, join(QueuePrefix, namespace, queue), ConsumerGroup, "$")
+	timerName := getTimersetKey(namespace, queue)
 	return &Queue{
 		name:     QueueName{Namespace: namespace, Queue: queue},
 		redis:    redis,
@@ -84,7 +88,7 @@ func (q *Queue) PushInstantJob(j engine.Job, tries uint16) error {
 	val, err := q.redis.Conn.XAdd(dummyCtx, args).Result()
 	if err == nil {
 		// record stream id for future ack sake
-		ok, err := q.redis.Conn.SetNX(dummyCtx, GetJobStreamIDKey(j.ID()), val, time.Duration(j.TTL())*time.Second).Result()
+		ok, err := q.redis.Conn.SetNX(dummyCtx, getJobStreamIDKey(j.ID()), val, time.Duration(j.TTL())*time.Second).Result()
 		if err != nil || !ok {
 			err = errors.New("failed to record job stream id")
 			return err
@@ -97,7 +101,7 @@ func (q *Queue) PushInstantJob(j engine.Job, tries uint16) error {
 func (q *Queue) PushDelayedJob(namespace, queue, jobID string, delaySecond uint32, tries uint16) error {
 	metrics.timerAddJobs.WithLabelValues(q.redis.Name).Inc()
 	timestamp := time.Now().Unix() + int64(delaySecond)
-	buf := ConstructDelayedJobContent(namespace, queue, jobID, tries)
+	buf := constructDelayedJobContent(namespace, queue, jobID, tries)
 	return q.redis.Conn.ZAdd(dummyCtx, q.timerset, &go_redis.Z{Score: float64(timestamp), Member: buf}).Err()
 }
 
@@ -115,7 +119,7 @@ func (q *Queue) Size() (size int64, err error) {
 
 // Peek a right-most element in the list without popping it
 func (q *Queue) Peek() (jobID string, tries uint16, err error) {
-	val, err := q.redis.Conn.LIndex(dummyCtx, q.Name(), -1).Result()
+	res, err := q.redis.Conn.XRevRangeN(dummyCtx, q.Name(), "+", "-", 1).Result()
 	switch err {
 	case nil:
 		// continue
@@ -124,6 +128,7 @@ func (q *Queue) Peek() (jobID string, tries uint16, err error) {
 	default:
 		return "", 0, err
 	}
+	val := res[0].Values[StreamMessageField].(string)
 	tries, jobID, err = structUnpack(val)
 	return jobID, tries, err
 }
@@ -159,9 +164,14 @@ func PollQueues(redis *RedisInstance, queueNames []QueueName, timeoutSecond, ttr
 		}
 	}()
 
-	keys := make([]string, len(queueNames))
-	for i, k := range queueNames {
-		keys[i] = k.String()
+	// ex. streams args format: ["q1","q2",">",">"]
+	keys := make([]string, 2*len(queueNames))
+	for i := range keys {
+		if i < len(queueNames) {
+			keys[i] = queueNames[i].String()
+			continue
+		}
+		keys[i] = ">"
 	}
 	val, results := make([]string, 2), make([]go_redis.XStream, 0)
 	args := &go_redis.XReadGroupArgs{
@@ -169,19 +179,27 @@ func PollQueues(redis *RedisInstance, queueNames []QueueName, timeoutSecond, ttr
 		Consumer: ConsumerName,
 		Streams:  keys,
 		Count:    StreamReadCount,
+		Block:    StreamNoBlockingFlag,
 	}
-	if timeoutSecond > 0 {
-		args.Block = time.Duration(timeoutSecond) * time.Second
-	} else {
-		args.Block = -1
-	}
+	// try none-blocking read first inorder to avoid receiving multi message from different streams
 	results, err = redis.Conn.XReadGroup(dummyCtx, args).Result()
-	if len(results) > 1 {
-		// todo receive multiple messages, will return the first one and write the rest back to stream
-	}
 	if len(results) > 0 {
+		fmt.Printf("xread noblock result:%v", results)
 		msg := results[0].Messages[0]
 		val[0], val[1] = results[0].Stream, msg.Values[StreamMessageField].(string)
+	} else {
+		// try blocking read when timeout second is specified
+		if timeoutSecond > 0 {
+			args.Block = time.Duration(timeoutSecond) * time.Second
+			results, err = redis.Conn.XReadGroup(dummyCtx, args).Result()
+			fmt.Printf("xread block result:%v", results)
+			// in case of receiving multiple messages, will return the first one
+			// and the rest which are now in pending state will be handled later
+			if len(results) > 0 {
+				msg := results[0].Messages[0]
+				val[0], val[1] = results[0].Stream, msg.Values[StreamMessageField].(string)
+			}
+		}
 	}
 	switch err {
 	case nil:
@@ -199,75 +217,19 @@ func PollQueues(redis *RedisInstance, queueNames []QueueName, timeoutSecond, ttr
 		return nil, "", 0, err
 	}
 	tries, jobID, err := structUnpack(val[1])
+	fmt.Printf("tries:%v; jobid:%v; err:%v", tries, jobID, err)
 	if err != nil {
 		logger.WithField("err", err).Error("Failed to unpack lua struct data")
 		return nil, "", 0, err
 	}
 
-	if tries == 0 {
+	if tries < 0 {
 		logger.WithFields(logrus.Fields{
 			"jobID": jobID,
 			"ttr":   ttrSecond,
 			"queue": queueName.String(),
-		}).Error("Job with tries == 0 appeared")
-		return nil, "", 0, fmt.Errorf("Job %s with tries == 0 appeared", jobID)
+		}).Error("Job with tries < 0 appeared")
+		return nil, "", 0, fmt.Errorf("Job %s with tries < 0 appeared", jobID)
 	}
 	return queueName, jobID, tries, nil
-}
-
-// Pack (tries, jobID) into lua struct pack of format "HHHc0", in lua this can be done:
-//   ```local data = struct.pack("HHc0", tries, #job_id, job_id)```
-func structPack(tries uint16, jobID string) (data string) {
-	buf := make([]byte, 2+2+len(jobID))
-	binary.LittleEndian.PutUint16(buf[0:], tries)
-	binary.LittleEndian.PutUint16(buf[2:], uint16(len(jobID)))
-	copy(buf[4:], jobID)
-	return string(buf)
-}
-
-// Unpack the "HHc0" lua struct format, in lua this can be done:
-//   ```local tries, job_id = struct.unpack("HHc0", data)```
-func structUnpack(data string) (tries uint16, jobID string, err error) {
-	buf := []byte(data)
-	h1 := binary.LittleEndian.Uint16(buf[0:])
-	h2 := binary.LittleEndian.Uint16(buf[2:])
-	jobID = string(buf[4:])
-	tries = h1
-	if len(jobID) != int(h2) {
-		err = errors.New("corrupted data")
-	}
-	return
-}
-
-// ConstructDelayedJobContent struct-pack the data in the format `Hc0Hc0HHc0`:
-// {namespace len}{namespace}{queue len}{queue}{tries}{jobID len}{jobID}
-// length are 2-byte uint16 in little-endian
-func ConstructDelayedJobContent(namespace, queue, jobID string, tries uint16) []byte {
-	namespaceLen := len(namespace)
-	queueLen := len(queue)
-	jobIDLen := len(jobID)
-	buf := make([]byte, 2+namespaceLen+2+queueLen+2+2+jobIDLen)
-	binary.LittleEndian.PutUint16(buf[0:], uint16(namespaceLen))
-	copy(buf[2:], namespace)
-	binary.LittleEndian.PutUint16(buf[2+namespaceLen:], uint16(queueLen))
-	copy(buf[2+namespaceLen+2:], queue)
-	binary.LittleEndian.PutUint16(buf[2+namespaceLen+2+queueLen:], tries)
-	binary.LittleEndian.PutUint16(buf[2+namespaceLen+2+queueLen+2:], uint16(jobIDLen))
-	copy(buf[2+namespaceLen+2+queueLen+2+2:], jobID)
-	return buf
-}
-
-// GetJobStreamIDKey returns the stream id of a job
-func GetJobStreamIDKey(jobID string) string {
-	return join(StreamIDPrefix, jobID)
-}
-
-// GetQueueStreamName returns the stream name of a queue
-func GetQueueStreamName(namespace, queue string) string {
-	return join(QueuePrefix, namespace, queue)
-}
-
-// GetTimersetKey returns the timer set key of a queue
-func GetTimersetKey(namespace, queue string) string {
-	return join(TimerSetPrefix, namespace, queue)
 }

@@ -3,6 +3,8 @@ package redis
 import (
 	"sync"
 	"time"
+
+	"github.com/go-redis/redis/v8"
 )
 
 const (
@@ -22,42 +24,44 @@ end
 
 for _,v in ipairs(expiredMembers) do
 	local ns, q, tries, job_id = struct.unpack("Hc0Hc0HHc0", v)
-	if redis.call("EXISTS", table.concat({pool_prefix, ns, q, job_id}, "/")) > 0 then
-			-- move to ready queue
-			local val = struct.pack("HHc0", tonumber(tries), #job_id, job_id)
-			redis.call("XADD", 'table.concat({output_queue_prefix, ns, q}, "/")', '*', 'stream_field_name', val)
-		end
-	end
+	local val = struct.pack("HHc0", tonumber(tries), #job_id, job_id)
+	redis.call("XADD", table.concat({output_queue_prefix, ns, q}, "/"), "*", stream_field_name, val)	
 end
 redis.call("ZREM", zset_key, unpack(expiredMembers))
 return #expiredMembers
 `
 )
 
+const (
+	MinMsgIdleTime       = 2 * time.Minute
+	RenewStreamIDExpTime = 3 * time.Minute
+	DefaultPendingSize   = 50
+)
+
 // Timer manages a set of delay queues. Periodically, timer will check all delay queues
 // and push due jobs into ready queue.
 type Timer struct {
-	name     string
-	redis    *RedisInstance
-	interval time.Duration
-	shutdown chan struct{}
-	members  map[string]struct{}
-	rwmu     sync.RWMutex
-
-	pumpSHA string
+	name        string
+	redisCli    *RedisInstance
+	interval    time.Duration
+	shutdown    chan struct{}
+	members     map[string]struct{}
+	rwmu        sync.RWMutex
+	recycleTime time.Duration
+	pumpSHA     string
 }
 
 // NewTimer return an instance of delay queue
-func NewTimer(name string, redis *RedisInstance, interval time.Duration) (*Timer, error) {
+func NewTimer(name string, redis *RedisInstance, interval, recycleTime time.Duration) (*Timer, error) {
 	timer := &Timer{
-		name:     name,
-		redis:    redis,
-		interval: interval,
-		shutdown: make(chan struct{}),
-		members:  make(map[string]struct{}),
+		name:        name,
+		redisCli:    redis,
+		interval:    interval,
+		recycleTime: recycleTime,
+		shutdown:    make(chan struct{}),
+		members:     make(map[string]struct{}),
 	}
 
-	// todo modify luaPumpQueueScript for multiple timer sets
 	sha, err := redis.Conn.ScriptLoad(dummyCtx, luaPumpQueueScript).Result()
 	if err != nil {
 		logger.WithField("err", err).Error("Failed to preload lua script in timer")
@@ -65,7 +69,8 @@ func NewTimer(name string, redis *RedisInstance, interval time.Duration) (*Timer
 	}
 	timer.pumpSHA = sha
 
-	go timer.tick()
+	go timer.Tick()
+	go timer.ProcessPendingMsg()
 	return timer, nil
 }
 
@@ -74,7 +79,7 @@ func (t *Timer) Name() string {
 }
 
 // Tick pump all due jobs to the target queue
-func (t *Timer) tick() {
+func (t *Timer) Tick() {
 	tick := time.NewTicker(t.interval)
 	for {
 		select {
@@ -89,12 +94,15 @@ func (t *Timer) tick() {
 
 func (t *Timer) pump(currentSecond int64) {
 	var count int64
+	t.rwmu.RLock()
+	defer t.rwmu.RUnlock()
 	for {
 		for member := range t.members {
-			val, err := t.redis.Conn.EvalSha(dummyCtx, t.pumpSHA, []string{member, QueuePrefix, PoolPrefix, StreamMessageField}, currentSecond, BatchSize).Result()
+			val, err := t.redisCli.Conn.EvalSha(dummyCtx, t.pumpSHA,
+				[]string{member, QueuePrefix, PoolPrefix, StreamMessageField}, currentSecond, BatchSize).Result()
 			if err != nil {
 				if isLuaScriptGone(err) { // when redis restart, the script needs to be uploaded again
-					sha, err := t.redis.Conn.ScriptLoad(dummyCtx, luaPumpQueueScript).Result()
+					sha, err := t.redisCli.Conn.ScriptLoad(dummyCtx, luaPumpQueueScript).Result()
 					if err != nil {
 						logger.WithField("err", err).Error("Failed to reload script")
 						time.Sleep(time.Second)
@@ -110,13 +118,13 @@ func (t *Timer) pump(currentSecond int64) {
 			count += n
 			if count >= BatchSize {
 				// There might have more expired jobs to pump
-				metrics.timerFullBatches.WithLabelValues(t.redis.Name).Inc()
+				metrics.timerFullBatches.WithLabelValues(t.redisCli.Name).Inc()
 				time.Sleep(10 * time.Millisecond) // Hurry up! accelerate pumping the due jobs
 				continue
 			}
 		}
 		logger.WithField("count", count).Debug("Due jobs")
-		metrics.timerDueJobs.WithLabelValues(t.redis.Name).Add(float64(count))
+		metrics.timerDueJobs.WithLabelValues(t.redisCli.Name).Add(float64(count))
 		return
 	}
 }
@@ -126,7 +134,7 @@ func (t *Timer) Shutdown() {
 }
 
 func (t *Timer) Size() (size int64, err error) {
-	return t.redis.Conn.ZCard(dummyCtx, t.name).Result()
+	return t.redisCli.Conn.ZCard(dummyCtx, t.name).Result()
 }
 
 // AddTimerSet adds a new timer set to Timer
@@ -134,4 +142,97 @@ func (t *Timer) AddTimerSet(name string) {
 	t.rwmu.Lock()
 	t.members[name] = struct{}{}
 	t.rwmu.Unlock()
+}
+
+// ProcessPendingMsg periodically checks pending messages for all streams and
+// either put them back to ready state or simply discard them based on ttr and idle time
+func (t *Timer) ProcessPendingMsg() {
+	tick := time.NewTicker(t.recycleTime)
+	for {
+		select {
+		case <-tick.C:
+			t.recycle()
+		case <-t.shutdown:
+			return
+		}
+	}
+}
+
+func (t *Timer) recycle() {
+	t.rwmu.RLock()
+	for member := range t.members {
+		vals := splits(3, member)
+		if len(vals) != 3 || vals[0] != TimerSetPrefix {
+			continue
+		}
+		namespace, queue := vals[1], vals[2]
+		stream := join(QueuePrefix, namespace, queue)
+		err := handlePendingMsg(t.redisCli, stream, namespace, queue)
+		if err != nil {
+			continue
+		}
+	}
+	t.rwmu.RUnlock()
+}
+
+func handlePendingMsg(client *RedisInstance, stream, namespace, queue string) error {
+	extArgs := &redis.XPendingExtArgs{
+		Stream: stream,
+		Group:  ConsumerGroup,
+		Idle:   MinMsgIdleTime,
+		Start:  "-",
+		End:    "+",
+		Count:  DefaultPendingSize,
+	}
+	msgs, err := client.Conn.XPendingExt(dummyCtx, extArgs).Result()
+	if err != nil {
+		return err
+	}
+	// check each job's tries. If tries <= 0 then move it to dead letter, else renew the job
+	for _, msg := range msgs {
+		tries, jobID := getJobInfo(client, stream, msg.ID)
+		if tries <= 0 {
+			val := structPack(1, jobID)
+			err := client.Conn.Persist(dummyCtx, PoolJobKey2(namespace, queue, jobID)).Err()
+			if err != nil {
+				continue
+			}
+			client.Conn.LPush(dummyCtx, join(DeadLetterPrefix, namespace, queue), val)
+			// remove the original msg out of pending stream
+			client.Conn.XAck(dummyCtx, queue, ConsumerGroup, msg.ID)
+			continue
+		}
+		// write job back to stream with updated number of tries
+		renewJob(client, tries-1, queue, jobID, msg.ID)
+	}
+	return nil
+}
+
+func getJobInfo(client *RedisInstance, stream, id string) (uint16, string) {
+	res, err := client.Conn.XRangeN(dummyCtx, stream, id, id, 1).Result()
+	if err != nil {
+		return 0, ""
+	}
+	val := res[0].Values[StreamMessageField].(string)
+	tries, jobID, err := structUnpack(val)
+	if err != nil {
+		return 0, ""
+	}
+	return tries, jobID
+}
+
+func renewJob(client *RedisInstance, tries uint16, queue, jobID, msgID string) {
+	val := structPack(tries, jobID)
+	args := &redis.XAddArgs{
+		Stream: queue,
+		MaxLen: MaxQueueLength,
+		Values: []string{StreamMessageField, val},
+	}
+	streamID, err := client.Conn.XAdd(dummyCtx, args).Result()
+	if err == nil {
+		// record stream id for future ack sake
+		client.Conn.Set(dummyCtx, getJobStreamIDKey(jobID), streamID, RenewStreamIDExpTime)
+	}
+	// remove the original msg out of pending stream
+	client.Conn.XAck(dummyCtx, queue, ConsumerGroup, msgID)
 }

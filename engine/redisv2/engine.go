@@ -43,7 +43,7 @@ func NewEngine(redisName string, conn *go_redis.Client) (engine.Engine, error) {
 	if err != nil {
 		return nil, err
 	}
-	timer, err := NewTimer("timer_set", redis, time.Second)
+	timer, err := NewTimer("timer_set", redis, time.Second, time.Minute)
 	if err != nil {
 		return nil, err
 	}
@@ -191,10 +191,10 @@ func (e *Engine) Delete(namespace, queue, jobID string) error {
 	}
 
 	// 1. ack stream message
-	streamIDKey := GetJobStreamIDKey(jobID)
+	streamIDKey := getJobStreamIDKey(jobID)
 	streamID, err := e.redis.Conn.Get(dummyCtx, streamIDKey).Result()
 	if streamID != "" {
-		streamName := GetQueueStreamName(namespace, queue)
+		streamName := getQueueStreamName(namespace, queue)
 		err = e.redis.Conn.XAck(dummyCtx, streamName, ConsumerGroup, streamID).Err()
 	}
 	if err != nil {

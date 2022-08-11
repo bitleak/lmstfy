@@ -101,8 +101,8 @@ func (q *Queue) Name() string {
 }
 
 // PushInstantJob pushes an instant job into queue stream, the job data format: ["job","{tries}{job id}"]
-func (q *Queue) PushInstantJob(j engine.Job, tries uint16) error {
-	if tries == 0 {
+func (q *Queue) PushInstantJob(j engine.Job) error {
+	if j.Tries() == 0 {
 		return nil
 	}
 	if j.Namespace() != q.name.Namespace || j.Queue() != q.name.Queue {
@@ -110,7 +110,7 @@ func (q *Queue) PushInstantJob(j engine.Job, tries uint16) error {
 		return engine.ErrWrongQueue
 	}
 	metrics.queueDirectPushJobs.WithLabelValues(q.redis.Name).Inc()
-	val := structPack(tries, j.ID())
+	val := structPack(j.Tries(), j.ID())
 	args := &go_redis.XAddArgs{
 		Stream: q.Name(),
 		MaxLen: MaxQueueLength,
@@ -129,10 +129,10 @@ func (q *Queue) PushInstantJob(j engine.Job, tries uint16) error {
 }
 
 // PushDelayedJob pushes a future due job into timer set with its due data, the job data format: {tries}{job id}
-func (q *Queue) PushDelayedJob(namespace, queue, jobID string, delaySecond uint32, tries uint16) error {
+func (q *Queue) PushDelayedJob(j engine.Job) error {
 	metrics.timerAddJobs.WithLabelValues(q.redis.Name).Inc()
-	timestamp := time.Now().Unix() + int64(delaySecond)
-	buf := constructDelayedJobContent(namespace, queue, jobID, tries)
+	timestamp := time.Now().Unix() + int64(j.Delay())
+	buf := constructDelayedJobContent(j.Namespace(), j.Queue(), j.ID(), j.Tries())
 	return q.redis.Conn.ZAdd(dummyCtx, q.timerset, &go_redis.Z{Score: float64(timestamp), Member: buf}).Err()
 }
 

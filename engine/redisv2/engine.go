@@ -87,13 +87,13 @@ func (e *Engine) Publish(namespace, queue string, body []byte, ttlSecond, delayS
 	e.timer.AddTimerSet(q.timerset)
 
 	if delaySecond == 0 {
-		err = q.PushInstantJob(job, tries)
+		err = q.PushInstantJob(job)
 		if err != nil {
 			err = fmt.Errorf("queue: %s", err)
 		}
 		return job.ID(), err
 	}
-	err = q.PushDelayedJob(namespace, queue, job.ID(), delaySecond, tries)
+	err = q.PushDelayedJob(job)
 	if err != nil {
 		err = fmt.Errorf("timer: %s", err)
 	}

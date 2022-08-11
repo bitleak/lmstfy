@@ -17,9 +17,7 @@ $(PROGRAM):
 	@echo ""
 
 test:
-	- cd scripts/redis && docker-compose up -d && cd ../..
-	@LMSTFY_TEST_CONFIG=`pwd`/scripts/test-conf.toml sh scripts/run-test.sh 
-	- cd scripts/redis && docker-compose down && cd ../..
+	@sh scripts/run-test.sh
 
 lint:
 	@rm -rf lint.log

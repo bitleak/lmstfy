@@ -14,34 +14,15 @@ import (
 )
 
 var (
-	CONF *config.Config
-)
-
-var (
 	Host      string
 	Port      int
 	Namespace = "client-ns"
 	Token     string
 )
 
-func init() {
-	cfg := os.Getenv("LMSTFY_TEST_CONFIG")
-	if cfg == "" {
-		panic(`
-############################################################
-PLEASE setup env LMSTFY_TEST_CONFIG to the config file first
-############################################################
-`)
-	}
-	var err error
-	if CONF, err = config.MustLoad(os.Getenv("LMSTFY_TEST_CONFIG")); err != nil {
-		panic(fmt.Sprintf("Failed to load config file: %s", err))
-	}
-}
-
 // NOTE: lmstfy server should be start by gitlab CI script from outside, but should use the same
 // config file specified in $LMSTFY_TEST_CONFIG
-func setup() {
+func setup(CONF *config.Config) {
 	ctx := context.Background()
 	Host = CONF.Host
 	Port = CONF.Port
@@ -89,7 +70,9 @@ func setup() {
 func teardown() {}
 
 func TestMain(m *testing.M) {
-	setup()
+	presetConfig := config.CreatePresetForTest()
+	defer presetConfig.Destroy()
+	setup(presetConfig.Config)
 	ret := m.Run()
 	teardown()
 	os.Exit(ret)

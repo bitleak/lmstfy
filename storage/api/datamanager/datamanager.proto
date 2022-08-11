@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package datamanager;
+option go_package = "../datamanager";
+
+message JobData {
+  string id = 1;
+  string namespace = 2;
+  string queue = 3;
+  bytes  body = 4;
+  uint32 ttl = 5;
+  uint32 delay = 6;
+  uint32 tries = 7;
+}
+
+message DataRequest {
+  string namespace = 1;
+  string queue = 2;
+  int64  duetime = 3;
+}

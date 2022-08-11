@@ -15,19 +15,21 @@ const (
 local deadletter = KEYS[1]
 local queue = KEYS[2]
 local poolPrefix = KEYS[3]
+local stream_field_name = KEYS[4]
 local limit = tonumber(ARGV[1])
 local respawnTTL = tonumber(ARGV[2])
 
 for i = 1, limit do
-    local data = redis.call("RPOPLPUSH", deadletter, queue)
+	local data = redis.call("RPOP", deadletter)
 	if data == false then
 		return i - 1  -- deadletter is empty
 	end
-    -- unpack the jobID, and set the TTL
+    -- unpack the jobID, set the TTL and write back to queue
     local _, jobID = struct.unpack("HHc0", data)
     if respawnTTL > 0 then
 		redis.call("EXPIRE", poolPrefix .. "/" .. jobID, respawnTTL)
 	end
+    redis.call("XADD", queue, "*", stream_field_name, data)
 end
 return limit  -- deadletter has more data when return value is >= limit
 `
@@ -99,9 +101,6 @@ func (dl *DeadLetter) Name() string {
 // Add a job to dead letter. NOTE the data format is the same
 // as the ready queue (lua struct `HHc0`), by doing this we could directly pop
 // the dead job back to the ready queue.
-//
-// NOTE: this method is not called any where except in tests, but this logic is
-// implement in the timer's pump script. please refer to that.
 func (dl *DeadLetter) Add(jobID string) error {
 	val := structPack(1, jobID)
 	if err := dl.redis.Conn.Persist(dummyCtx, PoolJobKey2(dl.namespace, dl.queue, jobID)).Err(); err != nil {
@@ -201,7 +200,8 @@ func (dl *DeadLetter) Respawn(limit, ttlSecond int64) (count int64, err error) {
 			batchSize = limit
 		}
 		for {
-			val, err := dl.redis.Conn.EvalSha(dummyCtx, respawnDeadletterSHA, []string{dl.Name(), queueName, poolPrefix}, batchSize, ttlSecond).Result() // Respawn `batchSize` jobs at a time
+			val, err := dl.redis.Conn.EvalSha(dummyCtx, respawnDeadletterSHA,
+				[]string{dl.Name(), queueName, poolPrefix, StreamMessageField}, batchSize, ttlSecond).Result() // Respawn `batchSize` jobs at a time
 			if err != nil {
 				if isLuaScriptGone(err) {
 					if err := PreloadDeadLetterLuaScript(dl.redis); err != nil {
@@ -220,12 +220,12 @@ func (dl *DeadLetter) Respawn(limit, ttlSecond int64) (count int64, err error) {
 				break
 			}
 			if limit-count < batchSize {
-				batchSize = limit - count // This is the last batch, we should't respawn jobs exceeding the limit.
+				batchSize = limit - count // This is the last batch, we shouldn't respawn jobs exceeding the limit.
 			}
 		}
 		return count, nil
 	} else if limit == 1 {
-		data, err := dl.redis.Conn.RPopLPush(dummyCtx, dl.Name(), queueName).Result()
+		data, err := dl.redis.Conn.RPop(dummyCtx, dl.Name()).Result()
 		if err != nil {
 			if err == go_redis.Nil {
 				return 0, nil
@@ -237,10 +237,27 @@ func (dl *DeadLetter) Respawn(limit, ttlSecond int64) (count int64, err error) {
 			return 1, err
 		}
 		if ttlSecond > 0 {
-			err = dl.redis.Conn.Expire(dummyCtx, PoolJobKey2(dl.namespace, dl.queue, jobID), time.Duration(ttlSecond)*time.Second).Err()
+			err = dl.redis.Conn.Expire(dummyCtx, PoolJobKey2(dl.namespace, dl.queue, jobID),
+				time.Duration(ttlSecond)*time.Second).Err()
 		}
 		if err != nil {
 			return 1, fmt.Errorf("failed to set TTL on respawned job[%s]: %s", jobID, err)
+		}
+
+		args := &go_redis.XAddArgs{
+			Stream: queueName,
+			MaxLen: MaxQueueLength,
+			Values: []string{StreamMessageField, data},
+		}
+		val, err := dl.redis.Conn.XAdd(dummyCtx, args).Result()
+		if err == nil {
+			// record stream id for future ack sake
+			ok, err := dl.redis.Conn.SetNX(dummyCtx, getJobStreamIDKey(jobID), val,
+				time.Duration(ttlSecond)*time.Second).Result()
+			if err != nil || !ok {
+				err = errors.New("failed to record job stream id")
+				return 1, err
+			}
 		}
 		return 1, nil
 	} else {

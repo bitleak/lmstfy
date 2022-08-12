@@ -2,37 +2,22 @@ package auth
 
 import (
 	"fmt"
+	"os"
+	"testing"
+
 	"github.com/bitleak/lmstfy/config"
 	"github.com/bitleak/lmstfy/engine"
 	"github.com/bitleak/lmstfy/engine/redis"
 	"github.com/bitleak/lmstfy/helper"
 	go_redis "github.com/go-redis/redis/v8"
-	"os"
-	"testing"
 )
 
 var (
-	conf       *config.Config
 	adminRedis *go_redis.Client
 )
 
-func init() {
-	cfg := os.Getenv("LMSTFY_TEST_CONFIG")
-	if cfg == "" {
-		panic(`
-############################################################
-PLEASE setup env LMSTFY_TEST_CONFIG to the config file first
-############################################################
-`)
-	}
-	var err error
-	if conf, err = config.MustLoad(os.Getenv("LMSTFY_TEST_CONFIG")); err != nil {
-		panic(fmt.Sprintf("Failed to load config file: %s", err))
-	}
+func setup(conf *config.Config) {
 
-}
-
-func setup() {
 	if err := Setup(conf); err != nil {
 		panic(fmt.Sprintf("Failed to setup auth testcase: %s", err))
 	}
@@ -49,7 +34,9 @@ func setup() {
 }
 
 func TestMain(m *testing.M) {
-	setup()
+	presetConfig := config.CreatePresetForTest()
+	defer presetConfig.Destroy()
+	setup(presetConfig.Config)
 	ret := m.Run()
 	os.Exit(ret)
 }

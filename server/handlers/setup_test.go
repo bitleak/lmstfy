@@ -27,32 +27,13 @@ func ginTest(req *http.Request) (*gin.Context, *gin.Engine, *httptest.ResponseRe
 	return ctx, engine, w
 }
 
-var (
-	CONF *config.Config
-)
-
-func init() {
-	cfg := os.Getenv("LMSTFY_TEST_CONFIG")
-	if cfg == "" {
-		panic(`
-############################################################
-PLEASE setup env LMSTFY_TEST_CONFIG to the config file first
-############################################################
-`)
-	}
-	var err error
-	if CONF, err = config.MustLoad(os.Getenv("LMSTFY_TEST_CONFIG")); err != nil {
-		panic(fmt.Sprintf("Failed to load config file: %s", err))
-	}
-}
-
-func setup() {
+func setup(Conf *config.Config) {
 	dummyCtx := context.TODO()
 	logger := logrus.New()
-	level, _ := logrus.ParseLevel(CONF.LogLevel)
+	level, _ := logrus.ParseLevel(Conf.LogLevel)
 	logger.SetLevel(level)
 
-	conn := helper.NewRedisClient(&CONF.AdminRedis, nil)
+	conn := helper.NewRedisClient(&Conf.AdminRedis, nil)
 	err := conn.Ping(dummyCtx).Err()
 	if err != nil {
 		panic(fmt.Sprintf("Failed to ping: %s", err))
@@ -62,7 +43,7 @@ func setup() {
 		panic(fmt.Sprintf("Failed to flush db: %s", err))
 	}
 
-	for _, poolConf := range CONF.Pool {
+	for _, poolConf := range Conf.Pool {
 		conn := helper.NewRedisClient(&poolConf, nil)
 		err := conn.Ping(dummyCtx).Err()
 		if err != nil {
@@ -74,22 +55,24 @@ func setup() {
 		}
 	}
 
-	if err := redis_engine.Setup(CONF, logger); err != nil {
+	if err := redis_engine.Setup(Conf, logger); err != nil {
 		panic(fmt.Sprintf("Failed to setup redis engine: %s", err))
 	}
 
-	if err := auth.Setup(CONF); err != nil {
+	if err := auth.Setup(Conf); err != nil {
 		panic(fmt.Sprintf("Failed to setup auth module: %s", err))
 	}
-	if err := throttler.Setup(&CONF.AdminRedis, logger); err != nil {
+	if err := throttler.Setup(&Conf.AdminRedis, logger); err != nil {
 		panic(fmt.Sprintf("Failed to setup throttler module: %s", err))
 	}
 	handlers.Setup(logger)
-	handlers.SetupParamDefaults(CONF)
+	handlers.SetupParamDefaults(Conf)
 }
 
 func TestMain(m *testing.M) {
-	setup()
+	presetConfig := config.CreatePresetForTest()
+	defer presetConfig.Destroy()
+	setup(presetConfig.Config)
 	ret := m.Run()
 	os.Exit(ret)
 }

@@ -4,13 +4,14 @@ on:
   push:
     branches:
       - master
-      - v2
+      - feature/*
     tags:
       - v*
     
   pull_request:     
     branches:
       - master
+      - feature/*
 
 jobs:
   lint-build-test:

@@ -84,7 +84,6 @@ func TestEngine_Consume2(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to consume: %s", err)
 	}
-	fmt.Printf("consume2 job:%v", job)
 	if !bytes.Equal(body, job.Body()) || jobID1 != job.ID() {
 		t.Fatalf("Mistmatched job data")
 	}

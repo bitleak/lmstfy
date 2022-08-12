@@ -1,7 +1,6 @@
 package redis
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
@@ -160,12 +159,8 @@ func (t *Timer) ProcessPendingMsg() {
 }
 
 func (t *Timer) recycle() {
-	fmt.Println("enter recycle")
-	fmt.Println("members", t.members)
 	t.rwmu.RLock()
 	for member := range t.members {
-		fmt.Println("process member", member)
-
 		vals := splits(3, member)
 		if len(vals) != 3 || vals[0] != TimerSetPrefix {
 			continue
@@ -190,14 +185,12 @@ func handlePendingMsg(client *RedisInstance, stream, namespace, queue string) er
 		Count:  DefaultPendingSize,
 	}
 	msgs, err := client.Conn.XPendingExt(dummyCtx, extArgs).Result()
-	fmt.Printf("get pending msg: %v and error: %v", msgs, err)
 	if err != nil {
 		return err
 	}
 	// check each job's tries. If tries <= 0 then move it to dead letter, else renew the job
 	for _, msg := range msgs {
 		tries, jobID := getJobInfo(client, stream, msg.ID)
-		fmt.Println("get msg tries", tries)
 		if tries <= 0 {
 			val := structPack(1, jobID)
 			err := client.Conn.Persist(dummyCtx, PoolJobKey2(namespace, queue, jobID)).Err()
@@ -236,13 +229,10 @@ func renewJob(client *RedisInstance, tries uint16, stream, jobID, msgID string) 
 		Values: []string{StreamMessageField, val},
 	}
 	streamID, err := client.Conn.XAdd(dummyCtx, args).Result()
-	fmt.Printf("renew job: %v, new stream id: %v, error:%v", jobID, streamID, err)
 	if err == nil {
 		// record stream id for future ack sake
 		client.Conn.Set(dummyCtx, getJobStreamIDKey(jobID), streamID, RenewStreamIDExpTime)
-		fmt.Println("set stream id ok")
 	}
 	// remove the original msg out of pending stream
-	res, err := client.Conn.XAck(dummyCtx, stream, ConsumerGroup, msgID).Result()
-	fmt.Printf("ack old pending stream id %v, and res:%v, error: %v", msgID, res, err)
+	client.Conn.XAck(dummyCtx, stream, ConsumerGroup, msgID)
 }

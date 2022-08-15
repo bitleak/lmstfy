@@ -209,14 +209,15 @@ func TestQueue_Backup(t *testing.T) {
 		pool := NewPool(R)
 		pool.Add(job)
 	}
-	backupQueueName := timer.GetBackupQueueName(namespace, queue)
-	members, err := q.redis.Conn.ZRange(dummyCtx, backupQueueName, 0, -1).Result()
+	backupQueueName := timer.BuildBackupKey(namespace, queue)
+	memberScores, err := q.redis.Conn.ZRangeWithScores(dummyCtx, backupQueueName, 0, -1).Result()
 	assert.Nil(t, err)
-	for _, member := range members {
-		tries, jobID, err := structUnpack(member)
-		assert.Nil(t, err)
-		assert.Equal(t, 26, len(jobID))
+	now := time.Now().Unix()
+	for _, memberScore := range memberScores {
+		assert.Equal(t, 26, len(memberScore.Member.(string)))
+		timestamp, tries := decodeScore(memberScore.Score)
 		assert.Equal(t, uint16(2), tries)
+		assert.LessOrEqual(t, timestamp, now)
 	}
 
 	for i := 0; i < 10; i++ {

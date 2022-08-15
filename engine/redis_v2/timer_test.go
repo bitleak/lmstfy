@@ -7,6 +7,7 @@ import (
 
 	"github.com/bitleak/lmstfy/engine"
 	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/require"
 )
 
 func TestTimer_Add(t *testing.T) {
@@ -126,4 +127,16 @@ func BenchmarkTimer_Pump(b *testing.B) {
 
 	b.StartTimer()
 	timer.pump(time.Now().Unix() + 1)
+}
+
+func TestScore_Encode(t *testing.T) {
+	now := time.Now().Unix()
+	tries := uint16(123)
+
+	for i := 0; i < 1000; i++ {
+		score := encodeScore(now+int64(i), tries)
+		gotTimestamp, gotTries := decodeScore(score)
+		require.Equal(t, tries, gotTries)
+		require.Equal(t, now+int64(i), gotTimestamp)
+	}
 }

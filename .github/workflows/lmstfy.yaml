@@ -4,20 +4,21 @@ on:
   push:
     branches:
       - master
-      - v2
+      - feature/*
     tags:
       - v*
     
   pull_request:     
     branches:
       - master
+      - feature/*
 
 jobs:
   lint-build-test:
     name: Lint/Build/Test 
     strategy:
       matrix:
-        go-version: [1.14.x, 1.15.x, 1.16.x]
+        go-version: [1.17.x,1.18.x]
         os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:

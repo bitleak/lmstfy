@@ -10,7 +10,6 @@ import (
 
 func TestValidateRedisConfig(t *testing.T) {
 	ctx := context.Background()
-	assert.Nil(t, ValidateRedisConfig(ctx, &CONF.AdminRedis))
 	defaultPool := CONF.Pool["default"]
 	redisCli := NewRedisClient(&defaultPool, nil)
 	_, err := redisCli.ConfigSet(ctx, "appendonly", "no").Result()

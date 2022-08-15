@@ -14,35 +14,20 @@ import (
 )
 
 var (
-	CONF           *config.Config
 	OldRedisEngine engine.Engine
 	NewRedisEngine engine.Engine
 	dummyCtx       = context.TODO()
 )
 
-func init() {
-	cfg := os.Getenv("LMSTFY_TEST_CONFIG")
-	if cfg == "" {
-		panic(`
-############################################################
-PLEASE setup env LMSTFY_TEST_CONFIG to the config file first
-############################################################
-`)
-	}
-	var err error
-	if CONF, err = config.MustLoad(os.Getenv("LMSTFY_TEST_CONFIG")); err != nil {
-		panic(fmt.Sprintf("Failed to load config file: %s", err))
-	}
+func setup(Conf *config.Config) {
 	logger = logrus.New()
-	level, _ := logrus.ParseLevel(CONF.LogLevel)
+	level, _ := logrus.ParseLevel(Conf.LogLevel)
 	logger.SetLevel(level)
-}
 
-func setup() {
-	if err := redis.Setup(CONF, logger); err != nil {
+	if err := redis.Setup(Conf, logger); err != nil {
 		panic(fmt.Sprintf("Failed to setup redis engine: %s", err))
 	}
-	for _, poolConf := range CONF.Pool {
+	for _, poolConf := range Conf.Pool {
 		conn := helper.NewRedisClient(&poolConf, nil)
 		err := conn.Ping(dummyCtx).Err()
 		if err != nil {
@@ -63,7 +48,9 @@ func teardown() {
 }
 
 func TestMain(m *testing.M) {
-	setup()
+	presetConfig := config.CreatePresetForTest("migrate")
+	defer presetConfig.Destroy()
+	setup(presetConfig.Config)
 	ret := m.Run()
 	teardown()
 	os.Exit(ret)

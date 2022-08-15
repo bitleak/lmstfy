@@ -2,6 +2,7 @@ package redis_v2
 
 import (
 	"encoding/binary"
+	"strings"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -22,7 +23,7 @@ if #expiredMembers == 0 then
 	return 0
 end
 
-for _,v in ipairs(expiredMembers) do
+for score,v in ipairs(expiredMembers) do
 	local ns, q, tries, job_id = struct.unpack("Hc0Hc0HHc0", v)
 	if redis.call("EXISTS", table.concat({pool_prefix, ns, q, job_id}, "/")) > 0 then
 		-- only pump job to ready queue/dead letter if the job did not expire
@@ -35,6 +36,8 @@ for _,v in ipairs(expiredMembers) do
 			-- move to ready queue
 			local val = struct.pack("HHc0", tonumber(tries), #job_id, job_id)
 			redis.call("LPUSH", table.concat({output_queue_prefix, ns, q}, "/"), val)
+			local backup_key = table.concat({output_queue_prefix, ns, q, "backup"}, "/")
+			redis.call("ZADD", backup_key, score, val)
 		end
 	end
 end
@@ -98,7 +101,29 @@ func (t *Timer) Add(namespace, queue, jobID string, delaySecond uint32, tries ui
 	binary.LittleEndian.PutUint16(buf[2+namespaceLen+2+queueLen+2:], uint16(jobIDLen))
 	copy(buf[2+namespaceLen+2+queueLen+2+2:], jobID)
 
-	return t.redis.Conn.ZAdd(dummyCtx, t.Name(), &redis.Z{Score: float64(timestamp), Member: buf}).Err()
+	err := t.redis.Conn.ZAdd(dummyCtx, t.Name(), &redis.Z{Score: float64(timestamp), Member: buf}).Err()
+	if err != nil {
+		return err
+	}
+
+	_ = t.RemoveFromBackup(namespace, queue, jobID, tries+1)
+	return nil
+}
+
+func (t *Timer) GetBackupQueueName(namespace, queue string) string {
+	return strings.Join([]string{QueuePrefix, namespace, queue, "backup"}, "/")
+}
+func (t *Timer) AddToBackup(namespace, queue, jobID string, tries uint16) error {
+	timestamp := time.Now().Unix()
+	val := structPack(tries, jobID)
+	backupQueueName := t.GetBackupQueueName(namespace, queue)
+	return t.redis.Conn.ZAdd(dummyCtx, backupQueueName, &redis.Z{Score: float64(timestamp), Member: val}).Err()
+}
+
+func (t *Timer) RemoveFromBackup(namespace, queue, jobID string, tries uint16) error {
+	metrics.timerRemoveBackupJobs.WithLabelValues(t.redis.Name).Inc()
+	backupQueueName := t.GetBackupQueueName(namespace, queue)
+	return t.redis.Conn.ZRem(dummyCtx, backupQueueName, structPack(tries, jobID)).Err()
 }
 
 // Tick pump all due jobs to the target queue

@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-redis/redis/v8"
-
 	"github.com/bitleak/lmstfy/engine"
+	"github.com/go-redis/redis/v8"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestQueue_Push(t *testing.T) {
@@ -140,6 +140,12 @@ func TestStructPacking(t *testing.T) {
 }
 
 func TestPopMultiQueues(t *testing.T) {
+	timer, err := NewTimer("timer_set_q", R, time.Second)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to new timer: %s", err))
+	}
+	defer timer.Shutdown()
+
 	namespace := "ns-queueName"
 	queues := make([]QueueName, 3)
 	queueNames := make([]string, 3)
@@ -156,7 +162,7 @@ func TestPopMultiQueues(t *testing.T) {
 	}
 
 	queueName := "q7"
-	q := NewQueue(namespace, queueName, R, nil)
+	q := NewQueue(namespace, queueName, R, timer)
 	msg := "hello msg 7"
 	job := engine.NewJob(namespace, queueName, []byte(msg), 30, 0, 2)
 	q.Push(job, 2)
@@ -171,7 +177,7 @@ func TestPopMultiQueues(t *testing.T) {
 	// single queue condition
 	queueName = "q8"
 	job = engine.NewJob(namespace, queueName, []byte(msg), 30, 0, 2)
-	q = NewQueue(namespace, queueName, R, nil)
+	q = NewQueue(namespace, queueName, R, timer)
 	q.Push(job, 2)
 	gotQueueName, gotVal, err = popMultiQueues(R, []string{queueNames[2]})
 	if err != nil {
@@ -180,4 +186,46 @@ func TestPopMultiQueues(t *testing.T) {
 	if gotQueueName != q.Name() {
 		t.Fatalf("invalid queueName name, %s was expected but got %s", q.Name(), gotQueueName)
 	}
+}
+
+func TestQueue_Backup(t *testing.T) {
+	timer, err := NewTimer("timer_set_q", R, time.Second)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to new timer: %s", err))
+	}
+	defer timer.Shutdown()
+
+	namespace := "ns-queue"
+	queue := "q9"
+	q := NewQueue(namespace, queue, R, timer)
+	count := 10
+	for i := 0; i < count; i++ {
+		delay := uint32(0)
+		if i%2 == 0 {
+			delay = 1
+		}
+		job := engine.NewJob(namespace, queue, []byte("hello msg"), 30, delay, 2)
+		q.Push(job, 2)
+		pool := NewPool(R)
+		pool.Add(job)
+	}
+	backupQueueName := timer.GetBackupQueueName(namespace, queue)
+	members, err := q.redis.Conn.ZRange(dummyCtx, backupQueueName, 0, -1).Result()
+	assert.Nil(t, err)
+	for _, member := range members {
+		tries, jobID, err := structUnpack(member)
+		assert.Nil(t, err)
+		assert.Equal(t, 26, len(jobID))
+		assert.Equal(t, uint16(2), tries)
+	}
+
+	for i := 0; i < 10; i++ {
+		jobID, _, err := q.Poll(2, 1)
+		if err != nil || jobID == "" {
+			t.Fatalf("Failed to poll job from queue: %s", err)
+		}
+	}
+	backupCount, err := q.redis.Conn.ZCard(dummyCtx, backupQueueName).Result()
+	assert.Nil(t, err)
+	assert.Equal(t, int64(0), backupCount)
 }

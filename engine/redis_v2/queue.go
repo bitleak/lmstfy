@@ -81,6 +81,9 @@ func (q *Queue) Push(j engine.Job, tries uint16) error {
 	}
 	metrics.queueDirectPushJobs.WithLabelValues(q.redis.Name).Inc()
 	val := structPack(tries, j.ID())
+	if err := q.timer.addToBackup(q.name.Namespace, q.name.Queue, j.ID(), j.Tries()); err != nil {
+		return err
+	}
 	return q.redis.Conn.LPush(dummyCtx, q.Name(), val).Err()
 }
 

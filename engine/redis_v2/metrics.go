@@ -18,6 +18,7 @@ type Metrics struct {
 	poolGetJobs           *prometheus.CounterVec
 	poolDeleteJobs        *prometheus.CounterVec
 	timerAddJobs          *prometheus.CounterVec
+	timerRemoveBackupJobs *prometheus.CounterVec
 	timerDueJobs          *prometheus.CounterVec
 	timerFullBatches      *prometheus.CounterVec
 	queueDirectPushJobs   *prometheus.CounterVec
@@ -62,6 +63,7 @@ func setupMetrics() {
 		poolGetJobs:           cv("pool_get_jobs"),
 		poolDeleteJobs:        cv("pool_delete_jobs"),
 		timerAddJobs:          cv("timer_add_jobs"),
+		timerRemoveBackupJobs: cv("timer_remove_backup_jobs"),
 		timerDueJobs:          cv("timer_due_jobs"),
 		timerFullBatches:      cv("timer_full_batches"),
 		queueDirectPushJobs:   cv("queue_direct_push_jobs"),

@@ -35,7 +35,6 @@ func TestEngine_Consume(t *testing.T) {
 	defer e.Shutdown()
 	body := []byte("hello msg 2")
 	jobID, err := e.Publish("ns-engine", "q2", body, 10, 2, 1)
-	t.Log(jobID)
 	if err != nil {
 		t.Fatalf("Failed to publish: %s", err)
 	}

@@ -2,6 +2,8 @@ package redis_v2
 
 import (
 	"encoding/binary"
+	"math"
+	"strings"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -13,17 +15,24 @@ local zset_key = KEYS[1]
 local output_queue_prefix = KEYS[2]
 local pool_prefix = KEYS[3]
 local output_deadletter_prefix = KEYS[4]
-local now = ARGV[1]
+local min_score= ARGV[1]
 local limit = ARGV[2]
 
-local expiredMembers = redis.call("ZRANGEBYSCORE", zset_key, 0, now, "LIMIT", 0, limit)
+local expiredMembers = redis.call("ZRANGEBYSCORE", zset_key, 0, min_score, "WITHSCORES", "LIMIT", 0, limit)
 
 if #expiredMembers == 0 then
 	return 0
 end
 
-for _,v in ipairs(expiredMembers) do
-	local ns, q, tries, job_id = struct.unpack("Hc0Hc0HHc0", v)
+-- we want to remove those members after pumping into ready queue,
+-- so need a new array to record members without score.
+local toBeRemovedMembers = {}
+for i = 1, #expiredMembers, 2 do
+	local v = expiredMembers[i]
+	table.insert(toBeRemovedMembers, v)
+	local score = tonumber(expiredMembers[i+1])
+	local tries = bit.band(score, 0xffff)
+	local ns, q, job_id = struct.unpack("Hc0Hc0Hc0", v)
 	if redis.call("EXISTS", table.concat({pool_prefix, ns, q, job_id}, "/")) > 0 then
 		-- only pump job to ready queue/dead letter if the job did not expire
 		if tries == 0 then
@@ -35,11 +44,13 @@ for _,v in ipairs(expiredMembers) do
 			-- move to ready queue
 			local val = struct.pack("HHc0", tonumber(tries), #job_id, job_id)
 			redis.call("LPUSH", table.concat({output_queue_prefix, ns, q}, "/"), val)
+			local backup_key = table.concat({output_queue_prefix, ns, q, "backup"}, "/")
+			redis.call("ZADD", backup_key, score, job_id)
 		end
 	end
 end
-redis.call("ZREM", zset_key, unpack(expiredMembers))
-return #expiredMembers
+redis.call("ZREM", zset_key, unpack(toBeRemovedMembers))
+return #toBeRemovedMembers
 `
 )
 
@@ -79,12 +90,28 @@ func (t *Timer) Name() string {
 	return t.name
 }
 
+// encodeScore will encode timestamp(unix second) and tries as score.
+// Be careful that the underlay of Lua number is double, so it will
+// lose precious if overrun the 53bit.
+func encodeScore(timestamp int64, tries uint16) float64 {
+	return float64(((timestamp & 0xffffffff) << 16) | int64(tries&0xffff))
+}
+
+// decodeScore will decode the score into timestamp and tries
+func decodeScore(score float64) (int64, uint16) {
+	val := int64(score)
+	timestamp := (val >> 16) & 0xffffffff
+	tries := uint16(val & 0xffff)
+	return timestamp, tries
+}
+
 func (t *Timer) Add(namespace, queue, jobID string, delaySecond uint32, tries uint16) error {
 	metrics.timerAddJobs.WithLabelValues(t.redis.Name).Inc()
 	timestamp := time.Now().Unix() + int64(delaySecond)
 
-	// struct-pack the data in the format `Hc0Hc0HHc0`:
-	//   {namespace len}{namespace}{queue len}{queue}{tries}{jobID len}{jobID}
+	score := encodeScore(timestamp, tries)
+	// struct-pack the data in the format `Hc0Hc0Hc0`:
+	//   {namespace len}{namespace}{queue len}{queue}{jobID len}{jobID}
 	// length are 2-byte uint16 in little-endian
 	namespaceLen := len(namespace)
 	queueLen := len(queue)
@@ -94,11 +121,34 @@ func (t *Timer) Add(namespace, queue, jobID string, delaySecond uint32, tries ui
 	copy(buf[2:], namespace)
 	binary.LittleEndian.PutUint16(buf[2+namespaceLen:], uint16(queueLen))
 	copy(buf[2+namespaceLen+2:], queue)
-	binary.LittleEndian.PutUint16(buf[2+namespaceLen+2+queueLen:], uint16(tries))
-	binary.LittleEndian.PutUint16(buf[2+namespaceLen+2+queueLen+2:], uint16(jobIDLen))
-	copy(buf[2+namespaceLen+2+queueLen+2+2:], jobID)
+	binary.LittleEndian.PutUint16(buf[2+namespaceLen+2+queueLen:], uint16(jobIDLen))
+	copy(buf[2+namespaceLen+2+queueLen+2:], jobID)
 
-	return t.redis.Conn.ZAdd(dummyCtx, t.Name(), &redis.Z{Score: float64(timestamp), Member: buf}).Err()
+	err := t.redis.Conn.ZAdd(dummyCtx, t.Name(), &redis.Z{Score: score, Member: buf}).Err()
+	if err != nil {
+		return err
+	}
+
+	// We can ignore the error when removing job id from the backup queue
+	// coz it harms nothing even respawn them into the timer set.
+	_ = t.removeFromBackup(namespace, queue, jobID)
+	return nil
+}
+
+func (t *Timer) BuildBackupKey(namespace, queue string) string {
+	return strings.Join([]string{QueuePrefix, namespace, queue, "backup"}, "/")
+}
+
+func (t *Timer) addToBackup(namespace, queue, jobID string, tries uint16) error {
+	score := encodeScore(time.Now().Unix(), tries)
+	backupQueueName := t.BuildBackupKey(namespace, queue)
+	return t.redis.Conn.ZAdd(dummyCtx, backupQueueName, &redis.Z{Score: score, Member: jobID}).Err()
+}
+
+func (t *Timer) removeFromBackup(namespace, queue, jobID string) error {
+	metrics.timerRemoveBackupJobs.WithLabelValues(t.redis.Name).Inc()
+	backupQueueName := t.BuildBackupKey(namespace, queue)
+	return t.redis.Conn.ZRem(dummyCtx, backupQueueName, jobID).Err()
 }
 
 // Tick pump all due jobs to the target queue
@@ -116,8 +166,9 @@ func (t *Timer) tick() {
 }
 
 func (t *Timer) pump(currentSecond int64) {
+	minScore := encodeScore(currentSecond, math.MaxUint16)
 	for {
-		val, err := t.redis.Conn.EvalSha(dummyCtx, t.pumpSHA, []string{t.Name(), QueuePrefix, PoolPrefix, DeadLetterPrefix}, currentSecond, BatchSize).Result()
+		val, err := t.redis.Conn.EvalSha(dummyCtx, t.pumpSHA, []string{t.Name(), QueuePrefix, PoolPrefix, DeadLetterPrefix}, minScore, BatchSize).Result()
 		if err != nil {
 			if isLuaScriptGone(err) { // when redis restart, the script needs to be uploaded again
 				sha, err := t.redis.Conn.ScriptLoad(dummyCtx, luaPumpQueueScript).Result()

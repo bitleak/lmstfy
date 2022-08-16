@@ -24,6 +24,8 @@ if #expiredMembers == 0 then
 	return 0
 end
 
+-- we want to remove those members after pumping into ready queue,
+-- so need a new array to record members without score.
 local toBeRemovedMembers = {}
 for i = 1, #expiredMembers, 2 do
 	local v = expiredMembers[i]
@@ -48,7 +50,7 @@ for i = 1, #expiredMembers, 2 do
 	end
 end
 redis.call("ZREM", zset_key, unpack(toBeRemovedMembers))
-return #expiredMembers
+return #toBeRemovedMembers
 `
 )
 
@@ -88,10 +90,14 @@ func (t *Timer) Name() string {
 	return t.name
 }
 
+// encodeScore will encode timestamp(unix second) and tries as score.
+// Be careful that the underlay of Lua number is double, so it will
+// lose precious if overrun the 53bit.
 func encodeScore(timestamp int64, tries uint16) float64 {
 	return float64(((timestamp & 0xffffffff) << 16) | int64(tries&0xffff))
 }
 
+// decodeScore will decode the score into timestamp and tries
 func decodeScore(score float64) (int64, uint16) {
 	val := int64(score)
 	timestamp := (val >> 16) & 0xffffffff
@@ -123,6 +129,8 @@ func (t *Timer) Add(namespace, queue, jobID string, delaySecond uint32, tries ui
 		return err
 	}
 
+	// We can ignore the error when removing job id from the backup queue
+	// coz it harms nothing even respawn them into the timer set.
 	_ = t.removeFromBackup(namespace, queue, jobID)
 	return nil
 }

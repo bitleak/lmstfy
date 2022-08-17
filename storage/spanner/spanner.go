@@ -1,11 +1,12 @@
 package spanner
 
 import (
-	"cloud.google.com/go/spanner"
 	"context"
 	"errors"
 	"fmt"
-	"github.com/AfterShip/gopkg/storage/spannerx"
+
+	"cloud.google.com/go/spanner"
+
 	"github.com/bitleak/lmstfy/storage/model"
 )
 
@@ -14,11 +15,11 @@ const (
 )
 
 type SpannerDataMgr struct {
-	cli       *spannerx.Client
+	cli       *spanner.Client
 	tableName string
 }
 
-func NewSpannerDataMgr(client *spannerx.Client, tableName string) *SpannerDataMgr {
+func NewSpannerDataMgr(client *spanner.Client, tableName string) *SpannerDataMgr {
 	return &SpannerDataMgr{
 		cli:       client,
 		tableName: tableName,
@@ -32,7 +33,7 @@ func (mgr *SpannerDataMgr) BatchAddJobs(ctx context.Context, jobs []*model.JobDa
 		return err
 	}
 
-	_, err = mgr.cli.ReadWriteTransaction(ctx, func(ctx context.Context, txn *spannerx.ReadWriteTransaction) error {
+	_, err = mgr.cli.ReadWriteTransaction(ctx, func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
 		mutations := make([]*spanner.Mutation, 0)
 		for _, job := range jobs {
 			mut, err := spanner.InsertStruct(mgr.tableName, job)
@@ -110,7 +111,7 @@ func (mgr *SpannerDataMgr) DelJobs(ctx context.Context, jobIDs []string) (count 
 	if len(jobIDs) == 0 {
 		return 0, nil
 	}
-	_, err = mgr.cli.ReadWriteTransaction(ctx, func(ctx context.Context, txn *spannerx.ReadWriteTransaction) error {
+	_, err = mgr.cli.ReadWriteTransaction(ctx, func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
 		count, err = txn.Update(ctx, spanner.Statement{
 			SQL: "DELETE FROM lmstfy_jobs WHERE job_id IN UNNEST(@ids)",
 			Params: map[string]interface{}{

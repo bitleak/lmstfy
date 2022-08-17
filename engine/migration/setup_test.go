@@ -48,7 +48,7 @@ func teardown() {
 }
 
 func TestMain(m *testing.M) {
-	presetConfig, err := config.CreatePresetForTest()
+	presetConfig, err := config.CreatePresetForTest("migrate")
 	if err != nil {
 		panic(fmt.Sprintf("CreatePresetForTest failed with error: %s", err))
 	}

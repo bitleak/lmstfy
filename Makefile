@@ -17,7 +17,9 @@ $(PROGRAM):
 	@echo ""
 
 test:
+	- cd scripts/spanner && docker-compose up -d && cd ../..
 	@sh scripts/run-test.sh
+	- cd scripts/spanner && docker-compose down -d && cd ../..
 
 lint:
 	@rm -rf lint.log

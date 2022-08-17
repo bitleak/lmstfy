@@ -10,7 +10,7 @@ type PresetConfigForTest struct {
 	containers []*gnomock.Container
 }
 
-func CreatePresetForTest(pools ...string) *PresetConfigForTest {
+func CreatePresetForTest(pools ...string) (*PresetConfigForTest, error) {
 	cfg := &Config{
 		Host:      "127.0.0.1",
 		Port:      7777,
@@ -21,7 +21,10 @@ func CreatePresetForTest(pools ...string) *PresetConfigForTest {
 	}
 
 	p := redis.Preset()
-	defaultContainer, _ := gnomock.Start(p)
+	defaultContainer, err := gnomock.Start(p)
+	if err != nil {
+		return nil, err
+	}
 	addr := defaultContainer.DefaultAddress()
 	cfg.AdminRedis.Addr = addr
 	cfg.Pool[DefaultPoolName] = RedisConf{Addr: addr}
@@ -38,7 +41,7 @@ func CreatePresetForTest(pools ...string) *PresetConfigForTest {
 	return &PresetConfigForTest{
 		Config:     cfg,
 		containers: containers,
-	}
+	}, nil
 }
 
 func (presetConfig *PresetConfigForTest) Destroy() {

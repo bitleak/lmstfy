@@ -2,6 +2,7 @@ package redis_v2
 
 import (
 	"encoding/binary"
+	"errors"
 	"math"
 	"strings"
 	"time"
@@ -44,8 +45,8 @@ for i = 1, #expiredMembers, 2 do
 			-- move to ready queue
 			local val = struct.pack("HHc0", tonumber(tries), #job_id, job_id)
 			redis.call("LPUSH", table.concat({output_queue_prefix, ns, q}, "/"), val)
-			local backup_key = table.concat({output_queue_prefix, ns, q, "backup"}, "/")
-			redis.call("ZADD", backup_key, score, job_id)
+			local backup_key = table.concat({zset_key, "backup"}, "/")
+			redis.call("ZADD", backup_key, score, v)
 		end
 	end
 end
@@ -105,26 +106,43 @@ func decodeScore(score float64) (int64, uint16) {
 	return timestamp, tries
 }
 
-func (t *Timer) Add(namespace, queue, jobID string, delaySecond uint32, tries uint16) error {
-	metrics.timerAddJobs.WithLabelValues(t.redis.Name).Inc()
-	timestamp := time.Now().Unix() + int64(delaySecond)
-
-	score := encodeScore(timestamp, tries)
-	// struct-pack the data in the format `Hc0Hc0Hc0`:
-	//   {namespace len}{namespace}{queue len}{queue}{jobID len}{jobID}
-	// length are 2-byte uint16 in little-endian
+// structPackTimerData will struct-pack the data in the format `Hc0Hc0Hc0`:
+//   {namespace len}{namespace}{queue len}{queue}{jobID len}{jobID}
+// length are 2-byte uint16 in little-endian
+func structPackTimerData(namespace, queue, jobID string) []byte {
 	namespaceLen := len(namespace)
 	queueLen := len(queue)
 	jobIDLen := len(jobID)
-	buf := make([]byte, 2+namespaceLen+2+queueLen+2+2+jobIDLen)
+	buf := make([]byte, 2+namespaceLen+2+queueLen+2+jobIDLen)
 	binary.LittleEndian.PutUint16(buf[0:], uint16(namespaceLen))
 	copy(buf[2:], namespace)
 	binary.LittleEndian.PutUint16(buf[2+namespaceLen:], uint16(queueLen))
 	copy(buf[2+namespaceLen+2:], queue)
 	binary.LittleEndian.PutUint16(buf[2+namespaceLen+2+queueLen:], uint16(jobIDLen))
 	copy(buf[2+namespaceLen+2+queueLen+2:], jobID)
+	return buf
+}
 
-	err := t.redis.Conn.ZAdd(dummyCtx, t.Name(), &redis.Z{Score: score, Member: buf}).Err()
+func structUnpackTimerData(data []byte) (namespace, queue, jobID string, err error) {
+	namespaceLen := binary.LittleEndian.Uint16(data)
+	namespace = string(data[2 : namespaceLen+2])
+	queueLen := binary.LittleEndian.Uint16(data[2+namespaceLen:])
+	queue = string(data[2+namespaceLen+2 : 2+namespaceLen+2+queueLen])
+	JobIDLen := binary.LittleEndian.Uint16(data[2+namespaceLen+2+queueLen:])
+	jobID = string(data[2+namespaceLen+2+queueLen+2:])
+	if len(jobID) != int(JobIDLen) {
+		return "", "", "", errors.New("corrupted data")
+	}
+	return
+}
+
+func (t *Timer) Add(namespace, queue, jobID string, delaySecond uint32, tries uint16) error {
+	metrics.timerAddJobs.WithLabelValues(t.redis.Name).Inc()
+	timestamp := time.Now().Unix() + int64(delaySecond)
+
+	score := encodeScore(timestamp, tries)
+	member := structPackTimerData(namespace, queue, jobID)
+	err := t.redis.Conn.ZAdd(dummyCtx, t.Name(), &redis.Z{Score: score, Member: member}).Err()
 	if err != nil {
 		return err
 	}
@@ -135,20 +153,20 @@ func (t *Timer) Add(namespace, queue, jobID string, delaySecond uint32, tries ui
 	return nil
 }
 
-func (t *Timer) BuildBackupKey(namespace, queue string) string {
-	return strings.Join([]string{QueuePrefix, namespace, queue, "backup"}, "/")
+func (t *Timer) getBackupName() string {
+	return strings.Join([]string{t.Name(), "backup"}, "/")
 }
 
 func (t *Timer) addToBackup(namespace, queue, jobID string, tries uint16) error {
 	score := encodeScore(time.Now().Unix(), tries)
-	backupQueueName := t.BuildBackupKey(namespace, queue)
-	return t.redis.Conn.ZAdd(dummyCtx, backupQueueName, &redis.Z{Score: score, Member: jobID}).Err()
+	member := structPackTimerData(namespace, queue, jobID)
+	return t.redis.Conn.ZAdd(dummyCtx, t.getBackupName(), &redis.Z{Score: score, Member: member}).Err()
 }
 
 func (t *Timer) removeFromBackup(namespace, queue, jobID string) error {
+	member := structPackTimerData(namespace, queue, jobID)
 	metrics.timerRemoveBackupJobs.WithLabelValues(t.redis.Name).Inc()
-	backupQueueName := t.BuildBackupKey(namespace, queue)
-	return t.redis.Conn.ZRem(dummyCtx, backupQueueName, jobID).Err()
+	return t.redis.Conn.ZRem(dummyCtx, t.getBackupName(), member).Err()
 }
 
 // Tick pump all due jobs to the target queue

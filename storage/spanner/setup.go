@@ -3,6 +3,7 @@ package spanner
 import (
 	"context"
 	"fmt"
+	"google.golang.org/api/option"
 
 	"cloud.google.com/go/spanner"
 
@@ -11,10 +12,9 @@ import (
 
 func CreateSpannerClient(cfg *conf.SpannerConfig) (*spanner.Client, error) {
 	db := fmt.Sprintf("projects/%s/instances/%s/databases/%s", cfg.Project, cfg.Instance, cfg.Database)
-	spannerClient, err := spanner.NewClient(context.Background(), db)
-	if err != nil {
-		fmt.Printf("failed to create spanner client with error: %v", err)
-		return nil, err
+	if cfg.CredentialsFile != "" {
+		opt := option.WithCredentialsFile(cfg.CredentialsFile)
+		return spanner.NewClient(context.Background(), db, opt)
 	}
-	return spannerClient, nil
+	return spanner.NewClient(context.Background(), db)
 }

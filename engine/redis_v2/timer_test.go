@@ -2,11 +2,13 @@ package redis_v2
 
 import (
 	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/bitleak/lmstfy/engine"
 	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -60,6 +62,107 @@ func TestTimer_Tick(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+}
+
+func TestBackupTimer_BeforeOldestScore(t *testing.T) {
+	timer, err := NewTimer("test_backup_before_oldest_score", R, time.Second)
+	timer.checkBackupInterval = time.Second
+	if err != nil {
+		panic(fmt.Sprintf("Failed to new timer: %s", err))
+	}
+	defer timer.Shutdown()
+
+	pool := NewPool(R)
+	ns := "ns-test-backup"
+	queueName := "q0"
+	queue := NewQueue(ns, queueName, R, timer)
+	count := 10
+	for i := 0; i < count; i++ {
+		job := engine.NewJob(ns, queueName, []byte("hello msg"+strconv.Itoa(i)), 100, 1, 3)
+		pool.Add(job)
+		if i%2 == 0 {
+			queue.Push(job, job.Tries())
+		} else {
+			timer.Add(job.Namespace(), job.Queue(), job.ID(), job.Delay(), job.Tries())
+		}
+	}
+	// make sure all jobs are in the ready queue and consume them without ACK,
+	// so they should appear in the backup queue.
+	time.Sleep(time.Second)
+	assert.Equal(t, int64(count), R.Conn.ZCard(dummyCtx, timer.BackupName()).Val())
+	for i := 0; i < count/2; i++ {
+		_, err := R.Conn.BRPop(dummyCtx, time.Second, queue.Name()).Result()
+		assert.Nil(t, err)
+	}
+	require.Equal(t, int64(count)/2, R.Conn.LLen(dummyCtx, queue.Name()).Val())
+	time.Sleep(3 * time.Second)
+	// all jobs should requeue in ready queue again
+	require.Equal(t, int64(count), R.Conn.LLen(dummyCtx, queue.Name()).Val())
+	require.Equal(t, int64(count), R.Conn.ZCard(dummyCtx, timer.BackupName()).Val())
+
+	for i := 0; i < count; i++ {
+		val, err := R.Conn.BRPop(dummyCtx, time.Second, queue.Name()).Result()
+		assert.Nil(t, err)
+		tries, jobID, err := structUnpack(val[1])
+		assert.Nil(t, err)
+		assert.Equal(t, uint16(3), tries)
+		assert.Nil(t, pool.Delete(ns, queueName, jobID))
+	}
+	// backup jobs should be disappeared after jobs were ACKed
+	time.Sleep(2 * time.Second)
+	require.Equal(t, int64(0), R.Conn.LLen(dummyCtx, queue.Name()).Val())
+	require.Equal(t, int64(0), R.Conn.ZCard(dummyCtx, t.Name()).Val())
+	require.Equal(t, int64(0), R.Conn.ZCard(dummyCtx, timer.BackupName()).Val())
+}
+
+func TestBackupTimer_EmptyReadyQueue(t *testing.T) {
+	timer, err := NewTimer("test_backup_timer_set", R, time.Second)
+	timer.checkBackupInterval = time.Second
+	if err != nil {
+		panic(fmt.Sprintf("Failed to new timer: %s", err))
+	}
+	defer timer.Shutdown()
+
+	pool := NewPool(R)
+	ns := "ns-test-backup"
+	queueName := "q1"
+	queue := NewQueue(ns, queueName, R, timer)
+	count := 10
+	for i := 0; i < count; i++ {
+		job := engine.NewJob(ns, queueName, []byte("hello msg"+strconv.Itoa(i)), 100, 1, 3)
+		pool.Add(job)
+		if i%2 == 0 {
+			queue.Push(job, job.Tries())
+		} else {
+			timer.Add(job.Namespace(), job.Queue(), job.ID(), job.Delay(), job.Tries())
+		}
+	}
+	// make sure all jobs are in the ready queue and consume them without ACK,
+	// so they should appear in the backup queue.
+	time.Sleep(time.Second)
+	assert.Equal(t, int64(count), R.Conn.ZCard(dummyCtx, timer.BackupName()).Val())
+	for i := 0; i < count; i++ {
+		_, err := R.Conn.BRPop(dummyCtx, time.Second, queue.Name()).Result()
+		assert.Nil(t, err)
+	}
+	time.Sleep(2 * time.Second)
+	// all jobs should requeue in ready queue
+	require.Equal(t, int64(count), R.Conn.LLen(dummyCtx, queue.Name()).Val())
+	require.Equal(t, int64(count), R.Conn.ZCard(dummyCtx, timer.BackupName()).Val())
+
+	for i := 0; i < count; i++ {
+		val, err := R.Conn.BRPop(dummyCtx, time.Second, queue.Name()).Result()
+		assert.Nil(t, err)
+		tries, jobID, err := structUnpack(val[1])
+		assert.Nil(t, err)
+		assert.Equal(t, uint16(3), tries)
+		assert.Nil(t, pool.Delete(ns, queueName, jobID))
+	}
+	// backup jobs should be disappeared after jobs were ACKed
+	time.Sleep(2 * time.Second)
+	require.Equal(t, int64(0), R.Conn.LLen(dummyCtx, queue.Name()).Val())
+	require.Equal(t, int64(0), R.Conn.ZCard(dummyCtx, t.Name()).Val())
+	require.Equal(t, int64(0), R.Conn.ZCard(dummyCtx, timer.BackupName()).Val())
 }
 
 func BenchmarkTimer(b *testing.B) {

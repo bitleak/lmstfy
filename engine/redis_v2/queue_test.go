@@ -209,7 +209,7 @@ func TestQueue_Backup(t *testing.T) {
 		pool := NewPool(R)
 		pool.Add(job)
 	}
-	backupName := timer.getBackupName()
+	backupName := timer.BackupName()
 	memberScores, err := q.redis.Conn.ZRangeWithScores(dummyCtx, backupName, 0, -1).Result()
 	assert.Nil(t, err)
 	now := time.Now().Unix()

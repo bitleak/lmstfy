@@ -13,7 +13,7 @@ import (
 )
 
 func TestTimer_Add(t *testing.T) {
-	timer, err := NewTimer("timer_set_1", R, time.Second)
+	timer, err := NewTimer("timer_set_1", R, time.Second, 600*time.Second)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))
 	}
@@ -24,7 +24,7 @@ func TestTimer_Add(t *testing.T) {
 }
 
 func TestTimer_Tick(t *testing.T) {
-	timer, err := NewTimer("timer_set_2", R, time.Second)
+	timer, err := NewTimer("timer_set_2", R, time.Second, 600*time.Second)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))
 	}
@@ -65,8 +65,7 @@ func TestTimer_Tick(t *testing.T) {
 }
 
 func TestBackupTimer_BeforeOldestScore(t *testing.T) {
-	timer, err := NewTimer("test_backup_before_oldest_score", R, time.Second)
-	timer.checkBackupInterval = time.Second
+	timer, err := NewTimer("test_backup_before_oldest_score", R, time.Second, time.Second)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))
 	}
@@ -116,8 +115,7 @@ func TestBackupTimer_BeforeOldestScore(t *testing.T) {
 }
 
 func TestBackupTimer_EmptyReadyQueue(t *testing.T) {
-	timer, err := NewTimer("test_backup_timer_set", R, time.Second)
-	timer.checkBackupInterval = time.Second
+	timer, err := NewTimer("test_backup_timer_set", R, time.Second, time.Second)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))
 	}
@@ -170,7 +168,7 @@ func BenchmarkTimer(b *testing.B) {
 	logger.SetLevel(logrus.ErrorLevel)
 	defer logger.SetLevel(logrus.DebugLevel)
 
-	t, err := NewTimer("timer_set_3", R, time.Second)
+	t, err := NewTimer("timer_set_3", R, time.Second, 600*time.Second)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))
 	}
@@ -217,7 +215,7 @@ func BenchmarkTimer_Pump(b *testing.B) {
 	b.StopTimer()
 
 	pool := NewPool(R)
-	timer, err := NewTimer("timer_set_4", R, time.Second)
+	timer, err := NewTimer("timer_set_4", R, time.Second, 600*time.Second)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))
 	}

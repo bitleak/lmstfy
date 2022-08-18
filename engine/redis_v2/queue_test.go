@@ -12,7 +12,7 @@ import (
 )
 
 func TestQueue_Push(t *testing.T) {
-	timer, err := NewTimer("timer_set_q", R, time.Second)
+	timer, err := NewTimer("timer_set_q", R, time.Second, 600*time.Second)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))
 	}
@@ -30,7 +30,7 @@ func TestQueue_Push(t *testing.T) {
 }
 
 func TestQueue_Poll(t *testing.T) {
-	timer, err := NewTimer("timer_set_q", R, time.Second)
+	timer, err := NewTimer("timer_set_q", R, time.Second, 600*time.Second)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))
 	}
@@ -51,7 +51,7 @@ func TestQueue_Poll(t *testing.T) {
 }
 
 func TestQueue_Peek(t *testing.T) {
-	timer, err := NewTimer("timer_set_q", R, time.Second)
+	timer, err := NewTimer("timer_set_q", R, time.Second, 600*time.Second)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))
 	}
@@ -69,7 +69,7 @@ func TestQueue_Peek(t *testing.T) {
 }
 
 func TestQueue_Destroy(t *testing.T) {
-	timer, err := NewTimer("timer_set_q", R, time.Second)
+	timer, err := NewTimer("timer_set_q", R, time.Second, 600*time.Second)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))
 	}
@@ -91,7 +91,7 @@ func TestQueue_Destroy(t *testing.T) {
 }
 
 func TestQueue_Tries(t *testing.T) {
-	timer, err := NewTimer("timer_set_q", R, time.Second)
+	timer, err := NewTimer("timer_set_q", R, time.Second, 600*time.Second)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))
 	}
@@ -140,7 +140,7 @@ func TestStructPacking(t *testing.T) {
 }
 
 func TestPopMultiQueues(t *testing.T) {
-	timer, err := NewTimer("timer_set_q", R, time.Second)
+	timer, err := NewTimer("timer_set_q", R, time.Second, 600*time.Second)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))
 	}
@@ -189,7 +189,7 @@ func TestPopMultiQueues(t *testing.T) {
 }
 
 func TestQueue_Backup(t *testing.T) {
-	timer, err := NewTimer("timer_set_for_test_backup", R, time.Second)
+	timer, err := NewTimer("timer_set_for_test_backup", R, time.Second, 600*time.Second)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))
 	}

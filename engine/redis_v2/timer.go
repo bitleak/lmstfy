@@ -128,12 +128,12 @@ type Timer struct {
 }
 
 // NewTimer return an instance of delay queue
-func NewTimer(name string, redis *RedisInstance, interval time.Duration) (*Timer, error) {
+func NewTimer(name string, redis *RedisInstance, interval, checkBackupInterval time.Duration) (*Timer, error) {
 	timer := &Timer{
 		name:                name,
 		redis:               redis,
 		interval:            interval,
-		checkBackupInterval: interval * 600,
+		checkBackupInterval: checkBackupInterval,
 		shutdown:            make(chan struct{}),
 	}
 

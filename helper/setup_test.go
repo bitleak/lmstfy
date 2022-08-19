@@ -1,6 +1,7 @@
 package helper
 
 import (
+	"fmt"
 	"os"
 	"testing"
 
@@ -12,7 +13,10 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	presetConfig := config.CreatePresetForTest()
+	presetConfig, err := config.CreatePresetForTest()
+	if err != nil {
+		panic(fmt.Sprintf("CreatePresetForTest failed with error: %s", err))
+	}
 	defer presetConfig.Destroy()
 	CONF = presetConfig.Config
 	ret := m.Run()

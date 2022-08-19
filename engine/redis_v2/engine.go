@@ -42,7 +42,7 @@ func NewEngine(redisName string, conn *go_redis.Client) (engine.Engine, error) {
 	}
 	go RedisInstanceMonitor(redis)
 	meta := NewMetaManager(redis)
-	timer, err := NewTimer("timer_set_v2", redis, time.Second)
+	timer, err := NewTimer("timer_set_v2", redis, time.Second, 600*time.Second)
 	if err != nil {
 		return nil, err
 	}

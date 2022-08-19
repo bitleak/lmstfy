@@ -75,7 +75,7 @@ func TestDeadLetter_Respawn(t *testing.T) {
 		t.Fatalf("Respawned job's TTL should be removed")
 	}
 
-	timer, err := NewTimer("ns-dead", R, time.Second)
+	timer, err := NewTimer("ns-dead", R, time.Second, 600*time.Second)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))
 	}

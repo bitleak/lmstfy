@@ -12,7 +12,7 @@ import (
 )
 
 func TestQueue_Push(t *testing.T) {
-	timer, err := NewTimer("timer_set_q", R, time.Second)
+	timer, err := NewTimer("timer_set_q", R, time.Second, 600*time.Second)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))
 	}
@@ -30,7 +30,7 @@ func TestQueue_Push(t *testing.T) {
 }
 
 func TestQueue_Poll(t *testing.T) {
-	timer, err := NewTimer("timer_set_q", R, time.Second)
+	timer, err := NewTimer("timer_set_q", R, time.Second, 600*time.Second)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))
 	}
@@ -51,7 +51,7 @@ func TestQueue_Poll(t *testing.T) {
 }
 
 func TestQueue_Peek(t *testing.T) {
-	timer, err := NewTimer("timer_set_q", R, time.Second)
+	timer, err := NewTimer("timer_set_q", R, time.Second, 600*time.Second)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))
 	}
@@ -69,7 +69,7 @@ func TestQueue_Peek(t *testing.T) {
 }
 
 func TestQueue_Destroy(t *testing.T) {
-	timer, err := NewTimer("timer_set_q", R, time.Second)
+	timer, err := NewTimer("timer_set_q", R, time.Second, 600*time.Second)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))
 	}
@@ -91,7 +91,7 @@ func TestQueue_Destroy(t *testing.T) {
 }
 
 func TestQueue_Tries(t *testing.T) {
-	timer, err := NewTimer("timer_set_q", R, time.Second)
+	timer, err := NewTimer("timer_set_q", R, time.Second, 600*time.Second)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))
 	}
@@ -140,7 +140,7 @@ func TestStructPacking(t *testing.T) {
 }
 
 func TestPopMultiQueues(t *testing.T) {
-	timer, err := NewTimer("timer_set_q", R, time.Second)
+	timer, err := NewTimer("timer_set_q", R, time.Second, 600*time.Second)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))
 	}
@@ -189,7 +189,7 @@ func TestPopMultiQueues(t *testing.T) {
 }
 
 func TestQueue_Backup(t *testing.T) {
-	timer, err := NewTimer("timer_set_q", R, time.Second)
+	timer, err := NewTimer("timer_set_for_test_backup", R, time.Second, 600*time.Second)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))
 	}
@@ -209,12 +209,16 @@ func TestQueue_Backup(t *testing.T) {
 		pool := NewPool(R)
 		pool.Add(job)
 	}
-	backupQueueName := timer.BuildBackupKey(namespace, queue)
-	memberScores, err := q.redis.Conn.ZRangeWithScores(dummyCtx, backupQueueName, 0, -1).Result()
+	backupName := timer.BackupName()
+	memberScores, err := q.redis.Conn.ZRangeWithScores(dummyCtx, backupName, 0, -1).Result()
 	assert.Nil(t, err)
 	now := time.Now().Unix()
 	for _, memberScore := range memberScores {
-		assert.Equal(t, 26, len(memberScore.Member.(string)))
+		gotNamespace, gotQueue, gotJobID, err := structUnpackTimerData([]byte(memberScore.Member.(string)))
+		assert.Nil(t, err)
+		assert.Equal(t, namespace, gotNamespace)
+		assert.Equal(t, queue, gotQueue)
+		assert.Equal(t, 26, len(gotJobID))
 		timestamp, tries := decodeScore(memberScore.Score)
 		assert.Equal(t, uint16(2), tries)
 		assert.LessOrEqual(t, timestamp, now)
@@ -226,7 +230,7 @@ func TestQueue_Backup(t *testing.T) {
 			t.Fatalf("Failed to poll job from queue: %s", err)
 		}
 	}
-	backupCount, err := q.redis.Conn.ZCard(dummyCtx, backupQueueName).Result()
+	backupCount, err := q.redis.Conn.ZCard(dummyCtx, backupName).Result()
 	assert.Nil(t, err)
 	assert.Equal(t, int64(0), backupCount)
 }

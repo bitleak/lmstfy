@@ -71,8 +71,8 @@ func (q *Queue) Name() string {
 }
 
 // Push a job into the queue, the job data format: {tries}{job id}
-func (q *Queue) Push(j engine.Job, tries uint16) error {
-	if tries == 0 {
+func (q *Queue) Push(j engine.Job) error {
+	if j.Tries() == 0 {
 		return nil
 	}
 	if j.Namespace() != q.name.Namespace || j.Queue() != q.name.Queue {
@@ -80,7 +80,7 @@ func (q *Queue) Push(j engine.Job, tries uint16) error {
 		return engine.ErrWrongQueue
 	}
 	metrics.queueDirectPushJobs.WithLabelValues(q.redis.Name).Inc()
-	val := structPack(tries, j.ID())
+	val := structPack(j.Tries(), j.ID())
 	if err := q.timer.addToBackup(q.name.Namespace, q.name.Queue, j.ID(), j.Tries()); err != nil {
 		return err
 	}

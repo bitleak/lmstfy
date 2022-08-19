@@ -82,7 +82,7 @@ func (e *Engine) Publish(namespace, queue string, body []byte, ttlSecond, delayS
 
 	if delaySecond == 0 {
 		q := NewQueue(namespace, queue, e.redis, e.timer)
-		err = q.Push(job, tries)
+		err = q.Push(job)
 		if err != nil {
 			err = fmt.Errorf("queue: %s", err)
 		}

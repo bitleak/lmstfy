@@ -10,7 +10,9 @@ import (
 
 	"github.com/bitleak/lmstfy/auth"
 	"github.com/bitleak/lmstfy/config"
+	"github.com/bitleak/lmstfy/engine"
 	redis_engine "github.com/bitleak/lmstfy/engine/redis"
+	"github.com/bitleak/lmstfy/engine/redis_v2"
 	"github.com/bitleak/lmstfy/helper"
 	"github.com/bitleak/lmstfy/server/handlers"
 	"github.com/bitleak/lmstfy/throttler"
@@ -55,8 +57,14 @@ func setup(Conf *config.Config) {
 		}
 	}
 
-	if err := redis_engine.Setup(Conf, logger); err != nil {
+	if err := redis_engine.Setup(Conf); err != nil {
 		panic(fmt.Sprintf("Failed to setup redis engine: %s", err))
+	}
+	if err := redis_v2.Setup(Conf); err != nil {
+		panic(fmt.Sprintf("Failed to setup redis v2 engine: %s", err))
+	}
+	if engine.GetEngine(config.DefaultPoolName) == nil {
+		panic("missing default pool")
 	}
 
 	if err := auth.Setup(Conf); err != nil {
@@ -69,13 +77,26 @@ func setup(Conf *config.Config) {
 	handlers.SetupParamDefaults(Conf)
 }
 
-func TestMain(m *testing.M) {
-	presetConfig, err := config.CreatePresetForTest()
+func runAllTests(m *testing.M, version string) {
+	presetConfig, err := config.CreatePresetForTest(version)
 	if err != nil {
 		panic(fmt.Sprintf("CreatePresetForTest failed with error: %s", err))
 	}
-	defer presetConfig.Destroy()
+
 	setup(presetConfig.Config)
 	ret := m.Run()
-	os.Exit(ret)
+	if ret != 0 {
+		os.Exit(ret)
+	}
+	engine.Shutdown()
+	presetConfig.Destroy()
+}
+
+func TestMain(m *testing.M) {
+	logger := logrus.New()
+	redis_engine.SetLogger(logger)
+	redis_v2.SetLogger(logger)
+
+	runAllTests(m, "")
+	runAllTests(m, redis_v2.VersionV2)
 }

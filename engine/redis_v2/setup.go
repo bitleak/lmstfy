@@ -2,8 +2,8 @@ package redis_v2
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -14,17 +14,29 @@ import (
 	"github.com/bitleak/lmstfy/helper"
 )
 
-const MaxRedisConnections = 5000
+const (
+	MaxRedisConnections = 5000
+	VersionV2           = "v2"
+)
 
 var (
 	logger   *logrus.Logger
 	dummyCtx = context.TODO()
 )
 
-// Setup set the essential config of redis engine
-func Setup(conf *config.Config, l *logrus.Logger) error {
+// SetLogger will set the logger for engine
+func SetLogger(l *logrus.Logger) {
 	logger = l
+}
+
+// Setup set the essential config of redis engine
+func Setup(conf *config.Config) error {
 	for name, poolConf := range conf.Pool {
+		// Only register v2 engine when the version is explicitly specified as "v2"
+		if !strings.EqualFold(poolConf.Version, VersionV2) {
+			continue
+		}
+
 		if poolConf.PoolSize == 0 {
 			poolConf.PoolSize = MaxRedisConnections
 		}
@@ -42,10 +54,7 @@ func Setup(conf *config.Config, l *logrus.Logger) error {
 		if err != nil {
 			return fmt.Errorf("setup engine error: %s", err)
 		}
-		engine.Register(engine.KindRedis, name, e)
-	}
-	if engine.GetEngineByKind(engine.KindRedis, "") == nil {
-		return errors.New("default redis engine not found")
+		engine.Register(engine.KindRedisV2, name, e)
 	}
 	return nil
 }

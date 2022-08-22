@@ -13,7 +13,7 @@ var _metrics *performanceMetrics
 
 const (
 	_namespace = "infra"
-	_subsystem = "lmstfy_redis"
+	_subsystem = "lmstfy_redis_v2"
 )
 
 func setupMetrics() {

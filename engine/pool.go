@@ -4,6 +4,7 @@ import "github.com/bitleak/lmstfy/config"
 
 const (
 	KindRedis     = "redis"
+	KindRedisV2   = "redis_v2"
 	KindMigration = "migration"
 )
 
@@ -47,11 +48,13 @@ func GetEngine(pool string) Engine {
 	if pool == "" {
 		pool = config.DefaultPoolName
 	}
-	e := GetEngineByKind(KindMigration, pool)
-	if e != nil {
-		return e
+	kinds := []string{KindRedis, KindRedisV2, KindMigration}
+	for _, kind := range kinds {
+		if e := GetEngineByKind(kind, pool); e != nil {
+			return e
+		}
 	}
-	return GetEngineByKind(KindRedis, pool)
+	return nil
 }
 
 func Register(kind, pool string, e Engine) {
@@ -62,9 +65,11 @@ func Register(kind, pool string, e Engine) {
 }
 
 func Shutdown() {
-	for _, enginePool := range engines {
-		for _, engine := range enginePool {
+	for kind, enginePool := range engines {
+		for name, engine := range enginePool {
 			engine.Shutdown()
+			delete(enginePool, name)
 		}
+		delete(engines, kind)
 	}
 }

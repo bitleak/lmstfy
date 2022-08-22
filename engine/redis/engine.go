@@ -9,8 +9,12 @@ import (
 	go_redis "github.com/go-redis/redis/v8"
 
 	"github.com/bitleak/lmstfy/engine"
+	"github.com/bitleak/lmstfy/storage"
+	"github.com/bitleak/lmstfy/storage/model"
 	"github.com/bitleak/lmstfy/uuid"
 )
+
+const DefaultPumpInTh = 10 // number of seconds
 
 type RedisInstance struct {
 	Name string
@@ -27,9 +31,10 @@ type Engine struct {
 	timer   *Timer
 	meta    *MetaManager
 	monitor *SizeMonitor
+	dataMgr storage.DataManager
 }
 
-func NewEngine(redisName string, conn *go_redis.Client) (engine.Engine, error) {
+func NewEngine(redisName string, conn *go_redis.Client, mgr storage.DataManager) (engine.Engine, error) {
 	redis := &RedisInstance{
 		Name: redisName,
 		Conn: conn,
@@ -52,13 +57,18 @@ func NewEngine(redisName string, conn *go_redis.Client) (engine.Engine, error) {
 	}
 	monitor := NewSizeMonitor(redis, timer, metadata)
 	go monitor.Loop()
-	return &Engine{
+	eng := &Engine{
 		redis:   redis,
 		pool:    NewPool(redis),
 		timer:   timer,
 		meta:    meta,
 		monitor: monitor,
-	}, nil
+		dataMgr: mgr,
+	}
+	if mgr != nil {
+		go mgr.LoopPump(eng)
+	}
+	return eng, nil
 }
 
 func (e *Engine) Publish(namespace, queue string, body []byte, ttlSecond, delaySecond uint32, tries uint16) (jobID string, err error) {
@@ -73,6 +83,24 @@ func (e *Engine) Publish(namespace, queue string, body []byte, ttlSecond, delayS
 	job := engine.NewJob(namespace, queue, body, ttlSecond, delaySecond, tries)
 	if tries == 0 {
 		return job.ID(), nil
+	}
+	if e.dataMgr != nil && delaySecond > DefaultPumpInTh {
+		jobs := []*model.JobData{
+			{
+				JobID:       job.ID(),
+				Namespace:   namespace,
+				Queue:       queue,
+				Body:        body,
+				ExpiredTime: time.Now().Unix() + int64(ttlSecond),
+				ReadyTime:   time.Now().Unix() + int64(delaySecond),
+				Tries:       int64(tries),
+				CreatedTime: time.Now().Unix(),
+			},
+		}
+		err = e.dataMgr.BatchAddJobs(dummyCtx, jobs) // if err occurred, will try writing to timer set
+		if err == nil {
+			return job.ID(), nil
+		}
 	}
 
 	err = e.pool.Add(job)

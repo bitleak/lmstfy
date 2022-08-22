@@ -12,6 +12,8 @@ import (
 	"github.com/bitleak/lmstfy/config"
 	"github.com/bitleak/lmstfy/engine"
 	"github.com/bitleak/lmstfy/helper"
+	"github.com/bitleak/lmstfy/storage"
+	"github.com/bitleak/lmstfy/storage/spanner"
 )
 
 const MaxRedisConnections = 5000
@@ -38,7 +40,16 @@ func Setup(conf *config.Config, l *logrus.Logger) error {
 		if cli.Ping(dummyCtx).Err() != nil {
 			return fmt.Errorf("redis server %s was not alive", poolConf.Addr)
 		}
-		e, err := NewEngine(name, cli)
+
+		var mgr storage.DataManager
+		var err error
+		if conf.EnableSecondaryStorage {
+			mgr, err = spanner.NewDataMgr(&conf.SecondaryStorage, cli)
+			if err != nil {
+				return fmt.Errorf("setup secondary storage error: %s", err)
+			}
+		}
+		e, err := NewEngine(name, cli, mgr)
 		if err != nil {
 			return fmt.Errorf("setup engine error: %s", err)
 		}

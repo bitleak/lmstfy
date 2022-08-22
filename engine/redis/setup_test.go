@@ -5,9 +5,10 @@ import (
 	"os"
 	"testing"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/bitleak/lmstfy/config"
 	"github.com/bitleak/lmstfy/helper"
-	"github.com/sirupsen/logrus"
 )
 
 var R *RedisInstance

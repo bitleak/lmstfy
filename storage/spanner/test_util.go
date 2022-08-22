@@ -159,3 +159,11 @@ func createTestReqData() []*model.JobDataReq {
 	req = append(req, r1, r2)
 	return req
 }
+
+func createTestReqData2() *model.JobDataReq {
+	req := &model.JobDataReq{
+		ReadyTime: time.Now().Unix() + 80,
+		Count:     10,
+	}
+	return req
+}

@@ -83,3 +83,20 @@ func TestSpannerDataMgr_GetQueueSize(t *testing.T) {
 	assert.EqualValues(t, 1, count[key2])
 	mgr.DelJobs(ctx, jobIDs)
 }
+
+func TestSpannerDataMgr_GetReadyJobs(t *testing.T) {
+	mgr, err := NewDataMgr(cfg, R.Conn)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to create spanner client with error: %s", err))
+	}
+	defer mgr.ShutDown()
+	jobs := createTestJobsData()
+	mgr.BatchAddJobs(ctx, jobs)
+	req := createTestReqData2()
+	jobs, err = mgr.GetReadyJobs(ctx, req)
+	if err != nil {
+		panic(fmt.Sprintf("GetReadyJobs failed with error: %s", err))
+	}
+	assert.EqualValues(t, 2, len(jobs))
+	mgr.DelJobs(ctx, jobIDs)
+}

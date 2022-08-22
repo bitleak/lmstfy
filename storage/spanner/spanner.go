@@ -173,7 +173,6 @@ func (mgr *SpannerDataMgr) GetReadyJobs(ctx context.Context, req *model.JobDataR
 
 // LoopPump periodically checks job data ready time and pumps jobs to engine
 func (mgr *SpannerDataMgr) LoopPump(eng engine.Engine) {
-	fmt.Printf("enter loop pump at %v\n", time.Now())
 	tick := time.NewTicker(DefaultLoopPumpPeriod)
 	//mutex := newLoopPumpMutex(mgr.redisClient)
 	pool := goredis.NewPool(mgr.redisClient)
@@ -182,10 +181,8 @@ func (mgr *SpannerDataMgr) LoopPump(eng engine.Engine) {
 	for {
 		select {
 		case now := <-tick.C:
-			fmt.Printf("start process loop pump at %v\n", time.Now())
 			ctx := context.Background()
 			if err := mutex.LockContext(ctx); err != nil {
-				fmt.Printf("LoopPump failed to acquire lock: %v\n", err)
 				log.Errorf("LoopPump failed to acquire lock: %v", err)
 				continue
 			}
@@ -219,7 +216,6 @@ func (mgr *SpannerDataMgr) LoopPump(eng engine.Engine) {
 				log.Errorf("LoopPump failed to release lock: %v", err)
 				continue
 			}
-			fmt.Printf("end process loop pump at %v\n", time.Now())
 		case <-mgr.shutdown:
 			return
 		}

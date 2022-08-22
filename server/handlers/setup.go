@@ -2,12 +2,14 @@ package handlers
 
 import (
 	"strconv"
+	"sync"
 
 	"github.com/bitleak/lmstfy/config"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 )
 
+var setupOnce sync.Once
 var _logger *logrus.Logger
 
 var (
@@ -19,8 +21,10 @@ var (
 )
 
 func Setup(l *logrus.Logger) {
-	_logger = l
-	setupMetrics()
+	setupOnce.Do(func() {
+		_logger = l
+		setupMetrics()
+	})
 }
 
 func GetHTTPLogger(c *gin.Context) *logrus.Entry {

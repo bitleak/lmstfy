@@ -48,7 +48,7 @@ var (
 
 const (
 	Namespace = "infra"
-	Subsystem = "lmstfy_redis"
+	Subsystem = "lmstfy_redis_v2"
 )
 
 func setupMetrics() {

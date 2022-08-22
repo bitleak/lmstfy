@@ -2,7 +2,6 @@ package redis
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -25,6 +24,10 @@ var (
 func Setup(conf *config.Config, l *logrus.Logger) error {
 	logger = l
 	for name, poolConf := range conf.Pool {
+		if len(poolConf.Version) != 0 {
+			continue
+		}
+
 		if poolConf.PoolSize == 0 {
 			poolConf.PoolSize = MaxRedisConnections
 		}
@@ -43,9 +46,6 @@ func Setup(conf *config.Config, l *logrus.Logger) error {
 			return fmt.Errorf("setup engine error: %s", err)
 		}
 		engine.Register(engine.KindRedis, name, e)
-	}
-	if engine.GetEngineByKind(engine.KindRedis, "") == nil {
-		return errors.New("default redis engine not found")
 	}
 	return nil
 }

@@ -57,10 +57,10 @@ func setup(Conf *config.Config) {
 		}
 	}
 
-	if err := redis_engine.Setup(Conf, logger); err != nil {
+	if err := redis_engine.Setup(Conf); err != nil {
 		panic(fmt.Sprintf("Failed to setup redis engine: %s", err))
 	}
-	if err := redis_v2.Setup(Conf, logger); err != nil {
+	if err := redis_v2.Setup(Conf); err != nil {
 		panic(fmt.Sprintf("Failed to setup redis v2 engine: %s", err))
 	}
 	if engine.GetEngine(config.DefaultPoolName) == nil {
@@ -77,19 +77,26 @@ func setup(Conf *config.Config) {
 	handlers.SetupParamDefaults(Conf)
 }
 
-func TestMain(m *testing.M) {
-	for _, version := range []string{"" /*default redis engine*/, redis_v2.VersionV2} {
-		presetConfig, err := config.CreatePresetForTest(version)
-		if err != nil {
-			panic(fmt.Sprintf("CreatePresetForTest failed with error: %s", err))
-		}
-
-		setup(presetConfig.Config)
-		ret := m.Run()
-		if ret != 0 {
-			os.Exit(ret)
-		}
-		engine.Shutdown()
-		presetConfig.Destroy()
+func runAllTests(m *testing.M, version string) {
+	presetConfig, err := config.CreatePresetForTest(version)
+	if err != nil {
+		panic(fmt.Sprintf("CreatePresetForTest failed with error: %s", err))
 	}
+
+	setup(presetConfig.Config)
+	ret := m.Run()
+	if ret != 0 {
+		os.Exit(ret)
+	}
+	engine.Shutdown()
+	presetConfig.Destroy()
+}
+
+func TestMain(m *testing.M) {
+	logger := logrus.New()
+	redis_engine.SetLogger(logger)
+	redis_v2.SetLogger(logger)
+
+	runAllTests(m, "")
+	runAllTests(m, redis_v2.VersionV2)
 }

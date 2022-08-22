@@ -24,9 +24,13 @@ var (
 	dummyCtx = context.TODO()
 )
 
-// Setup set the essential config of redis engine
-func Setup(conf *config.Config, l *logrus.Logger) error {
+// SetLogger will set the logger for engine
+func SetLogger(l *logrus.Logger) {
 	logger = l
+}
+
+// Setup set the essential config of redis engine
+func Setup(conf *config.Config) error {
 	for name, poolConf := range conf.Pool {
 		// Only register v2 engine when the version is explicitly specified as "v2"
 		if !strings.EqualFold(poolConf.Version, VersionV2) {

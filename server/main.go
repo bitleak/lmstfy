@@ -161,13 +161,16 @@ func postValidateConfig(ctx context.Context, conf *config.Config) error {
 }
 
 func setupEngines(conf *config.Config, l *logrus.Logger) error {
-	if err := redis_engine.Setup(conf, l); err != nil {
+	redis_engine.SetLogger(l)
+	if err := redis_engine.Setup(conf); err != nil {
 		return fmt.Errorf("%w in redis engine", err)
 	}
-	if err := redis_v2.Setup(conf, l); err != nil {
+	redis_v2.SetLogger(l)
+	if err := redis_v2.Setup(conf); err != nil {
 		return fmt.Errorf("%w in redis v2 engine", err)
 	}
-	if err := migration.Setup(conf, l); err != nil {
+	migration.SetLogger(l)
+	if err := migration.Setup(conf); err != nil {
 		return fmt.Errorf("%w in migration engine", err)
 	}
 	if engine.GetEngine(config.DefaultPoolName) == nil {

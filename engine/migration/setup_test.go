@@ -23,8 +23,8 @@ func setup(Conf *config.Config) {
 	logger = logrus.New()
 	level, _ := logrus.ParseLevel(Conf.LogLevel)
 	logger.SetLevel(level)
-
-	if err := redis.Setup(Conf, logger); err != nil {
+	redis.SetLogger(logger)
+	if err := redis.Setup(Conf); err != nil {
 		panic(fmt.Sprintf("Failed to setup redis engine: %s", err))
 	}
 	for _, poolConf := range Conf.Pool {

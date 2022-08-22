@@ -10,6 +10,10 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
+	"go.uber.org/automaxprocs/maxprocs"
+
 	"github.com/bitleak/lmstfy/auth"
 	"github.com/bitleak/lmstfy/config"
 	"github.com/bitleak/lmstfy/engine/migration"
@@ -20,9 +24,6 @@ import (
 	"github.com/bitleak/lmstfy/server/middleware"
 	"github.com/bitleak/lmstfy/throttler"
 	"github.com/bitleak/lmstfy/version"
-	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
-	"go.uber.org/automaxprocs/maxprocs"
 )
 
 type optionFlags struct {

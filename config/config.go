@@ -14,17 +14,19 @@ const (
 )
 
 type Config struct {
-	Host            string
-	Port            int
-	AdminHost       string
-	AdminPort       int
-	LogLevel        string
-	LogDir          string
-	LogFormat       string
-	Accounts        map[string]string
-	EnableAccessLog bool
-	AdminRedis      RedisConf
-	Pool            RedisPool
+	Host                   string
+	Port                   int
+	AdminHost              string
+	AdminPort              int
+	LogLevel               string
+	LogDir                 string
+	LogFormat              string
+	Accounts               map[string]string
+	EnableAccessLog        bool
+	EnableSecondaryStorage bool
+	AdminRedis             RedisConf
+	Pool                   RedisPool
+	SecondaryStorage       SpannerConfig
 
 	// Default publish params
 	TTLSecond   int
@@ -47,6 +49,14 @@ type RedisConf struct {
 	MasterName string
 }
 
+type SpannerConfig struct {
+	Project         string `mapstructure:"project" validate:"required"`
+	Instance        string `mapstructure:"instance" validate:"required"`
+	Database        string `mapstructure:"db" validate:"required"`
+	CredentialsFile string `mapstructure:"credentials_file"`
+	TableName       string
+}
+
 func (rc *RedisConf) validate() error {
 	if rc.Addr == "" {
 		return errors.New("the pool addr must not be empty")
@@ -60,6 +70,13 @@ func (rc *RedisConf) validate() error {
 // IsSentinel return whether the pool was running in sentinel mode
 func (rc *RedisConf) IsSentinel() bool {
 	return rc.MasterName != ""
+}
+
+func verifySecStorageConf(cfg SpannerConfig) error {
+	if cfg.Instance == "" || cfg.Project == "" || cfg.Database == "" || cfg.TableName == "" {
+		return errors.New("invalid secondary storage config")
+	}
+	return nil
 }
 
 // MustLoad load config file with specified path, an error returned if any condition not met
@@ -106,6 +123,13 @@ func MustLoad(path string) (*Config, error) {
 	_, err = logrus.ParseLevel(conf.LogLevel)
 	if err != nil {
 		return nil, errors.New("invalid log level")
+	}
+
+	if conf.EnableSecondaryStorage {
+		err = verifySecStorageConf(conf.SecondaryStorage)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return conf, nil
 }

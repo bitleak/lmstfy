@@ -2,12 +2,11 @@ package storage
 
 import (
 	"context"
-	"github.com/bitleak/lmstfy/engine"
-	"github.com/bitleak/lmstfy/storage/model"
+	"github.com/bitleak/lmstfy/datamanager/storage/model"
 )
 
-// DataManager handles data related request between engine and data storage
-type DataManager interface {
+// Storage handles requests related to secondary storage
+type Storage interface {
 	// BatchAddJobs write jobs data into secondary storage
 	BatchAddJobs(ctx context.Context, jobs []*model.JobData) (err error)
 	// BatchGetJobs pumps data that are due before certain due time
@@ -18,8 +17,4 @@ type DataManager interface {
 	DelJobs(ctx context.Context, jobIDs []string) (count int64, err error)
 	// GetReadyJobs return jobs which are ready based on input ready time from data storage
 	GetReadyJobs(ctx context.Context, req *model.JobDataReq) (jobs []*model.JobData, err error)
-	// LoopPump periodically checks job data ready time and pumps jobs to engine
-	LoopPump(eng engine.Engine)
-
-	ShutDown()
 }

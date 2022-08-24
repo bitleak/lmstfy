@@ -3,6 +3,7 @@ package spanner
 import (
 	"context"
 	"fmt"
+	"github.com/bitleak/lmstfy/datamanager/storage/model"
 	"regexp"
 	"time"
 
@@ -14,7 +15,6 @@ import (
 	"google.golang.org/grpc/codes"
 
 	"github.com/bitleak/lmstfy/config"
-	"github.com/bitleak/lmstfy/storage/model"
 )
 
 var cfg = &config.SpannerConfig{
@@ -133,8 +133,8 @@ func createTestJobsData() []*model.JobData {
 		Namespace:   "n1",
 		Queue:       "q1",
 		Body:        []byte("hello_j3"),
-		ExpiredTime: 1,
-		ReadyTime:   1,
+		ExpiredTime: time.Now().Unix() + 120,
+		ReadyTime:   time.Now().Unix() + 90,
 		Tries:       1,
 		CreatedTime: time.Now().Unix(),
 	}

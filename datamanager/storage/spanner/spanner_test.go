@@ -1,6 +1,7 @@
 package spanner
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -8,7 +9,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var db = "projects/test-project/instances/test-instance/databases/test-db"
+var (
+	db       = "projects/test-project/instances/test-instance/databases/test-db"
+	dummyCtx = context.TODO()
+)
 
 func init() {
 	if os.Getenv("SPANNER_EMULATOR_HOST") == "" {
@@ -30,11 +34,10 @@ func TestCreateSpannerClient(t *testing.T) {
 }
 
 func TestSpannerDataMgr_BatchAddDelJobs(t *testing.T) {
-	mgr, err := NewDataMgr(cfg, R.Conn)
+	mgr, err := NewStorage(cfg)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to create spanner client with error: %s", err))
 	}
-	defer mgr.ShutDown()
 	jobs := createTestJobsData()
 	err = mgr.BatchAddJobs(ctx, jobs)
 	if err != nil {
@@ -50,11 +53,10 @@ func TestSpannerDataMgr_BatchAddDelJobs(t *testing.T) {
 }
 
 func TestSpannerDataMgr_BatchGetJobs(t *testing.T) {
-	mgr, err := NewDataMgr(cfg, R.Conn)
+	mgr, err := NewStorage(cfg)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to create spanner client with error: %s", err))
 	}
-	defer mgr.ShutDown()
 	jobs := createTestJobsData()
 	mgr.BatchAddJobs(ctx, jobs)
 	req := createTestReqData()
@@ -66,11 +68,10 @@ func TestSpannerDataMgr_BatchGetJobs(t *testing.T) {
 }
 
 func TestSpannerDataMgr_GetQueueSize(t *testing.T) {
-	mgr, err := NewDataMgr(cfg, R.Conn)
+	mgr, err := NewStorage(cfg)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to create spanner client with error: %s", err))
 	}
-	defer mgr.ShutDown()
 	jobs := createTestJobsData()
 	mgr.BatchAddJobs(ctx, jobs)
 	req := createTestReqData()
@@ -85,11 +86,10 @@ func TestSpannerDataMgr_GetQueueSize(t *testing.T) {
 }
 
 func TestSpannerDataMgr_GetReadyJobs(t *testing.T) {
-	mgr, err := NewDataMgr(cfg, R.Conn)
+	mgr, err := NewStorage(cfg)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to create spanner client with error: %s", err))
 	}
-	defer mgr.ShutDown()
 	jobs := createTestJobsData()
 	mgr.BatchAddJobs(ctx, jobs)
 	req := createTestReqData2()

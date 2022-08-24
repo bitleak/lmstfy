@@ -47,6 +47,7 @@ type RedisConf struct {
 	MigrateTo string // If this is not empty, all the PUBLISH will go to that pool
 
 	MasterName string
+	Version    string
 }
 
 type SpannerConfig struct {

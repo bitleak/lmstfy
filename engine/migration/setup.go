@@ -10,8 +10,11 @@ import (
 
 var logger *logrus.Logger
 
-func Setup(conf *config.Config, l *logrus.Logger) error {
+func SetLogger(l *logrus.Logger) {
 	logger = l
+}
+
+func Setup(conf *config.Config) error {
 	for redisPool, poolConf := range conf.Pool {
 		if poolConf.MigrateTo != "" {
 			oldEngine := engine.GetEngineByKind(engine.KindRedis, redisPool)

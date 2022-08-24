@@ -80,7 +80,7 @@ func TestBackupTimer_BeforeOldestScore(t *testing.T) {
 		job := engine.NewJob(ns, queueName, []byte("hello msg"+strconv.Itoa(i)), 100, 1, 3)
 		pool.Add(job)
 		if i%2 == 0 {
-			queue.Push(job, job.Tries())
+			queue.Push(job)
 		} else {
 			timer.Add(job.Namespace(), job.Queue(), job.ID(), job.Delay(), job.Tries())
 		}
@@ -130,7 +130,7 @@ func TestBackupTimer_EmptyReadyQueue(t *testing.T) {
 		job := engine.NewJob(ns, queueName, []byte("hello msg"+strconv.Itoa(i)), 100, 1, 3)
 		pool.Add(job)
 		if i%2 == 0 {
-			queue.Push(job, job.Tries())
+			queue.Push(job)
 		} else {
 			timer.Add(job.Namespace(), job.Queue(), job.ID(), job.Delay(), job.Tries())
 		}

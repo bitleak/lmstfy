@@ -34,7 +34,7 @@ func setup(conf *config.Config) {
 }
 
 func TestMain(m *testing.M) {
-	presetConfig, err := config.CreatePresetForTest()
+	presetConfig, err := config.CreatePresetForTest("")
 	if err != nil {
 		panic(fmt.Sprintf("CreatePresetForTest failed with error: %s", err))
 	}

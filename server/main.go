@@ -17,6 +17,7 @@ import (
 
 	"github.com/bitleak/lmstfy/auth"
 	"github.com/bitleak/lmstfy/config"
+	"github.com/bitleak/lmstfy/datamanager"
 	"github.com/bitleak/lmstfy/engine"
 	"github.com/bitleak/lmstfy/engine/migration"
 	redis_engine "github.com/bitleak/lmstfy/engine/redis"
@@ -212,6 +213,18 @@ func main() {
 	}
 	if conf.EnableAccessLog {
 		middleware.EnableAccessLog()
+	}
+
+	// set up data manager
+	if conf.SecondaryStorage != nil {
+		for name, poolcfg := range conf.Pool {
+			if poolcfg.EnableSecondaryStorage {
+				eng := engine.GetEngineByKind(engine.KindRedis, name)
+				if err = datamanager.Setup(conf, &poolcfg, eng); err != nil {
+					panic(fmt.Sprintf("Failed to setup data manager: %s", err))
+				}
+			}
+		}
 	}
 	apiSrv := apiServer(conf, accessLogger, errorLogger, Flags.SkipVerification)
 	adminSrv := adminServer(conf, accessLogger, errorLogger)

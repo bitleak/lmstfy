@@ -3,6 +3,8 @@ package redis
 import (
 	"context"
 	"fmt"
+	"github.com/bitleak/lmstfy/datamanager/storage"
+	"github.com/bitleak/lmstfy/datamanager/storage/spanner"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -11,8 +13,6 @@ import (
 	"github.com/bitleak/lmstfy/config"
 	"github.com/bitleak/lmstfy/engine"
 	"github.com/bitleak/lmstfy/helper"
-	"github.com/bitleak/lmstfy/storage"
-	"github.com/bitleak/lmstfy/storage/spanner"
 )
 
 const MaxRedisConnections = 5000
@@ -48,15 +48,17 @@ func Setup(conf *config.Config) error {
 			return fmt.Errorf("redis server %s was not alive", poolConf.Addr)
 		}
 
-		var mgr storage.DataManager
+		var st storage.Storage
 		var err error
-		if conf.EnableSecondaryStorage {
-			mgr, err = spanner.NewDataMgr(&conf.SecondaryStorage, cli)
+		var storageThreshold uint32
+		if poolConf.EnableSecondaryStorage {
+			st, err = spanner.NewStorage(conf.SecondaryStorage)
 			if err != nil {
 				return fmt.Errorf("setup secondary storage error: %s", err)
 			}
+			storageThreshold = uint32(poolConf.Write2StorageThresh)
 		}
-		e, err := NewEngine(name, cli, mgr)
+		e, err := NewEngine(name, cli, st, storageThreshold)
 		if err != nil {
 			return fmt.Errorf("setup engine error: %s", err)
 		}

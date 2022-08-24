@@ -14,19 +14,18 @@ const (
 )
 
 type Config struct {
-	Host                   string
-	Port                   int
-	AdminHost              string
-	AdminPort              int
-	LogLevel               string
-	LogDir                 string
-	LogFormat              string
-	Accounts               map[string]string
-	EnableAccessLog        bool
-	EnableSecondaryStorage bool
-	AdminRedis             RedisConf
-	Pool                   RedisPool
-	SecondaryStorage       SpannerConfig
+	Host             string
+	Port             int
+	AdminHost        string
+	AdminPort        int
+	LogLevel         string
+	LogDir           string
+	LogFormat        string
+	Accounts         map[string]string
+	EnableAccessLog  bool
+	AdminRedis       RedisConf
+	Pool             RedisPool
+	SecondaryStorage *SpannerConfig
 
 	// Default publish params
 	TTLSecond   int
@@ -40,14 +39,21 @@ type Config struct {
 type RedisPool map[string]RedisConf
 
 type RedisConf struct {
-	Addr      string
-	Password  string
-	DB        int
-	PoolSize  int
-	MigrateTo string // If this is not empty, all the PUBLISH will go to that pool
-
+	Addr       string
+	Password   string
+	DB         int
+	PoolSize   int
+	MigrateTo  string // If this is not empty, all the PUBLISH will go to that pool
 	MasterName string
 	Version    string
+
+	EnableSecondaryStorage bool
+
+	// number of seconds which job data is pumped from storage to engine periodically
+	StoragePumpPeriod int
+	// number of seconds. when job's delay second is greater than pumpStorageThresh,
+	//it will be written to storage if enabled
+	Write2StorageThresh int
 }
 
 type SpannerConfig struct {
@@ -55,7 +61,7 @@ type SpannerConfig struct {
 	Instance        string `mapstructure:"instance" validate:"required"`
 	Database        string `mapstructure:"db" validate:"required"`
 	CredentialsFile string `mapstructure:"credentials_file"`
-	TableName       string
+	TableName       string `mapstructure:"table_name"`
 }
 
 func (rc *RedisConf) validate() error {
@@ -65,6 +71,11 @@ func (rc *RedisConf) validate() error {
 	if rc.DB < 0 {
 		return errors.New("the pool db must be greater than 0 or equal to 0")
 	}
+	if rc.EnableSecondaryStorage {
+		if rc.StoragePumpPeriod >= rc.Write2StorageThresh {
+			return errors.New("the pool StoragePumpPeriod must be less than Write2StorageThresh")
+		}
+	}
 	return nil
 }
 
@@ -73,8 +84,8 @@ func (rc *RedisConf) IsSentinel() bool {
 	return rc.MasterName != ""
 }
 
-func verifySecStorageConf(cfg SpannerConfig) error {
-	if cfg.Instance == "" || cfg.Project == "" || cfg.Database == "" || cfg.TableName == "" {
+func verifySecStorageConf(cfg *SpannerConfig) error {
+	if cfg == nil || cfg.Instance == "" || cfg.Project == "" || cfg.Database == "" || cfg.TableName == "" {
 		return errors.New("invalid secondary storage config")
 	}
 	return nil
@@ -126,9 +137,8 @@ func MustLoad(path string) (*Config, error) {
 		return nil, errors.New("invalid log level")
 	}
 
-	if conf.EnableSecondaryStorage {
-		err = verifySecStorageConf(conf.SecondaryStorage)
-		if err != nil {
+	if conf.SecondaryStorage != nil {
+		if err = verifySecStorageConf(conf.SecondaryStorage); err != nil {
 			return nil, err
 		}
 	}

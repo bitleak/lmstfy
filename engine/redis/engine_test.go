@@ -3,27 +3,30 @@ package redis
 import (
 	"bytes"
 	"fmt"
+	"github.com/bitleak/lmstfy/datamanager/pumper"
+	"github.com/bitleak/lmstfy/datamanager/storage"
+	"github.com/bitleak/lmstfy/datamanager/storage/spanner"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/bitleak/lmstfy/config"
-	"github.com/bitleak/lmstfy/storage"
-	"github.com/bitleak/lmstfy/storage/spanner"
 )
 
 var (
+	st              storage.Storage
+	write2StorageTh uint32 = 10
+)
+
+var (
+	db         = "projects/test-project/instances/test-instance/databases/test-db1"
+	PoolConf   = &config.RedisConf{StoragePumpPeriod: 10}
 	SecStgConf = &config.SpannerConfig{
 		Project:   "test-project",
 		Instance:  "test-instance",
 		Database:  "test-db1",
 		TableName: "lmstfy_jobs",
 	}
-)
-
-var (
-	mgr storage.DataManager
-	db  = "projects/test-project/instances/test-instance/databases/test-db1"
 )
 
 func initSpanner() {
@@ -41,7 +44,7 @@ func initSpanner() {
 }
 
 func TestEngine_Publish(t *testing.T) {
-	e, err := NewEngine(R.Name, R.Conn, mgr)
+	e, err := NewEngine(R.Name, R.Conn, st, write2StorageTh)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
@@ -63,19 +66,26 @@ func TestEngine_Publish(t *testing.T) {
 
 func TestEngine_Publish_SecondaryStorage(t *testing.T) {
 	initSpanner()
-	dataMgr, err := spanner.NewDataMgr(SecStgConf, R.Conn)
+	st, err := spanner.NewStorage(SecStgConf)
 	if err != nil {
 		panic(fmt.Sprintf("Setup data manager error: %s", err))
 	}
-	e, err := NewEngine(R.Name, R.Conn, dataMgr)
+	e, err := NewEngine(R.Name, R.Conn, st, write2StorageTh)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
 	defer e.Shutdown()
-	defer dataMgr.ShutDown()
-	body := []byte("hello msg long delay job")
+
+	// start pumper so that it can pump job to engine for consumption when ready
+	pr, err := pumper.NewPumper(Cfg.Config, PoolConf)
+	if err != nil {
+		panic(fmt.Sprintf("Setup pumper error: %s", err))
+	}
+	go pr.LoopPump(st, e)
+	defer pr.Shutdown()
 
 	// Publish long-delay job
+	body := []byte("hello msg long delay job")
 	jobID, err := e.Publish("ns-engine", "q1", body, 60, 20, 1)
 	t.Log(jobID)
 	if err != nil {
@@ -95,7 +105,7 @@ func TestEngine_Publish_SecondaryStorage(t *testing.T) {
 }
 
 func TestEngine_Consume(t *testing.T) {
-	e, err := NewEngine(R.Name, R.Conn, mgr)
+	e, err := NewEngine(R.Name, R.Conn, st, write2StorageTh)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
@@ -134,7 +144,7 @@ func TestEngine_Consume(t *testing.T) {
 
 // Consume the first one from multi publish
 func TestEngine_Consume2(t *testing.T) {
-	e, err := NewEngine(R.Name, R.Conn, mgr)
+	e, err := NewEngine(R.Name, R.Conn, st, write2StorageTh)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
@@ -158,7 +168,7 @@ func TestEngine_Consume2(t *testing.T) {
 }
 
 func TestEngine_ConsumeMulti(t *testing.T) {
-	e, err := NewEngine(R.Name, R.Conn, mgr)
+	e, err := NewEngine(R.Name, R.Conn, st, write2StorageTh)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
@@ -197,7 +207,7 @@ func TestEngine_ConsumeMulti(t *testing.T) {
 }
 
 func TestEngine_Peek(t *testing.T) {
-	e, err := NewEngine(R.Name, R.Conn, mgr)
+	e, err := NewEngine(R.Name, R.Conn, st, write2StorageTh)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
@@ -217,7 +227,7 @@ func TestEngine_Peek(t *testing.T) {
 }
 
 func TestEngine_BatchConsume(t *testing.T) {
-	e, err := NewEngine(R.Name, R.Conn, mgr)
+	e, err := NewEngine(R.Name, R.Conn, st, write2StorageTh)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}

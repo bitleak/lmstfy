@@ -16,7 +16,7 @@ type DataManager struct {
 	Pumper  pumper.Pumper
 }
 
-func Setup(cfg *config.Config, poolCfg *config.RedisConf, eng engine.Engine) error {
+func Setup(cfg *config.Config, eng engine.Engine) error {
 	if eng == nil {
 		return errors.New("failed to set up data manager: engine is nil")
 	}
@@ -25,10 +25,10 @@ func Setup(cfg *config.Config, poolCfg *config.RedisConf, eng engine.Engine) err
 		return err
 	}
 
-	pr, err := pumper.NewPumper(cfg, poolCfg)
+	pr, err := pumper.NewDefaultPumper(cfg, st, eng)
 	if err != nil {
 		return err
 	}
-	go pr.LoopPump(st, eng)
+	go pr.LoopPump()
 	return nil
 }

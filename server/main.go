@@ -220,7 +220,7 @@ func main() {
 		for name, poolcfg := range conf.Pool {
 			if poolcfg.EnableSecondaryStorage {
 				eng := engine.GetEngineByKind(engine.KindRedis, name)
-				if err = datamanager.Setup(conf, &poolcfg, eng); err != nil {
+				if err = datamanager.Setup(conf, eng); err != nil {
 					panic(fmt.Sprintf("Failed to setup data manager: %s", err))
 				}
 			}

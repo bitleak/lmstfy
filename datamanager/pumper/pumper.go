@@ -22,13 +22,23 @@ const (
 	MaxJobBatchSize          = 1000
 )
 
-type DefaultPumper struct {
-	redisClient       *redis.Client
-	shutdown          chan struct{}
-	storagePumpPeriod int64
+type Pumper interface {
+	// LoopPump periodically checks job data ready time and pumps jobs to engine
+	LoopPump()
+
+	SetPumpPeriod(period int64)
+	Shutdown()
 }
 
-func NewPumper(cfg *config.Config, poolConfig *config.RedisConf) (Pumper, error) {
+type DefaultPumper struct {
+	storage     storage.Storage
+	engine      engine.Engine
+	redisClient *redis.Client
+	shutdown    chan struct{}
+	pumpPeriod  int64
+}
+
+func NewDefaultPumper(cfg *config.Config, stor storage.Storage, eng engine.Engine) (Pumper, error) {
 	if cfg == nil {
 		return nil, errors.New("failed to create new pumper, nil config")
 	}
@@ -36,20 +46,18 @@ func NewPumper(cfg *config.Config, poolConfig *config.RedisConf) (Pumper, error)
 	if client.Ping(context.Background()).Err() != nil {
 		return nil, errors.New("failed to create redis client for pumper")
 	}
-	period := poolConfig.StoragePumpPeriod
-	if period <= 0 {
-		period = DefaultStoragePumpPeriod
-	}
 	return &DefaultPumper{
-		redisClient:       client,
-		shutdown:          make(chan struct{}),
-		storagePumpPeriod: int64(period),
+		storage:     stor,
+		engine:      eng,
+		redisClient: client,
+		shutdown:    make(chan struct{}),
+		pumpPeriod:  int64(DefaultStoragePumpPeriod),
 	}, nil
 }
 
 // LoopPump periodically checks job data ready time and pumps jobs to engine
-func (dp *DefaultPumper) LoopPump(st storage.Storage, eng engine.Engine) {
-	tick := time.NewTicker(time.Duration(dp.storagePumpPeriod) * time.Second)
+func (dp *DefaultPumper) LoopPump() {
+	tick := time.NewTicker(time.Duration(dp.pumpPeriod) * time.Second)
 	//mutex := newLoopPumpMutex(mgr.redisClient)
 	pool := goredis.NewPool(dp.redisClient)
 	rs := redsync.New(pool)
@@ -64,17 +72,18 @@ func (dp *DefaultPumper) LoopPump(st storage.Storage, eng engine.Engine) {
 			}
 
 			req := &model.JobDataReq{
-				ReadyTime: now.Unix() + dp.storagePumpPeriod,
+				PoolName:  dp.engine.GetPoolName(),
+				ReadyTime: now.Unix() + dp.pumpPeriod,
 				Count:     MaxJobBatchSize,
 			}
-			jobs, err := st.GetReadyJobs(ctx, req)
+			jobs, err := dp.storage.GetReadyJobs(ctx, req)
 			if err != nil {
 				logrus.Errorf("LoopPump failed to GetReadyJobs: %v", err)
 				continue
 			}
 			jobsID := make([]string, 0)
 			for _, j := range jobs {
-				_, err := eng.Publish(j.Namespace, j.Queue, j.Body, uint32(j.ExpiredTime),
+				_, err := dp.engine.Publish(j.Namespace, j.Queue, j.Body, uint32(j.ExpiredTime),
 					uint32(j.ReadyTime-now.Unix()), uint16(j.Tries))
 				if err != nil {
 					logrus.Errorf("LoopPump failed to publish job:%v with error %v", j.JobID, err)
@@ -83,11 +92,10 @@ func (dp *DefaultPumper) LoopPump(st storage.Storage, eng engine.Engine) {
 				jobsID = append(jobsID, j.JobID)
 			}
 
-			_, err = st.DelJobs(ctx, jobsID)
+			_, err = dp.storage.DelJobs(ctx, jobsID)
 			if err != nil {
 				logrus.Errorf("LoopPump delete jobs failed:%v", err)
 			}
-			time.Sleep(5 * time.Second)
 			if ok, err := mutex.UnlockContext(ctx); !ok || err != nil {
 				logrus.Errorf("LoopPump failed to release lock: %v", err)
 				continue
@@ -100,4 +108,11 @@ func (dp *DefaultPumper) LoopPump(st storage.Storage, eng engine.Engine) {
 
 func (dp *DefaultPumper) Shutdown() {
 	close(dp.shutdown)
+}
+
+func (dp *DefaultPumper) SetPumpPeriod(period int64) {
+	if period <= 0 {
+		return
+	}
+	dp.pumpPeriod = period
 }

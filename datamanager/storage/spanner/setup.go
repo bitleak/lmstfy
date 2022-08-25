@@ -3,14 +3,14 @@ package spanner
 import (
 	"context"
 	"fmt"
-	"google.golang.org/api/option"
 
 	"cloud.google.com/go/spanner"
+	"google.golang.org/api/option"
 
-	"github.com/bitleak/lmstfy/storage/conf"
+	"github.com/bitleak/lmstfy/config"
 )
 
-func CreateSpannerClient(cfg *conf.SpannerConfig) (*spanner.Client, error) {
+func CreateSpannerClient(cfg *config.SpannerConfig) (*spanner.Client, error) {
 	db := fmt.Sprintf("projects/%s/instances/%s/databases/%s", cfg.Project, cfg.Instance, cfg.Database)
 	if cfg.CredentialsFile != "" {
 		opt := option.WithCredentialsFile(cfg.CredentialsFile)

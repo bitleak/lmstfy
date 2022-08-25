@@ -3,6 +3,8 @@ package redis
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/bitleak/lmstfy/datamanager/storage"
+	"github.com/bitleak/lmstfy/datamanager/storage/model"
 	"io"
 	"time"
 
@@ -10,6 +12,10 @@ import (
 
 	"github.com/bitleak/lmstfy/engine"
 	"github.com/bitleak/lmstfy/uuid"
+)
+
+const (
+	DefaultWrite2StorageTh = 30 * 60 // number of seconds, equals 30 minutes
 )
 
 type RedisInstance struct {
@@ -27,9 +33,13 @@ type Engine struct {
 	timer   *Timer
 	meta    *MetaManager
 	monitor *SizeMonitor
+	storage storage.Storage
+	// number of seconds. when job's delay second is greater than pumpStorageThresh,
+	//it will be written to storage if enabled
+	storageThresh uint32
 }
 
-func NewEngine(redisName string, conn *go_redis.Client) (engine.Engine, error) {
+func NewEngine(redisName string, conn *go_redis.Client, st storage.Storage, threshold uint32) (engine.Engine, error) {
 	redis := &RedisInstance{
 		Name: redisName,
 		Conn: conn,
@@ -52,13 +62,19 @@ func NewEngine(redisName string, conn *go_redis.Client) (engine.Engine, error) {
 	}
 	monitor := NewSizeMonitor(redis, timer, metadata)
 	go monitor.Loop()
-	return &Engine{
-		redis:   redis,
-		pool:    NewPool(redis),
-		timer:   timer,
-		meta:    meta,
-		monitor: monitor,
-	}, nil
+	if threshold == 0 {
+		threshold = DefaultWrite2StorageTh
+	}
+	eng := &Engine{
+		redis:         redis,
+		pool:          NewPool(redis),
+		timer:         timer,
+		meta:          meta,
+		monitor:       monitor,
+		storage:       st,
+		storageThresh: threshold,
+	}
+	return eng, nil
 }
 
 func (e *Engine) Publish(namespace, queue string, body []byte, ttlSecond, delaySecond uint32, tries uint16) (jobID string, err error) {
@@ -73,6 +89,12 @@ func (e *Engine) Publish(namespace, queue string, body []byte, ttlSecond, delayS
 	job := engine.NewJob(namespace, queue, body, ttlSecond, delaySecond, tries)
 	if tries == 0 {
 		return job.ID(), nil
+	}
+	if e.storage != nil && delaySecond > e.storageThresh {
+		if err = e.writeJob2Storage(e.redis.Name, job); err == nil {
+			return job.ID(), nil
+		}
+		// if err occurred, will try writing to timer set
 	}
 
 	err = e.pool.Add(job)
@@ -277,4 +299,29 @@ func (e *Engine) DumpInfo(out io.Writer) error {
 	enc := json.NewEncoder(out)
 	enc.SetIndent("", "    ")
 	return enc.Encode(metadata)
+}
+
+func (e *Engine) GetPoolName() string {
+	if e == nil || e.pool == nil || e.pool.redis == nil || e.pool.redis.Name == "" {
+		return ""
+	}
+	return e.pool.redis.Name
+}
+
+func (e *Engine) writeJob2Storage(poolName string, job engine.Job) error {
+	now := time.Now().Unix()
+	jobs := []*model.JobData{
+		{
+			PoolName:    poolName,
+			JobID:       job.ID(),
+			Namespace:   job.Namespace(),
+			Queue:       job.Queue(),
+			Body:        job.Body(),
+			ExpiredTime: now + int64(job.TTL()),
+			ReadyTime:   now + int64(job.Delay()),
+			Tries:       int64(job.Tries()),
+			CreatedTime: now,
+		},
+	}
+	return e.storage.BatchAddJobs(dummyCtx, jobs)
 }

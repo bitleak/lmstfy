@@ -17,10 +17,12 @@ require (
 	github.com/spf13/viper v1.9.0
 	github.com/stretchr/testify v1.7.1
 	go.uber.org/automaxprocs v1.5.1
-	google.golang.org/api v0.66.0 // indirect
+	google.golang.org/api v0.66.0
 	google.golang.org/genproto v0.0.0-20220201184016-50beb8ab5c44
 	google.golang.org/grpc v1.42.0
 )
+
+require github.com/go-redsync/redsync/v4 v4.5.1
 
 require (
 	cloud.google.com/go v0.100.2 // indirect
@@ -48,6 +50,8 @@ require (
 	github.com/google/go-cmp v0.5.7 // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/googleapis/gax-go/v2 v2.1.1 // indirect
+	github.com/hashicorp/errwrap v1.0.0 // indirect
+	github.com/hashicorp/go-multierror v1.1.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect

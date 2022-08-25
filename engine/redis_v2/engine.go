@@ -278,3 +278,10 @@ func (e *Engine) DumpInfo(out io.Writer) error {
 	enc.SetIndent("", "    ")
 	return enc.Encode(metadata)
 }
+
+func (e *Engine) GetPoolName() string {
+	if e == nil || e.pool == nil || e.pool.redis == nil {
+		return ""
+	}
+	return e.pool.redis.Name
+}

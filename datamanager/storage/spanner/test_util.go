@@ -3,54 +3,34 @@ package spanner
 import (
 	"context"
 	"fmt"
-	"os"
+	"github.com/bitleak/lmstfy/datamanager/storage/model"
 	"regexp"
-	"testing"
 	"time"
 
 	"cloud.google.com/go/spanner"
 	database "cloud.google.com/go/spanner/admin/database/apiv1"
 	instance "cloud.google.com/go/spanner/admin/instance/apiv1"
-	"github.com/stretchr/testify/assert"
 	databasepb "google.golang.org/genproto/googleapis/spanner/admin/database/v1"
 	instancepb "google.golang.org/genproto/googleapis/spanner/admin/instance/v1"
 	"google.golang.org/grpc/codes"
 
-	"github.com/bitleak/lmstfy/storage/conf"
-	"github.com/bitleak/lmstfy/storage/model"
+	"github.com/bitleak/lmstfy/config"
 )
 
-var cfg = &conf.SpannerConfig{
-	Project:  "test-project",
-	Instance: "test-instance",
-	Database: "test-db",
+var cfg = &config.SpannerConfig{
+	Project:   "test-project",
+	Instance:  "test-instance",
+	Database:  "test-db",
+	TableName: "lmstfy_jobs",
 }
 
 var (
-	tableName = "lmstfy_jobs"
-	jobIDs    = []string{"1", "2", "3"}
-	ctx       = context.Background()
-	db        = "projects/test-project/instances/test-instance/databases/test-db"
+	poolName = "default"
+	jobIDs   = []string{"1", "2", "3"}
+	ctx      = context.Background()
 )
 
-func init() {
-	if os.Getenv("SPANNER_EMULATOR_HOST") == "" {
-		fmt.Println("failed to find $SPANNER_EMULATOR_HOST value")
-		return
-	}
-	err := createInstance(ctx, db)
-	if err != nil {
-		fmt.Printf("create instance with error: %v", err)
-		return
-	}
-	err = createDatabase(ctx, db)
-	if err != nil {
-		fmt.Printf("create db with error: %v", err)
-		return
-	}
-}
-
-func createInstance(ctx context.Context, uri string) error {
+func CreateInstance(ctx context.Context, uri string) error {
 	matches := regexp.MustCompile("projects/(.*)/instances/(.*)/databases/.*").FindStringSubmatch(uri)
 	if matches == nil || len(matches) != 3 {
 		return fmt.Errorf("invalid instance id %s", uri)
@@ -83,7 +63,7 @@ func createInstance(ctx context.Context, uri string) error {
 	return nil
 }
 
-func createDatabase(ctx context.Context, uri string) error {
+func CreateDatabase(ctx context.Context, uri string) error {
 	matches := regexp.MustCompile("^(.*)/databases/(.*)$").FindStringSubmatch(uri)
 	if matches == nil || len(matches) != 3 {
 		return fmt.Errorf("invalid database id %s", uri)
@@ -107,6 +87,7 @@ func createDatabase(ctx context.Context, uri string) error {
 		CreateStatement: "CREATE DATABASE `" + matches[2] + "`",
 		ExtraStatements: []string{
 			`CREATE TABLE lmstfy_jobs (
+								pool_name    STRING(1024),
 								job_id       STRING(1024),
 								namespace    STRING(1024),
 								queue        STRING(1024),
@@ -126,35 +107,39 @@ func createDatabase(ctx context.Context, uri string) error {
 	}
 	return nil
 }
+
 func createTestJobsData() []*model.JobData {
 	jobs := make([]*model.JobData, 0)
 	j1 := &model.JobData{
+		PoolName:    poolName,
 		JobID:       "1",
 		Namespace:   "n1",
 		Queue:       "q1",
-		Body:        nil,
-		ExpiredTime: 1,
-		ReadyTime:   1,
+		Body:        []byte("hello_j1"),
+		ExpiredTime: time.Now().Unix() + 120,
+		ReadyTime:   time.Now().Unix() + 30,
 		Tries:       1,
 		CreatedTime: time.Now().Unix(),
 	}
 	j2 := &model.JobData{
+		PoolName:    poolName,
 		JobID:       "2",
 		Namespace:   "n1",
 		Queue:       "q2",
-		Body:        nil,
-		ExpiredTime: 1,
-		ReadyTime:   1,
+		Body:        []byte("hello_j2"),
+		ExpiredTime: time.Now().Unix() + 120,
+		ReadyTime:   time.Now().Unix() + 60,
 		Tries:       1,
 		CreatedTime: time.Now().Unix(),
 	}
 	j3 := &model.JobData{
+		PoolName:    poolName,
 		JobID:       "3",
 		Namespace:   "n1",
 		Queue:       "q1",
-		Body:        nil,
-		ExpiredTime: 1,
-		ReadyTime:   1,
+		Body:        []byte("hello_j3"),
+		ExpiredTime: time.Now().Unix() + 120,
+		ReadyTime:   time.Now().Unix() + 90,
 		Tries:       1,
 		CreatedTime: time.Now().Unix(),
 	}
@@ -165,12 +150,14 @@ func createTestJobsData() []*model.JobData {
 func createTestReqData() []*model.JobDataReq {
 	req := make([]*model.JobDataReq, 0)
 	r1 := &model.JobDataReq{
+		PoolName:  poolName,
 		Namespace: "n1",
 		Queue:     "q1",
 		ReadyTime: 0,
 		Count:     10,
 	}
 	r2 := &model.JobDataReq{
+		PoolName:  poolName,
 		Namespace: "n1",
 		Queue:     "q2",
 		ReadyTime: 0,
@@ -180,62 +167,11 @@ func createTestReqData() []*model.JobDataReq {
 	return req
 }
 
-func TestCreateSpannerClient(t *testing.T) {
-	_, err := CreateSpannerClient(cfg)
-	assert.Nil(t, err)
-}
-
-func TestSpannerDataMgr_BatchAddDelJobs(t *testing.T) {
-	cli, err := CreateSpannerClient(cfg)
-	if err != nil {
-		panic(fmt.Sprintf("Failed to create spanner client with error: %s", err))
+func createTestReqData2() *model.JobDataReq {
+	req := &model.JobDataReq{
+		PoolName:  poolName,
+		ReadyTime: time.Now().Unix() + 80,
+		Count:     10,
 	}
-	mgr := NewSpannerDataMgr(cli, tableName)
-	jobs := createTestJobsData()
-	err = mgr.BatchAddJobs(ctx, jobs)
-	if err != nil {
-		panic(fmt.Sprintf("Failed to add jobs with error: %s", err))
-	}
-	t.Logf("add jobs success %v rows", len(jobs))
-
-	count, err := mgr.DelJobs(ctx, jobIDs)
-	if err != nil {
-		panic(fmt.Sprintf("failed to delete job: %v", err))
-	}
-	t.Logf("del jobs success %v rows", count)
-}
-
-func TestSpannerDataMgr_BatchGetJobs(t *testing.T) {
-	cli, err := CreateSpannerClient(cfg)
-	if err != nil {
-		panic(fmt.Sprintf("Failed to create spanner client with error: %s", err))
-	}
-	mgr := NewSpannerDataMgr(cli, tableName)
-	jobs := createTestJobsData()
-	mgr.BatchAddJobs(ctx, jobs)
-	req := createTestReqData()
-	_, err = mgr.BatchGetJobs(ctx, req)
-	if err != nil {
-		panic(fmt.Sprintf("BatchGetJobs failed with error: %s", err))
-	}
-	mgr.DelJobs(ctx, jobIDs)
-}
-
-func TestSpannerDataMgr_GetQueueSize(t *testing.T) {
-	cli, err := CreateSpannerClient(cfg)
-	if err != nil {
-		panic(fmt.Sprintf("Failed to create spanner client with error: %s", err))
-	}
-	mgr := NewSpannerDataMgr(cli, tableName)
-	jobs := createTestJobsData()
-	mgr.BatchAddJobs(ctx, jobs)
-	req := createTestReqData()
-	count, err := mgr.GetQueueSize(ctx, req)
-	if err != nil || len(count) == 0 {
-		panic(fmt.Sprintf("BatchGetJobs failed with error: %s", err))
-	}
-	key1, key2 := fmt.Sprintf("%s/%s", "n1", "q1"), fmt.Sprintf("%s/%s", "n1", "q2")
-	assert.EqualValues(t, 2, count[key1])
-	assert.EqualValues(t, 1, count[key2])
-	mgr.DelJobs(ctx, jobIDs)
+	return req
 }

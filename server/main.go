@@ -11,8 +11,13 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
+	"go.uber.org/automaxprocs/maxprocs"
+
 	"github.com/bitleak/lmstfy/auth"
 	"github.com/bitleak/lmstfy/config"
+	"github.com/bitleak/lmstfy/datamanager"
 	"github.com/bitleak/lmstfy/engine"
 	"github.com/bitleak/lmstfy/engine/migration"
 	redis_engine "github.com/bitleak/lmstfy/engine/redis"
@@ -23,9 +28,6 @@ import (
 	"github.com/bitleak/lmstfy/server/middleware"
 	"github.com/bitleak/lmstfy/throttler"
 	"github.com/bitleak/lmstfy/version"
-	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
-	"go.uber.org/automaxprocs/maxprocs"
 )
 
 type optionFlags struct {
@@ -211,6 +213,18 @@ func main() {
 	}
 	if conf.EnableAccessLog {
 		middleware.EnableAccessLog()
+	}
+
+	// set up data manager
+	if conf.SecondaryStorage != nil {
+		for name, poolcfg := range conf.Pool {
+			if poolcfg.EnableSecondaryStorage {
+				eng := engine.GetEngineByKind(engine.KindRedis, name)
+				if err = datamanager.Setup(conf, eng); err != nil {
+					panic(fmt.Sprintf("Failed to setup data manager: %s", err))
+				}
+			}
+		}
 	}
 	apiSrv := apiServer(conf, accessLogger, errorLogger, Flags.SkipVerification)
 	adminSrv := adminServer(conf, accessLogger, errorLogger)

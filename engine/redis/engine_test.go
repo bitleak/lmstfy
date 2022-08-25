@@ -3,32 +3,110 @@ package redis
 import (
 	"bytes"
 	"fmt"
+	"github.com/bitleak/lmstfy/datamanager/pumper"
+	"github.com/bitleak/lmstfy/datamanager/storage"
+	"github.com/bitleak/lmstfy/datamanager/storage/spanner"
+	"os"
 	"testing"
+	"time"
+
+	"github.com/bitleak/lmstfy/config"
 )
 
+var (
+	st              storage.Storage
+	write2StorageTh uint32 = 10
+)
+
+var (
+	db         = "projects/test-project/instances/test-instance/databases/test-db1"
+	PoolConf   = &config.RedisConf{StoragePumpPeriod: 10}
+	SecStgConf = &config.SpannerConfig{
+		Project:   "test-project",
+		Instance:  "test-instance",
+		Database:  "test-db1",
+		TableName: "lmstfy_jobs",
+	}
+)
+
+func initSpanner() {
+	if os.Getenv("SPANNER_EMULATOR_HOST") == "" {
+		panic(fmt.Sprintf("failed to find $SPANNER_EMULATOR_HOST value"))
+	}
+	err := spanner.CreateInstance(dummyCtx, db)
+	if err != nil {
+		panic(fmt.Sprintf("create instance error: %v", err))
+	}
+	err = spanner.CreateDatabase(dummyCtx, db)
+	if err != nil {
+		panic(fmt.Sprintf("create db error: %v", err))
+	}
+}
+
 func TestEngine_Publish(t *testing.T) {
-	e, err := NewEngine(R.Name, R.Conn)
+	e, err := NewEngine(R.Name, R.Conn, st, write2StorageTh)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
 	defer e.Shutdown()
 	body := []byte("hello msg 1")
-	jobID, err := e.Publish("ns-engine", "q1", body, 10, 2, 1)
+	jobID, err := e.Publish("ns-engine", "q0", body, 10, 2, 1)
 	t.Log(jobID)
 	if err != nil {
 		t.Fatalf("Failed to publish: %s", err)
 	}
 
 	// Publish no-delay job
-	jobID, err = e.Publish("ns-engine", "q1", body, 10, 0, 1)
+	jobID, err = e.Publish("ns-engine", "q0", body, 10, 0, 1)
 	t.Log(jobID)
 	if err != nil {
 		t.Fatalf("Failed to publish: %s", err)
 	}
 }
 
+func TestEngine_Publish_SecondaryStorage(t *testing.T) {
+	initSpanner()
+	st, err := spanner.NewStorage(SecStgConf)
+	if err != nil {
+		panic(fmt.Sprintf("Setup data manager error: %s", err))
+	}
+	e, err := NewEngine(R.Name, R.Conn, st, write2StorageTh)
+	if err != nil {
+		panic(fmt.Sprintf("Setup engine error: %s", err))
+	}
+	defer e.Shutdown()
+
+	// start pumper so that it can pump job to engine for consumption when ready
+	pr, err := pumper.NewDefaultPumper(Cfg.Config, st, e)
+	if err != nil {
+		panic(fmt.Sprintf("Setup pumper error: %s", err))
+	}
+	pr.SetPumpPeriod(10)
+	go pr.LoopPump()
+	defer pr.Shutdown()
+
+	// Publish long-delay job
+	body := []byte("hello msg long delay job")
+	jobID, err := e.Publish("ns-engine", "q1", body, 60, 20, 1)
+	t.Log(jobID)
+	if err != nil {
+		t.Fatalf("Failed to publish: %s", err)
+	}
+
+	//wait for data mgr to pump job from secondary storage to engine
+	time.Sleep(25 * time.Second)
+
+	job, err := e.Consume("ns-engine", []string{"q1"}, 3, 0)
+	if err != nil {
+		t.Fatalf("Failed to consume job from secondary storage: %s", err)
+	}
+	if !bytes.Equal(body, job.Body()) {
+		t.Fatalf("Mistmatched job data")
+	}
+}
+
 func TestEngine_Consume(t *testing.T) {
-	e, err := NewEngine(R.Name, R.Conn)
+	e, err := NewEngine(R.Name, R.Conn, st, write2StorageTh)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
@@ -67,7 +145,7 @@ func TestEngine_Consume(t *testing.T) {
 
 // Consume the first one from multi publish
 func TestEngine_Consume2(t *testing.T) {
-	e, err := NewEngine(R.Name, R.Conn)
+	e, err := NewEngine(R.Name, R.Conn, st, write2StorageTh)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
@@ -91,7 +169,7 @@ func TestEngine_Consume2(t *testing.T) {
 }
 
 func TestEngine_ConsumeMulti(t *testing.T) {
-	e, err := NewEngine(R.Name, R.Conn)
+	e, err := NewEngine(R.Name, R.Conn, st, write2StorageTh)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
@@ -130,7 +208,7 @@ func TestEngine_ConsumeMulti(t *testing.T) {
 }
 
 func TestEngine_Peek(t *testing.T) {
-	e, err := NewEngine(R.Name, R.Conn)
+	e, err := NewEngine(R.Name, R.Conn, st, write2StorageTh)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
@@ -150,7 +228,7 @@ func TestEngine_Peek(t *testing.T) {
 }
 
 func TestEngine_BatchConsume(t *testing.T) {
-	e, err := NewEngine(R.Name, R.Conn)
+	e, err := NewEngine(R.Name, R.Conn, st, write2StorageTh)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}

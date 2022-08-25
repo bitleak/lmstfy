@@ -4,30 +4,39 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"cloud.google.com/go/spanner"
+	"github.com/go-redis/redis/v8"
 
-	"github.com/bitleak/lmstfy/storage/model"
+	"github.com/bitleak/lmstfy/config"
+	"github.com/bitleak/lmstfy/datamanager/storage"
+	"github.com/bitleak/lmstfy/datamanager/storage/model"
 )
 
 const (
-	MaxAddJobBatchSize = 1000
+	MaxJobBatchSize = 1000
 )
 
-type SpannerDataMgr struct {
-	cli       *spanner.Client
-	tableName string
+type SpannerStorage struct {
+	cli         *spanner.Client
+	redisClient *redis.Client
+	tableName   string
 }
 
-func NewSpannerDataMgr(client *spanner.Client, tableName string) *SpannerDataMgr {
-	return &SpannerDataMgr{
-		cli:       client,
-		tableName: tableName,
+func NewStorage(cfg *config.SpannerConfig) (storage.Storage, error) {
+	client, err := CreateSpannerClient(cfg)
+	if err != nil {
+		return nil, err
 	}
+	return &SpannerStorage{
+		cli:       client,
+		tableName: cfg.TableName,
+	}, nil
 }
 
 // BatchAddJobs write jobs data into secondary storage
-func (mgr *SpannerDataMgr) BatchAddJobs(ctx context.Context, jobs []*model.JobData) (err error) {
+func (mgr *SpannerStorage) BatchAddJobs(ctx context.Context, jobs []*model.JobData) (err error) {
 	err = validateReq(jobs)
 	if err != nil {
 		return err
@@ -48,15 +57,16 @@ func (mgr *SpannerDataMgr) BatchAddJobs(ctx context.Context, jobs []*model.JobDa
 }
 
 // BatchGetJobs pumps data that are due before certain due time
-func (mgr *SpannerDataMgr) BatchGetJobs(ctx context.Context, req []*model.JobDataReq) (jobs []*model.JobData, err error) {
+func (mgr *SpannerStorage) BatchGetJobs(ctx context.Context, req []*model.JobDataReq) (jobs []*model.JobData, err error) {
 	txn := mgr.cli.ReadOnlyTransaction()
 	defer txn.Close()
 
 	for _, r := range req {
 		iter := txn.Query(ctx, spanner.Statement{
-			SQL: "SELECT job_id, namespace, queue, body, ready_time, expired_time, created_time " +
-				"FROM lmstfy_jobs WHERE namespace = @namespace and queue = @queue and ready_time >= @readytime LIMIT @limit",
+			SQL: "SELECT pool_name, job_id, namespace, queue, body, ready_time, expired_time, created_time, tries " +
+				"FROM lmstfy_jobs WHERE pool_name = @poolname and namespace = @namespace and queue = @queue and ready_time >= @readytime LIMIT @limit",
 			Params: map[string]interface{}{
+				"poolname":  r.PoolName,
 				"namespace": r.Namespace,
 				"queue":     r.Queue,
 				"readytime": r.ReadyTime,
@@ -79,7 +89,7 @@ func (mgr *SpannerDataMgr) BatchGetJobs(ctx context.Context, req []*model.JobDat
 }
 
 // GetQueueSize returns the size of data in storage which are due before certain due time
-func (mgr *SpannerDataMgr) GetQueueSize(ctx context.Context, req []*model.JobDataReq) (count map[string]int64, err error) {
+func (mgr *SpannerStorage) GetQueueSize(ctx context.Context, req []*model.JobDataReq) (count map[string]int64, err error) {
 	txn := mgr.cli.ReadOnlyTransaction()
 	defer txn.Close()
 	count = make(map[string]int64)
@@ -107,7 +117,7 @@ func (mgr *SpannerDataMgr) GetQueueSize(ctx context.Context, req []*model.JobDat
 }
 
 // DelJobs remove job data from storage based on job id
-func (mgr *SpannerDataMgr) DelJobs(ctx context.Context, jobIDs []string) (count int64, err error) {
+func (mgr *SpannerStorage) DelJobs(ctx context.Context, jobIDs []string) (count int64, err error) {
 	if len(jobIDs) == 0 {
 		return 0, nil
 	}
@@ -123,11 +133,42 @@ func (mgr *SpannerDataMgr) DelJobs(ctx context.Context, jobIDs []string) (count 
 	return count, err
 }
 
+// GetReadyJobs return jobs which are ready based on input ready time from data storage
+func (mgr *SpannerStorage) GetReadyJobs(ctx context.Context, req *model.JobDataReq) (jobs []*model.JobData, err error) {
+	if req.ReadyTime <= 0 {
+		return nil, fmt.Errorf("GetReadyJobs failed: missing readytime parameter")
+	}
+	txn := mgr.cli.ReadOnlyTransaction()
+	defer txn.Close()
+	iter := txn.Query(ctx, spanner.Statement{
+		SQL: "SELECT pool_name, job_id, namespace, queue, body, ready_time, expired_time, created_time, tries " +
+			"FROM lmstfy_jobs WHERE pool_name = @poolname and ready_time <= @readytime LIMIT @limit",
+		Params: map[string]interface{}{
+			"poolname":  req.PoolName,
+			"readytime": req.ReadyTime,
+			"limit":     req.Count,
+			"nowtime":   time.Now().Unix(),
+		},
+	})
+	err = iter.Do(func(row *spanner.Row) error {
+		elem := &model.JobData{}
+		if err = row.ToStruct(elem); err != nil {
+			return err
+		}
+		jobs = append(jobs, elem)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return jobs, nil
+}
+
 func validateReq(req []*model.JobData) error {
 	if len(req) == 0 {
 		return errors.New("invalid req, null jobs list")
 	}
-	if len(req) > MaxAddJobBatchSize {
+	if len(req) > MaxJobBatchSize {
 		return errors.New("invalid req, exceed maximum input batch size")
 	}
 	return nil

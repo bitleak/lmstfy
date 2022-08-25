@@ -5,12 +5,16 @@ import (
 	"os"
 	"testing"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/bitleak/lmstfy/config"
 	"github.com/bitleak/lmstfy/helper"
-	"github.com/sirupsen/logrus"
 )
 
-var R *RedisInstance
+var (
+	R   *RedisInstance
+	Cfg *config.PresetConfigForTest
+)
 
 func setup(CONF *config.Config) {
 	logger = logrus.New()
@@ -43,6 +47,7 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(fmt.Sprintf("CreatePresetForTest failed with error: %s", err))
 	}
+	Cfg = presetConfig
 	defer presetConfig.Destroy()
 	setup(presetConfig.Config)
 	ret := m.Run()

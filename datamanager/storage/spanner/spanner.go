@@ -63,9 +63,10 @@ func (mgr *SpannerStorage) BatchGetJobs(ctx context.Context, req []*model.JobDat
 
 	for _, r := range req {
 		iter := txn.Query(ctx, spanner.Statement{
-			SQL: "SELECT job_id, namespace, queue, body, ready_time, expired_time, created_time, tries " +
-				"FROM lmstfy_jobs WHERE namespace = @namespace and queue = @queue and ready_time >= @readytime LIMIT @limit",
+			SQL: "SELECT pool_name, job_id, namespace, queue, body, ready_time, expired_time, created_time, tries " +
+				"FROM lmstfy_jobs WHERE pool_name = @poolname and namespace = @namespace and queue = @queue and ready_time >= @readytime LIMIT @limit",
 			Params: map[string]interface{}{
+				"poolname":  r.PoolName,
 				"namespace": r.Namespace,
 				"queue":     r.Queue,
 				"readytime": r.ReadyTime,
@@ -140,9 +141,10 @@ func (mgr *SpannerStorage) GetReadyJobs(ctx context.Context, req *model.JobDataR
 	txn := mgr.cli.ReadOnlyTransaction()
 	defer txn.Close()
 	iter := txn.Query(ctx, spanner.Statement{
-		SQL: "SELECT job_id, namespace, queue, body, ready_time, expired_time, created_time, tries " +
-			"FROM lmstfy_jobs WHERE ready_time <= @readytime LIMIT @limit",
+		SQL: "SELECT pool_name, job_id, namespace, queue, body, ready_time, expired_time, created_time, tries " +
+			"FROM lmstfy_jobs WHERE pool_name = @poolname and ready_time <= @readytime LIMIT @limit",
 		Params: map[string]interface{}{
+			"poolname":  req.PoolName,
 			"readytime": req.ReadyTime,
 			"limit":     req.Count,
 			"nowtime":   time.Now().Unix(),

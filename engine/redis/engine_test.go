@@ -77,11 +77,12 @@ func TestEngine_Publish_SecondaryStorage(t *testing.T) {
 	defer e.Shutdown()
 
 	// start pumper so that it can pump job to engine for consumption when ready
-	pr, err := pumper.NewPumper(Cfg.Config, PoolConf)
+	pr, err := pumper.NewDefaultPumper(Cfg.Config, st, e)
 	if err != nil {
 		panic(fmt.Sprintf("Setup pumper error: %s", err))
 	}
-	go pr.LoopPump(st, e)
+	pr.SetPumpPeriod(10)
+	go pr.LoopPump()
 	defer pr.Shutdown()
 
 	// Publish long-delay job

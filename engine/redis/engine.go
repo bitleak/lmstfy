@@ -91,7 +91,7 @@ func (e *Engine) Publish(namespace, queue string, body []byte, ttlSecond, delayS
 		return job.ID(), nil
 	}
 	if e.storage != nil && delaySecond > e.storageThresh {
-		if err = e.writeJob2Storage(job); err == nil {
+		if err = e.writeJob2Storage(e.redis.Name, job); err == nil {
 			return job.ID(), nil
 		}
 		// if err occurred, will try writing to timer set
@@ -301,10 +301,18 @@ func (e *Engine) DumpInfo(out io.Writer) error {
 	return enc.Encode(metadata)
 }
 
-func (e *Engine) writeJob2Storage(job engine.Job) error {
+func (e *Engine) GetPoolName() string {
+	if e == nil || e.pool == nil || e.pool.redis == nil || e.pool.redis.Name == "" {
+		return ""
+	}
+	return e.pool.redis.Name
+}
+
+func (e *Engine) writeJob2Storage(poolName string, job engine.Job) error {
 	now := time.Now().Unix()
 	jobs := []*model.JobData{
 		{
+			PoolName:    poolName,
 			JobID:       job.ID(),
 			Namespace:   job.Namespace(),
 			Queue:       job.Queue(),

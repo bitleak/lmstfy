@@ -25,8 +25,9 @@ var cfg = &config.SpannerConfig{
 }
 
 var (
-	jobIDs = []string{"1", "2", "3"}
-	ctx    = context.Background()
+	poolName = "default"
+	jobIDs   = []string{"1", "2", "3"}
+	ctx      = context.Background()
 )
 
 func CreateInstance(ctx context.Context, uri string) error {
@@ -86,6 +87,7 @@ func CreateDatabase(ctx context.Context, uri string) error {
 		CreateStatement: "CREATE DATABASE `" + matches[2] + "`",
 		ExtraStatements: []string{
 			`CREATE TABLE lmstfy_jobs (
+								pool_name    STRING(1024),
 								job_id       STRING(1024),
 								namespace    STRING(1024),
 								queue        STRING(1024),
@@ -109,6 +111,7 @@ func CreateDatabase(ctx context.Context, uri string) error {
 func createTestJobsData() []*model.JobData {
 	jobs := make([]*model.JobData, 0)
 	j1 := &model.JobData{
+		PoolName:    poolName,
 		JobID:       "1",
 		Namespace:   "n1",
 		Queue:       "q1",
@@ -119,6 +122,7 @@ func createTestJobsData() []*model.JobData {
 		CreatedTime: time.Now().Unix(),
 	}
 	j2 := &model.JobData{
+		PoolName:    poolName,
 		JobID:       "2",
 		Namespace:   "n1",
 		Queue:       "q2",
@@ -129,6 +133,7 @@ func createTestJobsData() []*model.JobData {
 		CreatedTime: time.Now().Unix(),
 	}
 	j3 := &model.JobData{
+		PoolName:    poolName,
 		JobID:       "3",
 		Namespace:   "n1",
 		Queue:       "q1",
@@ -145,12 +150,14 @@ func createTestJobsData() []*model.JobData {
 func createTestReqData() []*model.JobDataReq {
 	req := make([]*model.JobDataReq, 0)
 	r1 := &model.JobDataReq{
+		PoolName:  poolName,
 		Namespace: "n1",
 		Queue:     "q1",
 		ReadyTime: 0,
 		Count:     10,
 	}
 	r2 := &model.JobDataReq{
+		PoolName:  poolName,
 		Namespace: "n1",
 		Queue:     "q2",
 		ReadyTime: 0,
@@ -162,6 +169,7 @@ func createTestReqData() []*model.JobDataReq {
 
 func createTestReqData2() *model.JobDataReq {
 	req := &model.JobDataReq{
+		PoolName:  poolName,
 		ReadyTime: time.Now().Unix() + 80,
 		Count:     10,
 	}

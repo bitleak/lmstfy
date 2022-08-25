@@ -22,4 +22,5 @@ type Engine interface {
 	Shutdown()
 
 	DumpInfo(output io.Writer) error
+	GetPoolName() string
 }

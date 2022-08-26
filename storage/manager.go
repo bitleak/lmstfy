@@ -11,7 +11,6 @@ import (
 	"github.com/bitleak/lmstfy/engine"
 	"github.com/bitleak/lmstfy/helper"
 	"github.com/bitleak/lmstfy/storage/lock"
-	"github.com/bitleak/lmstfy/storage/persistence"
 	"github.com/bitleak/lmstfy/storage/persistence/model"
 	"github.com/bitleak/lmstfy/storage/persistence/spanner"
 	"github.com/bitleak/lmstfy/storage/pumper"
@@ -29,7 +28,7 @@ type Manager struct {
 
 	mu       sync.Mutex
 	redisCli *redis.Client
-	storage  persistence.Persistence
+	storage  Persistence
 }
 
 var manager *Manager

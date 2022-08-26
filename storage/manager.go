@@ -1,4 +1,4 @@
-package datamanager
+package storage
 
 import (
 	"context"
@@ -8,13 +8,12 @@ import (
 	"time"
 
 	"github.com/bitleak/lmstfy/config"
-	"github.com/bitleak/lmstfy/datamanager/lock"
-	"github.com/bitleak/lmstfy/datamanager/pumper"
-	"github.com/bitleak/lmstfy/datamanager/storage"
-	"github.com/bitleak/lmstfy/datamanager/storage/model"
-	"github.com/bitleak/lmstfy/datamanager/storage/spanner"
 	"github.com/bitleak/lmstfy/engine"
 	"github.com/bitleak/lmstfy/helper"
+	"github.com/bitleak/lmstfy/storage/lock"
+	"github.com/bitleak/lmstfy/storage/persistence/model"
+	"github.com/bitleak/lmstfy/storage/persistence/spanner"
+	"github.com/bitleak/lmstfy/storage/pumper"
 	"github.com/go-redis/redis/v8"
 	"github.com/sirupsen/logrus"
 )
@@ -23,31 +22,31 @@ const (
 	maxJobBatchSize = 128
 )
 
-type DataManager struct {
+type Manager struct {
 	pools   map[string]engine.Engine
 	pumpers map[string]pumper.Pumper
 
 	mu       sync.Mutex
 	redisCli *redis.Client
-	storage  storage.Storage
+	storage  Persistence
 }
 
-var dataManager *DataManager
+var manager *Manager
 
 func Init(cfg *config.Config) (err error) {
-	dataManager, err = NewDataManger(cfg)
+	manager, err = NewManger(cfg)
 	return err
 }
 
-func Get() *DataManager {
-	return dataManager
+func Get() *Manager {
+	return manager
 }
 
-func NewDataManger(cfg *config.Config) (*DataManager, error) {
+func NewManger(cfg *config.Config) (*Manager, error) {
 	if cfg.SecondaryStorage == nil {
 		return nil, errors.New("nil second storage config")
 	}
-	storage, err := spanner.NewStorage(cfg.SecondaryStorage)
+	storage, err := spanner.NewSpanner(cfg.SecondaryStorage)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +54,7 @@ func NewDataManger(cfg *config.Config) (*DataManager, error) {
 	if redisCli.Ping(context.Background()).Err() != nil {
 		return nil, fmt.Errorf("create redis client err: %w", err)
 	}
-	return &DataManager{
+	return &Manager{
 		redisCli: redisCli,
 		storage:  storage,
 		pools:    make(map[string]engine.Engine),
@@ -63,7 +62,7 @@ func NewDataManger(cfg *config.Config) (*DataManager, error) {
 	}, nil
 }
 
-func (m *DataManager) PumpFn(name string, pool engine.Engine) func() bool {
+func (m *Manager) PumpFn(name string, pool engine.Engine) func() bool {
 	return func() bool {
 		now := time.Now()
 		req := &model.JobDataReq{
@@ -98,7 +97,7 @@ func (m *DataManager) PumpFn(name string, pool engine.Engine) func() bool {
 	}
 }
 
-func (m *DataManager) AddPool(name string, pool engine.Engine) {
+func (m *Manager) AddPool(name string, pool engine.Engine) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -108,10 +107,10 @@ func (m *DataManager) AddPool(name string, pool engine.Engine) {
 	go pumper.Loop(m.PumpFn(name, pool))
 }
 
-func (m *DataManager) AddJob(ctx context.Context, job *model.JobData) error {
+func (m *Manager) AddJob(ctx context.Context, job *model.JobData) error {
 	return m.storage.BatchAddJobs(ctx, []*model.JobData{job})
 }
 
-func (m *DataManager) Shutdown() {
+func (m *Manager) Shutdown() {
 	// Stop and release pumper here
 }

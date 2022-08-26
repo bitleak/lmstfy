@@ -10,42 +10,41 @@ import (
 	"github.com/go-redis/redis/v8"
 
 	"github.com/bitleak/lmstfy/config"
-	"github.com/bitleak/lmstfy/datamanager/storage"
-	"github.com/bitleak/lmstfy/datamanager/storage/model"
+	"github.com/bitleak/lmstfy/storage/persistence/model"
 )
 
 const (
 	MaxJobBatchSize = 1000
 )
 
-type SpannerStorage struct {
+type Spanner struct {
 	cli         *spanner.Client
 	redisClient *redis.Client
 	tableName   string
 }
 
-func NewStorage(cfg *config.SpannerConfig) (storage.Storage, error) {
+func NewSpanner(cfg *config.SpannerConfig) (*Spanner, error) {
 	client, err := CreateSpannerClient(cfg)
 	if err != nil {
 		return nil, err
 	}
-	return &SpannerStorage{
+	return &Spanner{
 		cli:       client,
 		tableName: cfg.TableName,
 	}, nil
 }
 
 // BatchAddJobs write jobs data into secondary storage
-func (mgr *SpannerStorage) BatchAddJobs(ctx context.Context, jobs []*model.JobData) (err error) {
+func (s *Spanner) BatchAddJobs(ctx context.Context, jobs []*model.JobData) (err error) {
 	err = validateReq(jobs)
 	if err != nil {
 		return err
 	}
 
-	_, err = mgr.cli.ReadWriteTransaction(ctx, func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
+	_, err = s.cli.ReadWriteTransaction(ctx, func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
 		mutations := make([]*spanner.Mutation, 0)
 		for _, job := range jobs {
-			mut, err := spanner.InsertStruct(mgr.tableName, job)
+			mut, err := spanner.InsertStruct(s.tableName, job)
 			if err != nil {
 				return err
 			}
@@ -57,8 +56,8 @@ func (mgr *SpannerStorage) BatchAddJobs(ctx context.Context, jobs []*model.JobDa
 }
 
 // BatchGetJobs pumps data that are due before certain due time
-func (mgr *SpannerStorage) BatchGetJobs(ctx context.Context, req []*model.JobDataReq) (jobs []*model.JobData, err error) {
-	txn := mgr.cli.ReadOnlyTransaction()
+func (s *Spanner) BatchGetJobs(ctx context.Context, req []*model.JobDataReq) (jobs []*model.JobData, err error) {
+	txn := s.cli.ReadOnlyTransaction()
 	defer txn.Close()
 
 	for _, r := range req {
@@ -89,8 +88,8 @@ func (mgr *SpannerStorage) BatchGetJobs(ctx context.Context, req []*model.JobDat
 }
 
 // GetQueueSize returns the size of data in storage which are due before certain due time
-func (mgr *SpannerStorage) GetQueueSize(ctx context.Context, req []*model.JobDataReq) (count map[string]int64, err error) {
-	txn := mgr.cli.ReadOnlyTransaction()
+func (s *Spanner) GetQueueSize(ctx context.Context, req []*model.JobDataReq) (count map[string]int64, err error) {
+	txn := s.cli.ReadOnlyTransaction()
 	defer txn.Close()
 	count = make(map[string]int64)
 
@@ -117,11 +116,11 @@ func (mgr *SpannerStorage) GetQueueSize(ctx context.Context, req []*model.JobDat
 }
 
 // DelJobs remove job data from storage based on job id
-func (mgr *SpannerStorage) DelJobs(ctx context.Context, jobIDs []string) (count int64, err error) {
+func (s *Spanner) DelJobs(ctx context.Context, jobIDs []string) (count int64, err error) {
 	if len(jobIDs) == 0 {
 		return 0, nil
 	}
-	_, err = mgr.cli.ReadWriteTransaction(ctx, func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
+	_, err = s.cli.ReadWriteTransaction(ctx, func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
 		count, err = txn.Update(ctx, spanner.Statement{
 			SQL: "DELETE FROM lmstfy_jobs WHERE job_id IN UNNEST(@ids)",
 			Params: map[string]interface{}{
@@ -134,11 +133,11 @@ func (mgr *SpannerStorage) DelJobs(ctx context.Context, jobIDs []string) (count 
 }
 
 // GetReadyJobs return jobs which are ready based on input ready time from data storage
-func (mgr *SpannerStorage) GetReadyJobs(ctx context.Context, req *model.JobDataReq) (jobs []*model.JobData, err error) {
+func (s *Spanner) GetReadyJobs(ctx context.Context, req *model.JobDataReq) (jobs []*model.JobData, err error) {
 	if req.ReadyTime <= 0 {
 		return nil, fmt.Errorf("GetReadyJobs failed: missing readytime parameter")
 	}
-	txn := mgr.cli.ReadOnlyTransaction()
+	txn := s.cli.ReadOnlyTransaction()
 	defer txn.Close()
 	iter := txn.Query(ctx, spanner.Statement{
 		SQL: "SELECT pool_name, job_id, namespace, queue, body, ready_time, expired_time, created_time, tries " +

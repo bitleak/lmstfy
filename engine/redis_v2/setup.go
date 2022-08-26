@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bitleak/lmstfy/datamanager"
+	"github.com/bitleak/lmstfy/storage"
 	"github.com/go-redis/redis/v8"
 	"github.com/sirupsen/logrus"
 
@@ -57,7 +57,7 @@ func Setup(conf *config.Config) error {
 		}
 		engine.Register(engine.KindRedisV2, name, e)
 		if poolConf.EnableSecondaryStorage && conf.HasSecondaryStorage() {
-			datamanager.Get().AddPool(name, e)
+			storage.Get().AddPool(name, e)
 		}
 	}
 	return nil

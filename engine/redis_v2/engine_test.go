@@ -3,14 +3,15 @@ package redis_v2
 import (
 	"bytes"
 	"fmt"
-	"github.com/bitleak/lmstfy/config"
-	"github.com/bitleak/lmstfy/datamanager"
-	"github.com/bitleak/lmstfy/datamanager/lock"
-	"github.com/bitleak/lmstfy/datamanager/pumper"
-	"github.com/bitleak/lmstfy/datamanager/storage/spanner"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/bitleak/lmstfy/config"
+	"github.com/bitleak/lmstfy/storage"
+	"github.com/bitleak/lmstfy/storage/lock"
+	"github.com/bitleak/lmstfy/storage/persistence/spanner"
+	"github.com/bitleak/lmstfy/storage/pumper"
 )
 
 var (
@@ -64,10 +65,10 @@ func TestEngine_Publish_SecondaryStorage(t *testing.T) {
 	initSpanner()
 	Cfg.Config.SecondaryStorage = SecStgConf
 
-	if err := datamanager.Init(Cfg.Config); err != nil {
+	if err := storage.Init(Cfg.Config); err != nil {
 		panic(fmt.Sprintf("Failed to init data manager for secondary storage: %s", err))
 	}
-	dataMgr := datamanager.Get()
+	dataMgr := storage.Get()
 	if dataMgr == nil {
 		panic(fmt.Sprint("Failed to find data manager"))
 	}

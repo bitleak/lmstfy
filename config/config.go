@@ -64,6 +64,10 @@ type SpannerConfig struct {
 	TableName       string `mapstructure:"table_name"`
 }
 
+func (c *Config) HasSecondaryStorage() bool {
+	return c.SecondaryStorage != nil
+}
+
 func (rc *RedisConf) validate() error {
 	if rc.Addr == "" {
 		return errors.New("the pool addr must not be empty")

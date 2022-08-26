@@ -11,13 +11,13 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/bitleak/lmstfy/datamanager"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"go.uber.org/automaxprocs/maxprocs"
 
 	"github.com/bitleak/lmstfy/auth"
 	"github.com/bitleak/lmstfy/config"
-	"github.com/bitleak/lmstfy/datamanager"
 	"github.com/bitleak/lmstfy/engine"
 	"github.com/bitleak/lmstfy/engine/migration"
 	redis_engine "github.com/bitleak/lmstfy/engine/redis"
@@ -216,14 +216,9 @@ func main() {
 	}
 
 	// set up data manager
-	if conf.SecondaryStorage != nil {
-		for name, poolcfg := range conf.Pool {
-			if poolcfg.EnableSecondaryStorage {
-				eng := engine.GetEngineByKind(engine.KindRedis, name)
-				if err = datamanager.Setup(conf, eng); err != nil {
-					panic(fmt.Sprintf("Failed to setup data manager: %s", err))
-				}
-			}
+	if conf.HasSecondaryStorage() {
+		if err := datamanager.Init(conf); err != nil {
+			panic(fmt.Sprintf("Failed to init secondary storage: %s", err))
 		}
 	}
 	apiSrv := apiServer(conf, accessLogger, errorLogger, Flags.SkipVerification)

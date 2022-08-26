@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bitleak/lmstfy/datamanager"
 	"github.com/go-redis/redis/v8"
 	"github.com/sirupsen/logrus"
 
@@ -50,11 +51,14 @@ func Setup(conf *config.Config) error {
 		if cli.Ping(dummyCtx).Err() != nil {
 			return fmt.Errorf("redis server %s was not alive", poolConf.Addr)
 		}
-		e, err := NewEngine(name, cli)
+		e, err := NewEngine(name, &poolConf, cli)
 		if err != nil {
 			return fmt.Errorf("setup engine error: %s", err)
 		}
 		engine.Register(engine.KindRedisV2, name, e)
+		if poolConf.EnableSecondaryStorage && conf.HasSecondaryStorage() {
+			datamanager.Get().AddPool(name, e)
+		}
 	}
 	return nil
 }

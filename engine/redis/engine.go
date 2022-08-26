@@ -3,19 +3,16 @@ package redis
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/bitleak/lmstfy/datamanager/storage"
-	"github.com/bitleak/lmstfy/datamanager/storage/model"
 	"io"
 	"time"
+
+	"github.com/bitleak/lmstfy/datamanager/storage"
+	"github.com/bitleak/lmstfy/datamanager/storage/model"
 
 	go_redis "github.com/go-redis/redis/v8"
 
 	"github.com/bitleak/lmstfy/engine"
 	"github.com/bitleak/lmstfy/uuid"
-)
-
-const (
-	DefaultWrite2StorageTh = 30 * 60 // number of seconds, equals 30 minutes
 )
 
 type RedisInstance struct {
@@ -39,7 +36,7 @@ type Engine struct {
 	storageThresh uint32
 }
 
-func NewEngine(redisName string, conn *go_redis.Client, st storage.Storage, threshold uint32) (engine.Engine, error) {
+func NewEngine(redisName string, conn *go_redis.Client) (engine.Engine, error) {
 	redis := &RedisInstance{
 		Name: redisName,
 		Conn: conn,
@@ -62,17 +59,12 @@ func NewEngine(redisName string, conn *go_redis.Client, st storage.Storage, thre
 	}
 	monitor := NewSizeMonitor(redis, timer, metadata)
 	go monitor.Loop()
-	if threshold == 0 {
-		threshold = DefaultWrite2StorageTh
-	}
 	eng := &Engine{
-		redis:         redis,
-		pool:          NewPool(redis),
-		timer:         timer,
-		meta:          meta,
-		monitor:       monitor,
-		storage:       st,
-		storageThresh: threshold,
+		redis:   redis,
+		pool:    NewPool(redis),
+		timer:   timer,
+		meta:    meta,
+		monitor: monitor,
 	}
 	return eng, nil
 }
@@ -89,12 +81,6 @@ func (e *Engine) Publish(namespace, queue string, body []byte, ttlSecond, delayS
 	job := engine.NewJob(namespace, queue, body, ttlSecond, delaySecond, tries)
 	if tries == 0 {
 		return job.ID(), nil
-	}
-	if e.storage != nil && delaySecond > e.storageThresh {
-		if err = e.writeJob2Storage(e.redis.Name, job); err == nil {
-			return job.ID(), nil
-		}
-		// if err occurred, will try writing to timer set
 	}
 
 	err = e.pool.Add(job)
@@ -299,13 +285,6 @@ func (e *Engine) DumpInfo(out io.Writer) error {
 	enc := json.NewEncoder(out)
 	enc.SetIndent("", "    ")
 	return enc.Encode(metadata)
-}
-
-func (e *Engine) GetPoolName() string {
-	if e == nil || e.pool == nil || e.pool.redis == nil || e.pool.redis.Name == "" {
-		return ""
-	}
-	return e.pool.redis.Name
 }
 
 func (e *Engine) writeJob2Storage(poolName string, job engine.Job) error {

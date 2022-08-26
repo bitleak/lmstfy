@@ -1,15 +1,19 @@
 package redis_v2
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"time"
 
+	"github.com/bitleak/lmstfy/config"
+	"github.com/bitleak/lmstfy/datamanager"
+	"github.com/bitleak/lmstfy/datamanager/storage/model"
+	"github.com/bitleak/lmstfy/uuid"
 	go_redis "github.com/go-redis/redis/v8"
 
 	"github.com/bitleak/lmstfy/engine"
-	"github.com/bitleak/lmstfy/uuid"
 )
 
 type RedisInstance struct {
@@ -22,6 +26,7 @@ type RedisInstance struct {
 // - deliver jobs to clients
 // - manage dead letters
 type Engine struct {
+	cfg     *config.RedisConf
 	redis   *RedisInstance
 	pool    *Pool
 	timer   *Timer
@@ -29,7 +34,7 @@ type Engine struct {
 	monitor *SizeMonitor
 }
 
-func NewEngine(redisName string, conn *go_redis.Client) (engine.Engine, error) {
+func NewEngine(redisName string, cfg *config.RedisConf, conn *go_redis.Client) (engine.Engine, error) {
 	redis := &RedisInstance{
 		Name: redisName,
 		Conn: conn,
@@ -53,6 +58,7 @@ func NewEngine(redisName string, conn *go_redis.Client) (engine.Engine, error) {
 	monitor := NewSizeMonitor(redis, timer, metadata)
 	go monitor.Loop()
 	return &Engine{
+		cfg:     cfg,
 		redis:   redis,
 		pool:    NewPool(redis),
 		timer:   timer,
@@ -75,6 +81,13 @@ func (e *Engine) Publish(namespace, queue string, body []byte, ttlSecond, delayS
 		return job.ID(), nil
 	}
 
+	if e.cfg.EnableSecondaryStorage &&
+		datamanager.Get() != nil &&
+		delaySecond > uint32(e.cfg.Write2StorageThresh) {
+		if err := e.sink2SecondStorage(context.TODO(), job); err == nil {
+			return job.ID(), nil
+		}
+	}
 	err = e.pool.Add(job)
 	if err != nil {
 		return job.ID(), fmt.Errorf("pool: %s", err)
@@ -93,6 +106,22 @@ func (e *Engine) Publish(namespace, queue string, body []byte, ttlSecond, delayS
 		err = fmt.Errorf("timer: %s", err)
 	}
 	return job.ID(), err
+}
+
+func (e *Engine) sink2SecondStorage(ctx context.Context, job engine.Job) error {
+	now := time.Now().Unix()
+	dbJob := &model.JobData{
+		PoolName:    e.redis.Name,
+		JobID:       job.ID(),
+		Namespace:   job.Namespace(),
+		Queue:       job.Queue(),
+		Body:        job.Body(),
+		ExpiredTime: now + int64(job.TTL()),
+		ReadyTime:   now + int64(job.Delay()),
+		Tries:       int64(job.Tries()),
+		CreatedTime: now,
+	}
+	return datamanager.Get().AddJob(ctx, dbJob)
 }
 
 // BatchConsume consume some jobs of a queue
@@ -277,11 +306,4 @@ func (e *Engine) DumpInfo(out io.Writer) error {
 	enc := json.NewEncoder(out)
 	enc.SetIndent("", "    ")
 	return enc.Encode(metadata)
-}
-
-func (e *Engine) GetPoolName() string {
-	if e == nil || e.pool == nil || e.pool.redis == nil {
-		return ""
-	}
-	return e.pool.redis.Name
 }

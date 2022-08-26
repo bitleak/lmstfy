@@ -3,12 +3,13 @@ package redis
 import (
 	"bytes"
 	"fmt"
-	"github.com/bitleak/lmstfy/datamanager/pumper"
-	"github.com/bitleak/lmstfy/datamanager/storage"
-	"github.com/bitleak/lmstfy/datamanager/storage/spanner"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/bitleak/lmstfy/datamanager/pumper"
+	"github.com/bitleak/lmstfy/datamanager/storage"
+	"github.com/bitleak/lmstfy/datamanager/storage/spanner"
 
 	"github.com/bitleak/lmstfy/config"
 )
@@ -44,7 +45,7 @@ func initSpanner() {
 }
 
 func TestEngine_Publish(t *testing.T) {
-	e, err := NewEngine(R.Name, R.Conn, st, write2StorageTh)
+	e, err := NewEngine(R.Name, R.Conn)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
@@ -70,7 +71,7 @@ func TestEngine_Publish_SecondaryStorage(t *testing.T) {
 	if err != nil {
 		panic(fmt.Sprintf("Setup data manager error: %s", err))
 	}
-	e, err := NewEngine(R.Name, R.Conn, st, write2StorageTh)
+	e, err := NewEngine(R.Name, R.Conn)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
@@ -106,7 +107,7 @@ func TestEngine_Publish_SecondaryStorage(t *testing.T) {
 }
 
 func TestEngine_Consume(t *testing.T) {
-	e, err := NewEngine(R.Name, R.Conn, st, write2StorageTh)
+	e, err := NewEngine(R.Name, R.Conn)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
@@ -145,7 +146,7 @@ func TestEngine_Consume(t *testing.T) {
 
 // Consume the first one from multi publish
 func TestEngine_Consume2(t *testing.T) {
-	e, err := NewEngine(R.Name, R.Conn, st, write2StorageTh)
+	e, err := NewEngine(R.Name, R.Conn)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
@@ -169,7 +170,7 @@ func TestEngine_Consume2(t *testing.T) {
 }
 
 func TestEngine_ConsumeMulti(t *testing.T) {
-	e, err := NewEngine(R.Name, R.Conn, st, write2StorageTh)
+	e, err := NewEngine(R.Name, R.Conn)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
@@ -208,7 +209,7 @@ func TestEngine_ConsumeMulti(t *testing.T) {
 }
 
 func TestEngine_Peek(t *testing.T) {
-	e, err := NewEngine(R.Name, R.Conn, st, write2StorageTh)
+	e, err := NewEngine(R.Name, R.Conn)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
@@ -228,7 +229,7 @@ func TestEngine_Peek(t *testing.T) {
 }
 
 func TestEngine_BatchConsume(t *testing.T) {
-	e, err := NewEngine(R.Name, R.Conn, st, write2StorageTh)
+	e, err := NewEngine(R.Name, R.Conn)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}

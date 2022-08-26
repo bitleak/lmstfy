@@ -125,10 +125,3 @@ func (e *Engine) Shutdown() {
 func (e *Engine) DumpInfo(output io.Writer) error {
 	return e.newEngine.DumpInfo(output)
 }
-
-func (e *Engine) GetPoolName() string {
-	if e == nil || e.newEngine == nil {
-		return ""
-	}
-	return e.newEngine.GetPoolName()
-}

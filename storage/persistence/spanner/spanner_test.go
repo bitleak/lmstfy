@@ -34,7 +34,7 @@ func TestCreateSpannerClient(t *testing.T) {
 }
 
 func TestSpannerDataMgr_BatchAddDelJobs(t *testing.T) {
-	mgr, err := NewStorage(cfg)
+	mgr, err := NewSpanner(cfg)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to create spanner client with error: %s", err))
 	}
@@ -53,7 +53,7 @@ func TestSpannerDataMgr_BatchAddDelJobs(t *testing.T) {
 }
 
 func TestSpannerDataMgr_BatchGetJobs(t *testing.T) {
-	mgr, err := NewStorage(cfg)
+	mgr, err := NewSpanner(cfg)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to create spanner client with error: %s", err))
 	}
@@ -68,7 +68,7 @@ func TestSpannerDataMgr_BatchGetJobs(t *testing.T) {
 }
 
 func TestSpannerDataMgr_GetQueueSize(t *testing.T) {
-	mgr, err := NewStorage(cfg)
+	mgr, err := NewSpanner(cfg)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to create spanner client with error: %s", err))
 	}
@@ -86,7 +86,7 @@ func TestSpannerDataMgr_GetQueueSize(t *testing.T) {
 }
 
 func TestSpannerDataMgr_GetReadyJobs(t *testing.T) {
-	mgr, err := NewStorage(cfg)
+	mgr, err := NewSpanner(cfg)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to create spanner client with error: %s", err))
 	}

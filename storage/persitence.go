@@ -2,11 +2,12 @@ package storage
 
 import (
 	"context"
-	"github.com/bitleak/lmstfy/datamanager/storage/model"
+
+	"github.com/bitleak/lmstfy/storage/persistence/model"
 )
 
-// Storage handles requests related to secondary storage
-type Storage interface {
+// Persistence handles requests related to secondary storage
+type Persistence interface {
 	// BatchAddJobs write jobs data into secondary storage
 	BatchAddJobs(ctx context.Context, jobs []*model.JobData) (err error)
 	// BatchGetJobs pumps data that are due before certain due time

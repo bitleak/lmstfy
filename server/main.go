@@ -17,7 +17,6 @@ import (
 
 	"github.com/bitleak/lmstfy/auth"
 	"github.com/bitleak/lmstfy/config"
-	"github.com/bitleak/lmstfy/datamanager"
 	"github.com/bitleak/lmstfy/engine"
 	"github.com/bitleak/lmstfy/engine/migration"
 	redis_engine "github.com/bitleak/lmstfy/engine/redis"
@@ -26,6 +25,7 @@ import (
 	"github.com/bitleak/lmstfy/log"
 	"github.com/bitleak/lmstfy/server/handlers"
 	"github.com/bitleak/lmstfy/server/middleware"
+	"github.com/bitleak/lmstfy/storage"
 	"github.com/bitleak/lmstfy/throttler"
 	"github.com/bitleak/lmstfy/version"
 )
@@ -207,7 +207,7 @@ func main() {
 	})
 	// set up data manager
 	if conf.HasSecondaryStorage() {
-		if err := datamanager.Init(conf); err != nil {
+		if err := storage.Init(conf); err != nil {
 			panic(fmt.Sprintf("Failed to init data manager for secondary storage: %s", err))
 		}
 	}

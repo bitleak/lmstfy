@@ -3,9 +3,10 @@ package spanner
 import (
 	"context"
 	"fmt"
-	"github.com/bitleak/lmstfy/datamanager/storage/model"
 	"regexp"
 	"time"
+
+	"github.com/bitleak/lmstfy/storage/persistence/model"
 
 	"cloud.google.com/go/spanner"
 	database "cloud.google.com/go/spanner/admin/database/apiv1"

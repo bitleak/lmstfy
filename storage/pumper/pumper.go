@@ -3,7 +3,7 @@ package pumper
 import (
 	"time"
 
-	lock2 "github.com/bitleak/lmstfy/datamanager/lock"
+	lock2 "github.com/bitleak/lmstfy/storage/lock"
 )
 
 type Pumper interface {

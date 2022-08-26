@@ -7,8 +7,6 @@ import (
 	"time"
 
 	"github.com/bitleak/lmstfy/datamanager/storage"
-	"github.com/bitleak/lmstfy/datamanager/storage/model"
-
 	go_redis "github.com/go-redis/redis/v8"
 
 	"github.com/bitleak/lmstfy/engine"
@@ -285,22 +283,4 @@ func (e *Engine) DumpInfo(out io.Writer) error {
 	enc := json.NewEncoder(out)
 	enc.SetIndent("", "    ")
 	return enc.Encode(metadata)
-}
-
-func (e *Engine) writeJob2Storage(poolName string, job engine.Job) error {
-	now := time.Now().Unix()
-	jobs := []*model.JobData{
-		{
-			PoolName:    poolName,
-			JobID:       job.ID(),
-			Namespace:   job.Namespace(),
-			Queue:       job.Queue(),
-			Body:        job.Body(),
-			ExpiredTime: now + int64(job.TTL()),
-			ReadyTime:   now + int64(job.Delay()),
-			Tries:       int64(job.Tries()),
-			CreatedTime: now,
-		},
-	}
-	return e.storage.BatchAddJobs(dummyCtx, jobs)
 }

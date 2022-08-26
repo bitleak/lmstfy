@@ -6,7 +6,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/bitleak/lmstfy/datamanager/storage"
+	"github.com/bitleak/lmstfy/storage/persistence"
 	go_redis "github.com/go-redis/redis/v8"
 
 	"github.com/bitleak/lmstfy/engine"
@@ -28,7 +28,7 @@ type Engine struct {
 	timer   *Timer
 	meta    *MetaManager
 	monitor *SizeMonitor
-	storage storage.Storage
+	storage persistence.Persistence
 	// number of seconds. when job's delay second is greater than pumpStorageThresh,
 	//it will be written to storage if enabled
 	storageThresh uint32

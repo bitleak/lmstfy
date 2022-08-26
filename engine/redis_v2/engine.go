@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/bitleak/lmstfy/config"
-	"github.com/bitleak/lmstfy/datamanager"
-	"github.com/bitleak/lmstfy/datamanager/storage/model"
+	"github.com/bitleak/lmstfy/storage"
+	"github.com/bitleak/lmstfy/storage/persistence/model"
 	"github.com/bitleak/lmstfy/uuid"
 	go_redis "github.com/go-redis/redis/v8"
 
@@ -82,7 +82,7 @@ func (e *Engine) Publish(namespace, queue string, body []byte, ttlSecond, delayS
 	}
 
 	if e.cfg.EnableSecondaryStorage &&
-		datamanager.Get() != nil &&
+		storage.Get() != nil &&
 		delaySecond > uint32(e.cfg.Write2StorageThresh) {
 		if err := e.sink2SecondStorage(context.TODO(), job); err == nil {
 			return job.ID(), nil
@@ -121,7 +121,7 @@ func (e *Engine) sink2SecondStorage(ctx context.Context, job engine.Job) error {
 		Tries:       int64(job.Tries()),
 		CreatedTime: now,
 	}
-	return datamanager.Get().AddJob(ctx, dbJob)
+	return storage.Get().AddJob(ctx, dbJob)
 }
 
 // BatchConsume consume some jobs of a queue

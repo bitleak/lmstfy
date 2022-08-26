@@ -10,8 +10,8 @@ import (
 	"github.com/go-redis/redis/v8"
 
 	"github.com/bitleak/lmstfy/config"
-	"github.com/bitleak/lmstfy/datamanager/storage"
-	"github.com/bitleak/lmstfy/datamanager/storage/model"
+	"github.com/bitleak/lmstfy/storage/persistence"
+	"github.com/bitleak/lmstfy/storage/persistence/model"
 )
 
 const (
@@ -24,7 +24,7 @@ type SpannerStorage struct {
 	tableName   string
 }
 
-func NewStorage(cfg *config.SpannerConfig) (storage.Storage, error) {
+func NewStorage(cfg *config.SpannerConfig) (persistence.Persistence, error) {
 	client, err := CreateSpannerClient(cfg)
 	if err != nil {
 		return nil, err

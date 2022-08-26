@@ -63,7 +63,7 @@ func NewDataManger(cfg *config.Config) (*DataManager, error) {
 	}, nil
 }
 
-func (m *DataManager) pumpFn(name string, pool engine.Engine) func() bool {
+func (m *DataManager) PumpFn(name string, pool engine.Engine) func() bool {
 	return func() bool {
 		now := time.Now()
 		req := &model.JobDataReq{
@@ -105,7 +105,7 @@ func (m *DataManager) AddPool(name string, pool engine.Engine) {
 	// FIXME: choose a right expiry value
 	redisLock := lock.NewRedisLock(m.redisCli, name, 10*time.Second)
 	pumper := pumper.NewDefault(redisLock, time.Minute)
-	go pumper.Loop(m.pumpFn(name, pool))
+	go pumper.Loop(m.PumpFn(name, pool))
 }
 
 func (m *DataManager) AddJob(ctx context.Context, job *model.JobData) error {

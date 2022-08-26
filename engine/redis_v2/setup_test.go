@@ -10,7 +10,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var R *RedisInstance
+var (
+	R   *RedisInstance
+	Cfg *config.PresetConfigForTest
+)
 
 func setup(CONF *config.Config) {
 	logger = logrus.New()
@@ -45,6 +48,7 @@ func TestMain(m *testing.M) {
 	}
 	defer presetConfig.Destroy()
 	setup(presetConfig.Config)
+	Cfg = presetConfig
 	ret := m.Run()
 	os.Exit(ret)
 }

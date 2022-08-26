@@ -11,13 +11,13 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/bitleak/lmstfy/datamanager"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"go.uber.org/automaxprocs/maxprocs"
 
 	"github.com/bitleak/lmstfy/auth"
 	"github.com/bitleak/lmstfy/config"
+	"github.com/bitleak/lmstfy/datamanager"
 	"github.com/bitleak/lmstfy/engine"
 	"github.com/bitleak/lmstfy/engine/migration"
 	redis_engine "github.com/bitleak/lmstfy/engine/redis"
@@ -205,6 +205,12 @@ func main() {
 	registerSignal(shutdown, func() {
 		log.ReopenLogs(conf.LogDir, accessLogger, errorLogger)
 	})
+	// set up data manager
+	if conf.HasSecondaryStorage() {
+		if err := datamanager.Init(conf); err != nil {
+			panic(fmt.Sprintf("Failed to init data manager for secondary storage: %s", err))
+		}
+	}
 	if err := setupEngines(conf, errorLogger); err != nil {
 		panic(fmt.Sprintf("Failed to setup engines, err: %s", err.Error()))
 	}
@@ -213,13 +219,6 @@ func main() {
 	}
 	if conf.EnableAccessLog {
 		middleware.EnableAccessLog()
-	}
-
-	// set up data manager
-	if conf.HasSecondaryStorage() {
-		if err := datamanager.Init(conf); err != nil {
-			panic(fmt.Sprintf("Failed to init secondary storage: %s", err))
-		}
 	}
 	apiSrv := apiServer(conf, accessLogger, errorLogger, Flags.SkipVerification)
 	adminSrv := adminServer(conf, accessLogger, errorLogger)

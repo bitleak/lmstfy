@@ -3,11 +3,44 @@ package redis_v2
 import (
 	"bytes"
 	"fmt"
+	"github.com/bitleak/lmstfy/config"
+	"github.com/bitleak/lmstfy/datamanager"
+	"github.com/bitleak/lmstfy/datamanager/lock"
+	"github.com/bitleak/lmstfy/datamanager/pumper"
+	"github.com/bitleak/lmstfy/datamanager/storage/spanner"
+	"os"
 	"testing"
+	"time"
 )
 
+var (
+	db              = "projects/test-project/instances/test-instance/databases/test-db1"
+	StoragePoolConf = &config.RedisConf{EnableSecondaryStorage: true, StoragePumpPeriod: 5, Write2StorageThresh: 10}
+	PoolConf        = &config.RedisConf{}
+	SecStgConf      = &config.SpannerConfig{
+		Project:   "test-project",
+		Instance:  "test-instance",
+		Database:  "test-db1",
+		TableName: "lmstfy_jobs",
+	}
+)
+
+func initSpanner() {
+	if os.Getenv("SPANNER_EMULATOR_HOST") == "" {
+		panic(fmt.Sprintf("failed to find $SPANNER_EMULATOR_HOST value"))
+	}
+	err := spanner.CreateInstance(dummyCtx, db)
+	if err != nil {
+		panic(fmt.Sprintf("create instance error: %v", err))
+	}
+	err = spanner.CreateDatabase(dummyCtx, db)
+	if err != nil {
+		panic(fmt.Sprintf("create db error: %v", err))
+	}
+}
+
 func TestEngine_Publish(t *testing.T) {
-	e, err := NewEngine(R.Name, R.Conn)
+	e, err := NewEngine(R.Name, PoolConf, R.Conn)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
@@ -27,8 +60,50 @@ func TestEngine_Publish(t *testing.T) {
 	}
 }
 
+func TestEngine_Publish_SecondaryStorage(t *testing.T) {
+	initSpanner()
+	Cfg.Config.SecondaryStorage = SecStgConf
+
+	if err := datamanager.Init(Cfg.Config); err != nil {
+		panic(fmt.Sprintf("Failed to init data manager for secondary storage: %s", err))
+	}
+	dataMgr := datamanager.Get()
+	if dataMgr == nil {
+		panic(fmt.Sprint("Failed to find data manager"))
+	}
+
+	e, err := NewEngine(R.Name, StoragePoolConf, R.Conn)
+	if err != nil {
+		panic(fmt.Sprintf("Setup engine error: %s", err))
+	}
+	defer e.Shutdown()
+
+	redisLock := lock.NewRedisLock(R.Conn, R.Name, 10*time.Second)
+	pumper := pumper.NewDefault(redisLock, 5*time.Second)
+	go pumper.Loop(dataMgr.PumpFn(R.Name, e))
+
+	// Publish long-delay job
+	body := []byte("hello msg long delay job")
+	jobID, err := e.Publish("ns-engine", "qs", body, 120, 15, 1)
+	t.Log(jobID)
+	if err != nil {
+		t.Fatalf("Failed to publish: %s", err)
+	}
+
+	//wait for data mgr to pump job from secondary storage to engine
+	time.Sleep(20 * time.Second)
+
+	job, err := e.Consume("ns-engine", []string{"qs"}, 3, 0)
+	if err != nil {
+		t.Fatalf("Failed to consume job from secondary storage: %s", err)
+	}
+	if !bytes.Equal(body, job.Body()) {
+		t.Fatalf("Mistmatched job data")
+	}
+}
+
 func TestEngine_Consume(t *testing.T) {
-	e, err := NewEngine(R.Name, R.Conn)
+	e, err := NewEngine(R.Name, PoolConf, R.Conn)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
@@ -66,7 +141,7 @@ func TestEngine_Consume(t *testing.T) {
 
 // Consume the first one from multi publish
 func TestEngine_Consume2(t *testing.T) {
-	e, err := NewEngine(R.Name, R.Conn)
+	e, err := NewEngine(R.Name, PoolConf, R.Conn)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
@@ -90,7 +165,7 @@ func TestEngine_Consume2(t *testing.T) {
 }
 
 func TestEngine_ConsumeMulti(t *testing.T) {
-	e, err := NewEngine(R.Name, R.Conn)
+	e, err := NewEngine(R.Name, PoolConf, R.Conn)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
@@ -129,7 +204,7 @@ func TestEngine_ConsumeMulti(t *testing.T) {
 }
 
 func TestEngine_Peek(t *testing.T) {
-	e, err := NewEngine(R.Name, R.Conn)
+	e, err := NewEngine(R.Name, PoolConf, R.Conn)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
@@ -149,7 +224,7 @@ func TestEngine_Peek(t *testing.T) {
 }
 
 func TestEngine_BatchConsume(t *testing.T) {
-	e, err := NewEngine(R.Name, R.Conn)
+	e, err := NewEngine(R.Name, PoolConf, R.Conn)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}

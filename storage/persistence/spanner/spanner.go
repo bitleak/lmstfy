@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"cloud.google.com/go/spanner"
-	"github.com/bitleak/lmstfy/storage"
 	"github.com/go-redis/redis/v8"
 
 	"github.com/bitleak/lmstfy/config"
@@ -24,7 +23,7 @@ type SpannerStorage struct {
 	tableName   string
 }
 
-func NewStorage(cfg *config.SpannerConfig) (storage.Persistence, error) {
+func NewStorage(cfg *config.SpannerConfig) (*SpannerStorage, error) {
 	client, err := CreateSpannerClient(cfg)
 	if err != nil {
 		return nil, err

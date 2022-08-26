@@ -46,7 +46,7 @@ func NewManger(cfg *config.Config) (*Manager, error) {
 	if cfg.SecondaryStorage == nil {
 		return nil, errors.New("nil second storage config")
 	}
-	storage, err := spanner.NewStorage(cfg.SecondaryStorage)
+	storage, err := spanner.NewSpanner(cfg.SecondaryStorage)
 	if err != nil {
 		return nil, err
 	}

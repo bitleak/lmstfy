@@ -83,7 +83,7 @@ func (e *Engine) Publish(namespace, queue string, body []byte, ttlSecond, delayS
 
 	if e.cfg.EnableSecondaryStorage &&
 		storage.Get() != nil &&
-		delaySecond > uint32(e.cfg.Write2StorageThresh) {
+		delaySecond > uint32(e.cfg.SecondaryStorageThresholdSeconds) {
 		if err := e.sink2SecondStorage(context.TODO(), job); err == nil {
 			return job.ID(), nil
 		}

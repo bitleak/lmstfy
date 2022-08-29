@@ -16,7 +16,7 @@ import (
 
 var (
 	db              = "projects/test-project/instances/test-instance/databases/test-db1"
-	StoragePoolConf = &config.RedisConf{EnableSecondaryStorage: true, StoragePumpPeriod: 5, Write2StorageThresh: 10}
+	StoragePoolConf = &config.RedisConf{EnableSecondaryStorage: true, SecondaryStorageThresholdSeconds: 10}
 	PoolConf        = &config.RedisConf{}
 	SecStgConf      = &config.SpannerConfig{
 		Project:   "test-project",
@@ -81,7 +81,7 @@ func TestEngine_Publish_SecondaryStorage(t *testing.T) {
 
 	redisLock := lock.NewRedisLock(R.Conn, R.Name, 10*time.Second)
 	pumper := pumper.NewDefault(redisLock, 5*time.Second)
-	go pumper.Loop(dataMgr.PumpFn(R.Name, e))
+	go pumper.Loop(dataMgr.PumpFn(R.Name, e, 10))
 
 	// Publish long-delay job
 	body := []byte("hello msg long delay job")

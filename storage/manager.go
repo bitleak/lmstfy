@@ -20,6 +20,9 @@ import (
 
 const (
 	maxJobBatchSize = 128
+
+	defaultLockExpiry   = 15 * time.Second
+	defaultPumpInterval = 3 * time.Second
 )
 
 type Manager struct {
@@ -62,13 +65,13 @@ func NewManger(cfg *config.Config) (*Manager, error) {
 	}, nil
 }
 
-func (m *Manager) PumpFn(name string, pool engine.Engine) func() bool {
+func (m *Manager) PumpFn(name string, pool engine.Engine, threshold int64) func() bool {
 	return func() bool {
 		now := time.Now()
 		req := &model.JobDataReq{
 			PoolName: name,
 			// FIXME: don't hard code deadline here
-			ReadyTime: now.Unix() + 3600,
+			ReadyTime: now.Unix() + threshold,
 			Count:     maxJobBatchSize,
 		}
 		ctx := context.TODO()
@@ -97,14 +100,13 @@ func (m *Manager) PumpFn(name string, pool engine.Engine) func() bool {
 	}
 }
 
-func (m *Manager) AddPool(name string, pool engine.Engine) {
+func (m *Manager) AddPool(name string, pool engine.Engine, threshold int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// FIXME: choose a right expiry value
-	redisLock := lock.NewRedisLock(m.redisCli, name, 10*time.Second)
-	pumper := pumper.NewDefault(redisLock, time.Minute)
-	go pumper.Loop(m.PumpFn(name, pool))
+	redisLock := lock.NewRedisLock(m.redisCli, name, defaultLockExpiry)
+	pumper := pumper.NewDefault(redisLock, defaultPumpInterval)
+	go pumper.Loop(m.PumpFn(name, pool, threshold))
 }
 
 func (m *Manager) AddJob(ctx context.Context, job *model.JobData) error {

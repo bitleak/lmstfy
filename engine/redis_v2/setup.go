@@ -18,7 +18,8 @@ import (
 const (
 	MaxRedisConnections = 5000
 	VersionV2           = "v2"
-	maxPumpThreshold    = 24 * 60 * 60
+
+	maxPumpInThresholdSeconds = 24 * 60 * 60
 )
 
 var (
@@ -59,8 +60,8 @@ func Setup(conf *config.Config) error {
 		engine.Register(engine.KindRedisV2, name, e)
 		if poolConf.EnableSecondaryStorage && conf.HasSecondaryStorage() {
 			threshold := poolConf.SecondaryStorageThresholdSeconds / 3
-			if threshold >= maxPumpThreshold {
-				threshold = maxPumpThreshold
+			if threshold >= maxPumpInThresholdSeconds {
+				threshold = maxPumpInThresholdSeconds
 			}
 			storage.Get().AddPool(name, e, threshold)
 		}

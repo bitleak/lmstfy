@@ -12,7 +12,7 @@ import (
 const (
 	DefaultPoolName = "default"
 
-	minSecondaryStorageThreshold = 60 * 60
+	minSecondaryStorageThresholdSeconds = 60 * 60
 )
 
 type Config struct {
@@ -75,7 +75,7 @@ func (rc *RedisConf) validate() error {
 	if rc.DB < 0 {
 		return errors.New("the pool db must be greater than 0 or equal to 0")
 	}
-	if rc.EnableSecondaryStorage && rc.SecondaryStorageThresholdSeconds < minSecondaryStorageThreshold {
+	if rc.EnableSecondaryStorage && rc.SecondaryStorageThresholdSeconds < minSecondaryStorageThresholdSeconds {
 		return errors.New("write to secondary storage threshold required at least 1 hour")
 	}
 	return nil

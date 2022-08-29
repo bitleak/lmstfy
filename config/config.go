@@ -49,8 +49,6 @@ type RedisConf struct {
 
 	EnableSecondaryStorage bool
 
-	// number of seconds which job data is pumped from storage to engine periodically
-	StoragePumpPeriod int
 	// number of seconds. when job's delay second is greater than pumpStorageThresh,
 	//it will be written to storage if enabled
 	Write2StorageThresh int
@@ -74,11 +72,6 @@ func (rc *RedisConf) validate() error {
 	}
 	if rc.DB < 0 {
 		return errors.New("the pool db must be greater than 0 or equal to 0")
-	}
-	if rc.EnableSecondaryStorage {
-		if rc.StoragePumpPeriod >= rc.Write2StorageThresh {
-			return errors.New("the pool StoragePumpPeriod must be less than Write2StorageThresh")
-		}
 	}
 	return nil
 }

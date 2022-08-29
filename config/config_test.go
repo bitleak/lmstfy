@@ -22,8 +22,7 @@ func TestConfig_Validate(t *testing.T) {
 	}
 
 	conf.EnableSecondaryStorage = true
-	conf.StoragePumpPeriod = 20
-	conf.Write2StorageThresh = 10
+	conf.SecondaryStorageThresholdSeconds = 10
 	if err := conf.validate(); err == nil {
 		t.Fatalf("validate addr error was expected, but got nil")
 	}

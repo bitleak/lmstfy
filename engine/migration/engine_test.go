@@ -227,3 +227,20 @@ func TestEngine_DeadLetter_Size(t *testing.T) {
 		t.Fatalf("Expected the deadletter queue size is: %d, but got %d\n", 2, size)
 	}
 }
+
+func TestEngine_PublishWithJobID(t *testing.T) {
+	e := NewEngine(OldRedisEngine, NewRedisEngine)
+	body := []byte("hello msg 1")
+	// Publish no-delay job
+	jobID, err := e.PublishWithJobID("ns-engine", "q10", "jobID1",
+		body, 10, 0, 1)
+	t.Log(jobID)
+	if err != nil {
+		t.Fatalf("Failed to publish: %s", err)
+	}
+	// Make sure the new engine received the job
+	job, err := NewRedisEngine.Consume("ns-engine", []string{"q10"}, 3, 0)
+	if job.ID() != jobID {
+		t.Fatalf("NewRedisEngine should received the job:%s, but get: %s", jobID, job.ID())
+	}
+}

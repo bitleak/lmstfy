@@ -2,6 +2,7 @@ package redis
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -281,4 +282,41 @@ func (e *Engine) DumpInfo(out io.Writer) error {
 	enc := json.NewEncoder(out)
 	enc.SetIndent("", "    ")
 	return enc.Encode(metadata)
+}
+
+func (e *Engine) PublishWithJobID(namespace, queue, storedJobID string, body []byte, ttlSecond, delaySecond uint32, tries uint16) (jobID string, err error) {
+	defer func() {
+		if err == nil {
+			metrics.publishJobs.WithLabelValues(e.redis.Name).Inc()
+			metrics.publishQueueJobs.WithLabelValues(e.redis.Name, namespace, queue).Inc()
+		}
+	}()
+	if storedJobID == "" {
+		return "", errors.New("PublishWithJobID failed: null job id")
+	}
+	e.meta.RecordIfNotExist(namespace, queue)
+	e.monitor.MonitorIfNotExist(namespace, queue)
+	job := engine.NewJobWithJobID(namespace, queue, body, ttlSecond, delaySecond, tries, storedJobID)
+	if tries == 0 {
+		return job.ID(), nil
+	}
+
+	err = e.pool.Add(job)
+	if err != nil {
+		return job.ID(), fmt.Errorf("pool: %s", err)
+	}
+
+	if delaySecond == 0 {
+		q := NewQueue(namespace, queue, e.redis, e.timer)
+		err = q.Push(job, tries)
+		if err != nil {
+			err = fmt.Errorf("queue: %s", err)
+		}
+		return job.ID(), err
+	}
+	err = e.timer.Add(namespace, queue, job.ID(), delaySecond, tries)
+	if err != nil {
+		err = fmt.Errorf("timer: %s", err)
+	}
+	return job.ID(), err
 }

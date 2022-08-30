@@ -125,3 +125,7 @@ func (e *Engine) Shutdown() {
 func (e *Engine) DumpInfo(output io.Writer) error {
 	return e.newEngine.DumpInfo(output)
 }
+
+func (e *Engine) PublishWithJobID(namespace, queue, storedJobID string, body []byte, ttlSecond, delaySecond uint32, tries uint16) (jobID string, err error) {
+	return e.newEngine.PublishWithJobID(namespace, queue, storedJobID, body, ttlSecond, delaySecond, tries)
+}

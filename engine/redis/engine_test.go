@@ -224,3 +224,31 @@ func TestEngine_BatchConsume(t *testing.T) {
 		t.Fatalf("Mistmatched jobs count")
 	}
 }
+
+func TestEngine_PublishWithJobID(t *testing.T) {
+	e, err := NewEngine(R.Name, R.Conn)
+	if err != nil {
+		panic(fmt.Sprintf("Setup engine error: %s", err))
+	}
+	defer e.Shutdown()
+	body := []byte("hello msg 1")
+	jobID1, err := e.PublishWithJobID("ns-engine", "q8", "jobID1",
+		body, 10, 0, 1)
+	t.Log(jobID1)
+	if err != nil {
+		t.Fatalf("Failed to PublishWithJobID: %s with error: %v", jobID1, err)
+	}
+
+	// Make sure the engine received the job
+	job, err := e.Consume("ns-engine", []string{"q8"}, 3, 0)
+	if job.ID() != jobID1 {
+		t.Fatalf("Engine should received the job:%s, but get: %s", jobID1, job.ID())
+	}
+
+	// Publish job with null job id
+	_, err = e.PublishWithJobID("ns-engine", "q8", "",
+		body, 10, 0, 1)
+	if err == nil {
+		t.Fatal("PublishWithJobID expected error of null job id, but got nil error")
+	}
+}

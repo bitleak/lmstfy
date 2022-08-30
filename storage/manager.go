@@ -82,10 +82,10 @@ func (m *Manager) PumpFn(name string, pool engine.Engine, threshold int64) func(
 		}
 		jobsID := make([]string, 0)
 		for _, j := range jobs {
-			_, err := pool.Publish(j.Namespace, j.Queue, j.Body, uint32(j.ExpiredTime),
+			_, err := pool.PublishWithJobID(j.Namespace, j.Queue, j.JobID, j.Body, uint32(j.ExpiredTime),
 				uint32(j.ReadyTime-now.Unix()), uint16(j.Tries))
 			if err != nil {
-				logrus.Errorf("publish job:%v with error %v", j.JobID, err)
+				logrus.Errorf("PublishWithJobID:%v failed with error %v", j.JobID, err)
 				return false
 			}
 			jobsID = append(jobsID, j.JobID)
@@ -95,7 +95,6 @@ func (m *Manager) PumpFn(name string, pool engine.Engine, threshold int64) func(
 			logrus.Errorf("LoopPump delete jobs failed:%v", err)
 			return false
 		}
-
 		return len(jobsID) == maxJobBatchSize
 	}
 }

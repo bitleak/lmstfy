@@ -64,6 +64,19 @@ func NewJobWithID(namespace, queue string, body []byte, ttl uint32, tries uint16
 	}
 }
 
+// NewJobWithJobID creates a job object with job ID. This case could occur when the job's source is from storage.
+func NewJobWithJobID(namespace, queue string, body []byte, ttl, delay uint32, tries uint16, jobID string) Job {
+	return &jobImpl{
+		namespace: namespace,
+		queue:     queue,
+		id:        jobID,
+		body:      body,
+		ttl:       ttl,
+		delay:     delay,
+		tries:     tries,
+	}
+}
+
 func (j *jobImpl) Namespace() string {
 	return j.namespace
 }

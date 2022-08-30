@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestEngine_Publish(t *testing.T) {
@@ -235,12 +237,9 @@ func TestEngine_PublishWithJobID(t *testing.T) {
 	jobID, err := e.PublishWithJobID("ns-engine", "q10", "jobID1",
 		body, 10, 0, 1)
 	t.Log(jobID)
-	if err != nil {
-		t.Fatalf("Failed to publish: %s", err)
-	}
+	assert.Nil(t, err)
 	// Make sure the new engine received the job
 	job, err := NewRedisEngine.Consume("ns-engine", []string{"q10"}, 3, 0)
-	if job.ID() != jobID {
-		t.Fatalf("NewRedisEngine should received the job:%s, but get: %s", jobID, job.ID())
-	}
+	assert.Nil(t, err)
+	assert.EqualValues(t, job.ID(), jobID)
 }

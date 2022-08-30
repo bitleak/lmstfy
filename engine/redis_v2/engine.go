@@ -78,35 +78,7 @@ func (e *Engine) Publish(namespace, queue string, body []byte, ttlSecond, delayS
 	e.meta.RecordIfNotExist(namespace, queue)
 	e.monitor.MonitorIfNotExist(namespace, queue)
 	job := engine.NewJob(namespace, queue, body, ttlSecond, delaySecond, tries)
-	if tries == 0 {
-		return job.ID(), nil
-	}
-
-	if e.cfg.EnableSecondaryStorage &&
-		storage.Get() != nil &&
-		delaySecond > uint32(e.cfg.SecondaryStorageThresholdSeconds) {
-		if err := e.sink2SecondStorage(context.TODO(), job); err == nil {
-			return job.ID(), nil
-		}
-	}
-	err = e.pool.Add(job)
-	if err != nil {
-		return job.ID(), fmt.Errorf("pool: %s", err)
-	}
-
-	if delaySecond == 0 {
-		q := NewQueue(namespace, queue, e.redis, e.timer)
-		err = q.Push(job)
-		if err != nil {
-			err = fmt.Errorf("queue: %s", err)
-		}
-		return job.ID(), err
-	}
-	err = e.timer.Add(namespace, queue, job.ID(), delaySecond, tries)
-	if err != nil {
-		err = fmt.Errorf("timer: %s", err)
-	}
-	return job.ID(), err
+	return e.PublishJobs(job)
 }
 
 func (e *Engine) sink2SecondStorage(ctx context.Context, job engine.Job) error {
@@ -322,10 +294,14 @@ func (e *Engine) PublishWithJobID(namespace, queue, storedJobID string, body []b
 	e.meta.RecordIfNotExist(namespace, queue)
 	e.monitor.MonitorIfNotExist(namespace, queue)
 	job := engine.NewJobWithJobID(namespace, queue, body, ttlSecond, delaySecond, tries, storedJobID)
-	if tries == 0 {
+	return e.PublishJobs(job)
+}
+
+func (e *Engine) PublishJobs(job engine.Job) (jobID string, err error) {
+	if job.Tries() == 0 {
 		return job.ID(), nil
 	}
-
+	delaySecond := job.Delay()
 	if e.cfg.EnableSecondaryStorage &&
 		storage.Get() != nil &&
 		delaySecond > uint32(e.cfg.SecondaryStorageThresholdSeconds) {
@@ -339,14 +315,14 @@ func (e *Engine) PublishWithJobID(namespace, queue, storedJobID string, body []b
 	}
 
 	if delaySecond == 0 {
-		q := NewQueue(namespace, queue, e.redis, e.timer)
+		q := NewQueue(job.Namespace(), job.Queue(), e.redis, e.timer)
 		err = q.Push(job)
 		if err != nil {
 			err = fmt.Errorf("queue: %s", err)
 		}
 		return job.ID(), err
 	}
-	err = e.timer.Add(namespace, queue, job.ID(), delaySecond, tries)
+	err = e.timer.Add(job.Namespace(), job.Queue(), job.ID(), delaySecond, job.Tries())
 	if err != nil {
 		err = fmt.Errorf("timer: %s", err)
 	}

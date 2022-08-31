@@ -100,3 +100,17 @@ func TestSpannerDataMgr_GetReadyJobs(t *testing.T) {
 	assert.EqualValues(t, 2, len(jobs))
 	mgr.DelJobs(ctx, jobIDs)
 }
+
+func TestSpannerDataMgr_BatchGetJobsByID(t *testing.T) {
+	mgr, err := NewSpanner(cfg)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to create spanner client with error: %s", err))
+	}
+	jobs := createTestJobsData()
+	mgr.BatchAddJobs(ctx, jobs)
+	IDs := []string{"1", "2", "3"}
+	jobs, err = mgr.BatchGetJobsByID(ctx, IDs)
+	assert.Nil(t, err)
+	assert.EqualValues(t, 3, len(jobs))
+	mgr.DelJobs(ctx, jobIDs)
+}

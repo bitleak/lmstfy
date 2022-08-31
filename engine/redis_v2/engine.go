@@ -243,6 +243,18 @@ func (e *Engine) Peek(namespace, queue, optionalJobID string) (job engine.Job, e
 		// return jobID with nil body if the job is expired
 		return engine.NewJobWithID(namespace, queue, nil, 0, 0, jobID), nil
 	}
+
+	// look up job data in storage
+	if err == engine.ErrNotFound && e.cfg.EnableSecondaryStorage {
+		res, err := storage.Get().GetJobByID(context.TODO(), optionalJobID)
+		if err != nil || len(res) <= 0 {
+			return nil, engine.ErrNotFound
+		}
+		j := res[0]
+		return engine.NewJobWithID(j.Namespace, j.Queue, j.Body,
+			uint32(j.ExpiredTime-time.Now().Unix()), uint16(j.Tries), j.JobID), nil
+	}
+
 	if err != nil {
 		return nil, err
 	}

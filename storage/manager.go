@@ -82,7 +82,7 @@ func (m *Manager) PumpFn(name string, pool engine.Engine, threshold int64) func(
 		}
 		jobsID := make([]string, 0)
 		for _, j := range jobs {
-			_, err := pool.Publish(j.Namespace, j.Queue, j.Body, uint32(j.ExpiredTime),
+			_, err := pool.Publish(j.Namespace, j.Queue, j.Body, uint32(j.ExpiredTime-now.Unix()),
 				uint32(j.ReadyTime-now.Unix()), uint16(j.Tries))
 			if err != nil {
 				logrus.Errorf("publish job:%v with error %v", j.JobID, err)
@@ -111,6 +111,10 @@ func (m *Manager) AddPool(name string, pool engine.Engine, threshold int64) {
 
 func (m *Manager) AddJob(ctx context.Context, job *model.JobData) error {
 	return m.storage.BatchAddJobs(ctx, []*model.JobData{job})
+}
+
+func (m *Manager) GetJobByID(ctx context.Context, ID string) ([]*model.JobData, error) {
+	return m.storage.BatchGetJobsByID(ctx, []string{ID})
 }
 
 func (m *Manager) Shutdown() {

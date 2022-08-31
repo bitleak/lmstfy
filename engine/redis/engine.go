@@ -66,13 +66,37 @@ func NewEngine(redisName string, conn *go_redis.Client) (engine.Engine, error) {
 }
 
 func (e *Engine) Publish(job engine.Job) (jobID string, err error) {
+	namespace, queue, delaySecond, tries := job.Namespace(), job.Queue(), job.Delay(), job.Tries()
 	defer func() {
 		if err == nil {
 			metrics.publishJobs.WithLabelValues(e.redis.Name).Inc()
-			metrics.publishQueueJobs.WithLabelValues(e.redis.Name, job.Namespace(), job.Queue()).Inc()
+			metrics.publishQueueJobs.WithLabelValues(e.redis.Name, namespace, queue).Inc()
 		}
 	}()
-	return e.publishJob(job)
+	e.meta.RecordIfNotExist(namespace, queue)
+	e.monitor.MonitorIfNotExist(namespace, queue)
+	if tries == 0 {
+		return job.ID(), nil
+	}
+
+	err = e.pool.Add(job)
+	if err != nil {
+		return job.ID(), fmt.Errorf("pool: %s", err)
+	}
+
+	if delaySecond == 0 {
+		q := NewQueue(namespace, queue, e.redis, e.timer)
+		err = q.Push(job, tries)
+		if err != nil {
+			err = fmt.Errorf("queue: %s", err)
+		}
+		return job.ID(), err
+	}
+	err = e.timer.Add(namespace, queue, job.ID(), delaySecond, tries)
+	if err != nil {
+		err = fmt.Errorf("timer: %s", err)
+	}
+	return job.ID(), err
 }
 
 // BatchConsume consume some jobs of a queue
@@ -257,29 +281,4 @@ func (e *Engine) DumpInfo(out io.Writer) error {
 	enc := json.NewEncoder(out)
 	enc.SetIndent("", "    ")
 	return enc.Encode(metadata)
-}
-
-func (e *Engine) publishJob(job engine.Job) (jobID string, err error) {
-	e.meta.RecordIfNotExist(job.Namespace(), job.Queue())
-	e.monitor.MonitorIfNotExist(job.Namespace(), job.Queue())
-	if job.Tries() == 0 {
-		return job.ID(), nil
-	}
-	err = e.pool.Add(job)
-	if err != nil {
-		return job.ID(), fmt.Errorf("pool: %s", err)
-	}
-	if job.Delay() == 0 {
-		q := NewQueue(job.Namespace(), job.Queue(), e.redis, e.timer)
-		err = q.Push(job, job.Tries())
-		if err != nil {
-			err = fmt.Errorf("queue: %s", err)
-		}
-		return job.ID(), err
-	}
-	err = e.timer.Add(job.Namespace(), job.Queue(), job.ID(), job.Delay(), job.Tries())
-	if err != nil {
-		err = fmt.Errorf("timer: %s", err)
-	}
-	return job.ID(), err
 }

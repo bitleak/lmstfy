@@ -33,7 +33,7 @@ func TestCreateSpannerClient(t *testing.T) {
 	assert.Nil(t, err)
 }
 
-func TestSpannerDataMgr_BatchAddDelJobs(t *testing.T) {
+func TestSpanner_BatchAddDelJobs(t *testing.T) {
 	mgr, err := NewSpanner(cfg)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to create spanner client with error: %s", err))
@@ -52,7 +52,7 @@ func TestSpannerDataMgr_BatchAddDelJobs(t *testing.T) {
 	t.Logf("del jobs success %v rows", count)
 }
 
-func TestSpannerDataMgr_BatchGetJobs(t *testing.T) {
+func TestSpanner_BatchGetJobs(t *testing.T) {
 	mgr, err := NewSpanner(cfg)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to create spanner client with error: %s", err))
@@ -67,7 +67,7 @@ func TestSpannerDataMgr_BatchGetJobs(t *testing.T) {
 	mgr.DelJobs(ctx, jobIDs)
 }
 
-func TestSpannerDataMgr_GetQueueSize(t *testing.T) {
+func TestSpanner_GetQueueSize(t *testing.T) {
 	mgr, err := NewSpanner(cfg)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to create spanner client with error: %s", err))
@@ -85,7 +85,7 @@ func TestSpannerDataMgr_GetQueueSize(t *testing.T) {
 	mgr.DelJobs(ctx, jobIDs)
 }
 
-func TestSpannerDataMgr_GetReadyJobs(t *testing.T) {
+func TestSpanner_GetReadyJobs(t *testing.T) {
 	mgr, err := NewSpanner(cfg)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to create spanner client with error: %s", err))
@@ -101,7 +101,7 @@ func TestSpannerDataMgr_GetReadyJobs(t *testing.T) {
 	mgr.DelJobs(ctx, jobIDs)
 }
 
-func TestSpannerDataMgr_BatchGetJobsByID(t *testing.T) {
+func TestSpanner_BatchGetJobsByID(t *testing.T) {
 	mgr, err := NewSpanner(cfg)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to create spanner client with error: %s", err))

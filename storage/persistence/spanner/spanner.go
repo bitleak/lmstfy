@@ -168,27 +168,26 @@ func (s *Spanner) BatchGetJobsByID(ctx context.Context, IDs []string) (jobs []*m
 	txn := s.cli.ReadOnlyTransaction()
 	defer txn.Close()
 
-	for _, id := range IDs {
-		iter := txn.Query(ctx, spanner.Statement{
-			SQL: "SELECT pool_name, job_id, namespace, queue, body, ready_time, expired_time, created_time, tries " +
-				"FROM lmstfy_jobs WHERE job_id=@jobid LIMIT @limit",
-			Params: map[string]interface{}{
-				"jobid": id,
-				"limit": 1,
-			},
-		})
-		err = iter.Do(func(row *spanner.Row) error {
-			elem := &model.JobData{}
-			if err = row.ToStruct(elem); err != nil {
-				return err
-			}
-			jobs = append(jobs, elem)
-			return nil
-		})
-		if err != nil {
-			return nil, err
+	iter := txn.Query(ctx, spanner.Statement{
+		SQL: "SELECT pool_name, job_id, namespace, queue, body, ready_time, expired_time, created_time, tries " +
+			"FROM lmstfy_jobs WHERE job_id IN UNNEST(@ids) LIMIT @limit",
+		Params: map[string]interface{}{
+			"ids":   IDs,
+			"limit": len(IDs),
+		},
+	})
+	err = iter.Do(func(row *spanner.Row) error {
+		elem := &model.JobData{}
+		if err = row.ToStruct(elem); err != nil {
+			return err
 		}
+		jobs = append(jobs, elem)
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
+
 	return jobs, nil
 }
 

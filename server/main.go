@@ -233,6 +233,7 @@ func main() {
 	adminSrv.Close() // Admin server does not need to be stopped gracefully
 	apiSrv.Shutdown(context.Background())
 
+	storage.Get().Shutdown()
 	throttler.GetThrottler().Shutdown()
 	logger.Infof("[%d] Bye bye", os.Getpid())
 }

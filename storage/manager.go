@@ -27,10 +27,11 @@ const (
 )
 
 type Manager struct {
+	wg      sync.WaitGroup
+	mu      sync.Mutex
 	pools   map[string]engine.Engine
 	pumpers map[string]pumper.Pumper
 
-	mu       sync.Mutex
 	redisCli *redis.Client
 	storage  Persistence
 }
@@ -119,7 +120,12 @@ func (m *Manager) AddPool(name string, pool engine.Engine, threshold int64) {
 
 	redisLock := lock.NewRedisLock(m.redisCli, name, defaultLockExpiry)
 	pumper := pumper.NewDefault(redisLock, defaultPumpInterval)
-	go pumper.Loop(m.PumpFn(name, pool, threshold))
+
+	m.wg.Add(1)
+	go func() {
+		defer m.wg.Done()
+		pumper.Loop(m.PumpFn(name, pool, threshold))
+	}()
 }
 
 func (m *Manager) AddJob(ctx context.Context, job *model.JobData) error {
@@ -131,5 +137,15 @@ func (m *Manager) GetJobByID(ctx context.Context, ID string) ([]*model.JobData, 
 }
 
 func (m *Manager) Shutdown() {
-	// Stop and release pumper here
+	if m == nil {
+		return
+	}
+
+	for _, pumper := range m.pumpers {
+		pumper.Shutdown()
+	}
+	m.wg.Wait()
+
+	_ = m.redisCli.Close()
+	m.storage.Close()
 }

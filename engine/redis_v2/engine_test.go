@@ -11,6 +11,7 @@ import (
 
   "github.com/bitleak/lmstfy/engine"
 	"github.com/bitleak/lmstfy/config"
+	"github.com/bitleak/lmstfy/log"
 	"github.com/bitleak/lmstfy/storage"
 	"github.com/bitleak/lmstfy/storage/lock"
 	"github.com/bitleak/lmstfy/storage/persistence/spanner"
@@ -70,6 +71,7 @@ func TestEngine_Publish_SecondaryStorage(t *testing.T) {
 	initSpanner()
 	Cfg.Config.SecondaryStorage = SecStgConf
 
+	log.Setup(Cfg.LogFormat, Cfg.LogDir, Cfg.LogLevel, "error")
 	if err := storage.Init(Cfg.Config); err != nil {
 		panic(fmt.Sprintf("Failed to init data manager for secondary storage: %s", err))
 	}

@@ -2,7 +2,6 @@ package redis
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -66,17 +65,14 @@ func NewEngine(redisName string, conn *go_redis.Client) (engine.Engine, error) {
 	return eng, nil
 }
 
-func (e *Engine) Publish(namespace, queue string, body []byte, ttlSecond, delaySecond uint32, tries uint16) (jobID string, err error) {
+func (e *Engine) Publish(job engine.Job) (jobID string, err error) {
 	defer func() {
 		if err == nil {
 			metrics.publishJobs.WithLabelValues(e.redis.Name).Inc()
-			metrics.publishQueueJobs.WithLabelValues(e.redis.Name, namespace, queue).Inc()
+			metrics.publishQueueJobs.WithLabelValues(e.redis.Name, job.Namespace(), job.Queue()).Inc()
 		}
 	}()
-	e.meta.RecordIfNotExist(namespace, queue)
-	e.monitor.MonitorIfNotExist(namespace, queue)
-	job := engine.NewJob(namespace, queue, body, ttlSecond, delaySecond, tries)
-	return e.PublishJobs(job)
+	return e.publishJob(job)
 }
 
 // BatchConsume consume some jobs of a queue
@@ -263,27 +259,12 @@ func (e *Engine) DumpInfo(out io.Writer) error {
 	return enc.Encode(metadata)
 }
 
-func (e *Engine) PublishWithJobID(namespace, queue, storedJobID string, body []byte, ttlSecond, delaySecond uint32, tries uint16) (jobID string, err error) {
-	defer func() {
-		if err == nil {
-			metrics.publishJobs.WithLabelValues(e.redis.Name).Inc()
-			metrics.publishQueueJobs.WithLabelValues(e.redis.Name, namespace, queue).Inc()
-		}
-	}()
-	if storedJobID == "" {
-		return "", errors.New("PublishWithJobID failed: null job id")
-	}
-	e.meta.RecordIfNotExist(namespace, queue)
-	e.monitor.MonitorIfNotExist(namespace, queue)
-	job := engine.NewJobWithJobID(namespace, queue, body, ttlSecond, delaySecond, tries, storedJobID)
-	return e.PublishJobs(job)
-}
-
-func (e *Engine) PublishJobs(job engine.Job) (jobID string, err error) {
+func (e *Engine) publishJob(job engine.Job) (jobID string, err error) {
+	e.meta.RecordIfNotExist(job.Namespace(), job.Queue())
+	e.monitor.MonitorIfNotExist(job.Namespace(), job.Queue())
 	if job.Tries() == 0 {
 		return job.ID(), nil
 	}
-
 	err = e.pool.Add(job)
 	if err != nil {
 		return job.ID(), fmt.Errorf("pool: %s", err)

@@ -74,7 +74,7 @@ func (e *Engine) Publish(job engine.Job) (jobID string, err error) {
 			metrics.publishQueueJobs.WithLabelValues(e.redis.Name, job.Namespace(), job.Queue()).Inc()
 		}
 	}()
-	return e.publishJobs(job)
+	return e.publishJob(job)
 }
 
 func (e *Engine) sink2SecondStorage(ctx context.Context, job engine.Job) error {
@@ -277,7 +277,7 @@ func (e *Engine) DumpInfo(out io.Writer) error {
 	return enc.Encode(metadata)
 }
 
-func (e *Engine) publishJobs(job engine.Job) (jobID string, err error) {
+func (e *Engine) publishJob(job engine.Job) (jobID string, err error) {
 	e.meta.RecordIfNotExist(job.Namespace(), job.Queue())
 	e.monitor.MonitorIfNotExist(job.Namespace(), job.Queue())
 	if job.Tries() == 0 {

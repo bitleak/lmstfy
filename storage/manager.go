@@ -10,6 +10,7 @@ import (
 	"github.com/bitleak/lmstfy/config"
 	"github.com/bitleak/lmstfy/engine"
 	"github.com/bitleak/lmstfy/helper"
+	"github.com/bitleak/lmstfy/log"
 	"github.com/bitleak/lmstfy/storage/lock"
 	"github.com/bitleak/lmstfy/storage/persistence/model"
 	"github.com/bitleak/lmstfy/storage/persistence/spanner"
@@ -69,31 +70,43 @@ func (m *Manager) PumpFn(name string, pool engine.Engine, threshold int64) func(
 	return func() bool {
 		now := time.Now()
 		req := &model.JobDataReq{
-			PoolName: name,
-			// FIXME: don't hard code deadline here
+			PoolName:  name,
 			ReadyTime: now.Unix() + threshold,
 			Count:     maxJobBatchSize,
 		}
 		ctx := context.TODO()
+		logger := log.Get().WithField("pool", name)
 		jobs, err := m.storage.GetReadyJobs(ctx, req)
 		if err != nil {
-			logrus.Errorf("Get ready jobs err: %v", err)
+			logger.WithError(err).Errorf("Failed to get ready jobs from storage")
 			return false
 		}
+
+		if len(jobs) == 0 {
+			return false
+		}
+		logger.Debugf("Got %d ready jobs from storage", len(jobs))
+
 		jobsID := make([]string, 0)
 		for _, job := range jobs {
 			j := engine.NewJob(job.Namespace, job.Queue, job.Body, uint32(job.ExpiredTime),
 				uint32(job.ReadyTime-now.Unix()), uint16(job.Tries), job.JobID)
 			_, err := pool.Publish(j)
 			if err != nil {
-				logrus.Errorf("Publish:%v failed with error %v", job.JobID, err)
-				return false
+				logger.WithFields(logrus.Fields{
+					"job": j,
+					"err": err,
+				}).Errorf("Failed to publish job")
+				continue
 			}
 			jobsID = append(jobsID, job.JobID)
 		}
 
 		if _, err := m.storage.DelJobs(ctx, jobsID); err != nil {
-			logrus.Errorf("LoopPump delete jobs failed:%v", err)
+			logger.WithFields(logrus.Fields{
+				"jobs": jobsID,
+				"err":  err,
+			}).Errorf("Failed to delete jobs from storage")
 			return false
 		}
 		return len(jobsID) == maxJobBatchSize

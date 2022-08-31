@@ -90,7 +90,7 @@ func (e *Engine) sink2SecondStorage(ctx context.Context, job engine.Job) error {
 		Tries:       int64(job.Tries()),
 		CreatedTime: now,
 	}
-	return storage.Get().AddJob(ctx, dbJob)
+	return storage.Get().AddJob(ctx, e.redis.Name, dbJob)
 }
 
 // BatchConsume consume some jobs of a queue

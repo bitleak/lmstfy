@@ -65,7 +65,8 @@ func NewEngine(redisName string, conn *go_redis.Client) (engine.Engine, error) {
 	return eng, nil
 }
 
-func (e *Engine) Publish(namespace, queue string, body []byte, ttlSecond, delaySecond uint32, tries uint16) (jobID string, err error) {
+func (e *Engine) Publish(job engine.Job) (jobID string, err error) {
+	namespace, queue, delaySecond, tries := job.Namespace(), job.Queue(), job.Delay(), job.Tries()
 	defer func() {
 		if err == nil {
 			metrics.publishJobs.WithLabelValues(e.redis.Name).Inc()
@@ -74,7 +75,6 @@ func (e *Engine) Publish(namespace, queue string, body []byte, ttlSecond, delayS
 	}()
 	e.meta.RecordIfNotExist(namespace, queue)
 	e.monitor.MonitorIfNotExist(namespace, queue)
-	job := engine.NewJob(namespace, queue, body, ttlSecond, delaySecond, tries)
 	if tries == 0 {
 		return job.ID(), nil
 	}

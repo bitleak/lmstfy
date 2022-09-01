@@ -18,8 +18,8 @@ func NewEngine(old, new engine.Engine) engine.Engine {
 	}
 }
 
-func (e *Engine) Publish(namespace, queue string, body []byte, ttlSecond, delaySecond uint32, tries uint16) (jobID string, err error) {
-	return e.newEngine.Publish(namespace, queue, body, ttlSecond, delaySecond, tries)
+func (e *Engine) Publish(job engine.Job) (jobID string, err error) {
+	return e.newEngine.Publish(job)
 }
 
 // BatchConsume consume some jobs of a queue

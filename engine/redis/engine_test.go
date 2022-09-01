@@ -3,7 +3,10 @@ package redis
 import (
 	"bytes"
 	"fmt"
+	"github.com/bitleak/lmstfy/engine"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestEngine_Publish(t *testing.T) {
@@ -13,14 +16,16 @@ func TestEngine_Publish(t *testing.T) {
 	}
 	defer e.Shutdown()
 	body := []byte("hello msg 1")
-	jobID, err := e.Publish("ns-engine", "q0", body, 10, 2, 1)
+	j := engine.NewJob("ns-engine", "q0", body, 10, 2, 1, "")
+	jobID, err := e.Publish(j)
 	t.Log(jobID)
 	if err != nil {
 		t.Fatalf("Failed to publish: %s", err)
 	}
 
 	// Publish no-delay job
-	jobID, err = e.Publish("ns-engine", "q0", body, 10, 0, 1)
+	j = engine.NewJob("ns-engine", "q0", body, 10, 0, 1, "")
+	jobID, err = e.Publish(j)
 	t.Log(jobID)
 	if err != nil {
 		t.Fatalf("Failed to publish: %s", err)
@@ -34,7 +39,8 @@ func TestEngine_Consume(t *testing.T) {
 	}
 	defer e.Shutdown()
 	body := []byte("hello msg 2")
-	jobID, err := e.Publish("ns-engine", "q2", body, 10, 2, 1)
+	j := engine.NewJob("ns-engine", "q2", body, 10, 2, 1, "")
+	jobID, err := e.Publish(j)
 	t.Log(jobID)
 	if err != nil {
 		t.Fatalf("Failed to publish: %s", err)
@@ -51,7 +57,8 @@ func TestEngine_Consume(t *testing.T) {
 	}
 
 	// Consume job that's published in no-delay way
-	jobID, err = e.Publish("ns-engine", "q2", body, 10, 0, 1)
+	j = engine.NewJob("ns-engine", "q2", body, 10, 0, 1, "")
+	jobID, err = e.Publish(j)
 	t.Log(jobID)
 	if err != nil {
 		t.Fatalf("Failed to publish: %s", err)
@@ -73,8 +80,10 @@ func TestEngine_Consume2(t *testing.T) {
 	}
 	defer e.Shutdown()
 	body := []byte("hello msg 3")
-	_, err = e.Publish("ns-engine", "q3", []byte("delay msg"), 10, 5, 1)
-	jobID, err := e.Publish("ns-engine", "q3", body, 10, 2, 1)
+	j := engine.NewJob("ns-engine", "q3", []byte("delay msg"), 10, 5, 1, "")
+	_, err = e.Publish(j)
+	j = engine.NewJob("ns-engine", "q3", body, 10, 2, 1, "")
+	jobID, err := e.Publish(j)
 	if err != nil {
 		t.Fatalf("Failed to publish: %s", err)
 	}
@@ -97,11 +106,13 @@ func TestEngine_ConsumeMulti(t *testing.T) {
 	}
 	defer e.Shutdown()
 	body := []byte("hello msg 4")
-	jobID, err := e.Publish("ns-engine", "q4", body, 10, 3, 1)
+	j := engine.NewJob("ns-engine", "q4", body, 10, 3, 1, "")
+	jobID, err := e.Publish(j)
 	if err != nil {
 		t.Fatalf("Failed to publish: %s", err)
 	}
-	jobID2, err := e.Publish("ns-engine", "q5", body, 10, 1, 1)
+	j2 := engine.NewJob("ns-engine", "q5", body, 10, 1, 1, "")
+	jobID2, err := e.Publish(j2)
 	if err != nil {
 		t.Fatalf("Failed to publish: %s", err)
 	}
@@ -136,7 +147,8 @@ func TestEngine_Peek(t *testing.T) {
 	}
 	defer e.Shutdown()
 	body := []byte("hello msg 6")
-	jobID, err := e.Publish("ns-engine", "q6", body, 10, 0, 1)
+	j := engine.NewJob("ns-engine", "q6", body, 10, 0, 1, "")
+	jobID, err := e.Publish(j)
 	if err != nil {
 		t.Fatalf("Failed to publish: %s", err)
 	}
@@ -156,7 +168,8 @@ func TestEngine_BatchConsume(t *testing.T) {
 	}
 	defer e.Shutdown()
 	body := []byte("hello msg 7")
-	jobID, err := e.Publish("ns-engine", "q7", body, 10, 3, 1)
+	j := engine.NewJob("ns-engine", "q7", body, 10, 3, 1, "")
+	jobID, err := e.Publish(j)
 	t.Log(jobID)
 	if err != nil {
 		t.Fatalf("Failed to publish: %s", err)
@@ -181,7 +194,8 @@ func TestEngine_BatchConsume(t *testing.T) {
 	// Consume some jobs
 	jobIDMap := map[string]bool{}
 	for i := 0; i < 4; i++ {
-		jobID, err := e.Publish("ns-engine", "q7", body, 10, 0, 1)
+		j := engine.NewJob("ns-engine", "q7", body, 10, 0, 1, "")
+		jobID, err := e.Publish(j)
 		t.Log(jobID)
 		if err != nil {
 			t.Fatalf("Failed to publish: %s", err)
@@ -223,4 +237,21 @@ func TestEngine_BatchConsume(t *testing.T) {
 	if len(jobs) != 0 {
 		t.Fatalf("Mistmatched jobs count")
 	}
+}
+
+func TestEngine_PublishWithJobID(t *testing.T) {
+	e, err := NewEngine(R.Name, R.Conn)
+	if err != nil {
+		panic(fmt.Sprintf("Setup engine error: %s", err))
+	}
+	defer e.Shutdown()
+	body := []byte("hello msg 1")
+	j := engine.NewJob("ns-engine", "q8", body, 10, 0, 1, "jobID1")
+	jobID, err := e.Publish(j)
+	t.Log(jobID)
+	assert.Nil(t, err)
+
+	// Make sure the engine received the job
+	job, err := e.Consume("ns-engine", []string{"q8"}, 3, 0)
+	assert.EqualValues(t, jobID, job.ID())
 }

@@ -549,7 +549,8 @@ func publishTestJob(ns, q string, delay, ttl uint32) (body []byte, jobID string)
 	if _, err := rand.Read(body); err != nil {
 		panic(err)
 	}
-	jobID, _ = e.Publish(ns, q, body, ttl, delay, 1)
+	j := engine.NewJob(ns, q, body, ttl, delay, 1, "")
+	jobID, _ = e.Publish(j)
 	return body, jobID
 }
 

@@ -9,8 +9,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-  "github.com/bitleak/lmstfy/engine"
 	"github.com/bitleak/lmstfy/config"
+	"github.com/bitleak/lmstfy/engine"
 	"github.com/bitleak/lmstfy/log"
 	"github.com/bitleak/lmstfy/storage"
 	"github.com/bitleak/lmstfy/storage/lock"

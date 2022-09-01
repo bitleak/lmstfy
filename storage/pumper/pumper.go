@@ -3,6 +3,7 @@ package pumper
 import (
 	"time"
 
+	"github.com/bitleak/lmstfy/log"
 	lock2 "github.com/bitleak/lmstfy/storage/lock"
 )
 
@@ -28,13 +29,18 @@ func NewDefault(lock lock2.Lock, interval time.Duration) *Default {
 func (p *Default) Loop(fn func() bool) {
 	isLeader := false
 
+	logger := log.Get()
 	if err := p.lock.Acquire(); err == nil {
 		isLeader = true
+		logger.Info("Acquired the pumper lock, I'm leader now")
+	} else {
+		logger.WithError(err).Info("Lost the pumper lock")
 	}
 
 	defer func() {
 		if isLeader {
 			if _, err := p.lock.Release(); err != nil {
+				logger.WithError(err).Error("Failed to release the pumper lock")
 			}
 		}
 	}()
@@ -53,15 +59,20 @@ func (p *Default) Loop(fn func() bool) {
 				extendLeaseOK, err := p.lock.ExtendLease()
 				if !extendLeaseOK || err != nil {
 					isLeader = false
+					logger.WithError(err).Error("Failed to extend lease")
 				}
 			} else {
 				if err := p.lock.Acquire(); err == nil {
 					// Become Leader
 					isLeader = true
+					logger.Info("Acquired the pumper lock, I'm leader now")
 					return
 				}
 			}
 		case <-p.shutdown:
+			if isLeader {
+				logger.Info("The pumper was shutdown, will release the pumper lock")
+			}
 			return
 		}
 	}

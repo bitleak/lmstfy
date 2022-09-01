@@ -20,4 +20,5 @@ type Persistence interface {
 	GetReadyJobs(ctx context.Context, req *model.JobDataReq) (jobs []*model.JobData, err error)
 	// BatchGetJobsByID returns job data by job ID
 	BatchGetJobsByID(ctx context.Context, IDs []string) (jobs []*model.JobData, err error)
+	Close()
 }

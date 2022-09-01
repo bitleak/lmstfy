@@ -200,3 +200,7 @@ func validateReq(req []*model.JobData) error {
 	}
 	return nil
 }
+
+func (s *Spanner) Close() {
+	s.cli.Close()
+}

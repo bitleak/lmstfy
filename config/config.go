@@ -33,11 +33,11 @@ func (spanner *SpannerConfig) validate() error {
 	return nil
 }
 
-type SecondStorage struct {
+type SecondaryStorage struct {
 	Spanner *SpannerConfig
 }
 
-func (storage *SecondStorage) validate() error {
+func (storage *SecondaryStorage) validate() error {
 	return storage.Spanner.validate()
 }
 
@@ -53,7 +53,7 @@ type Config struct {
 	EnableAccessLog  bool
 	AdminRedis       RedisConf
 	Pool             RedisPool
-	SecondaryStorage *SecondStorage
+	SecondaryStorage *SecondaryStorage
 
 	// Default publish params
 	TTLSecond   int

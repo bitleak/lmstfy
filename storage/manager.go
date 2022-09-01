@@ -55,7 +55,7 @@ func Get() *Manager {
 	return manager
 }
 
-func createPersistStorage(cfg *config.SecondStorage) (Persistence, error) {
+func createPersistStorage(cfg *config.SecondaryStorage) (Persistence, error) {
 	if cfg.Spanner != nil {
 		return spanner.NewSpanner(cfg.Spanner)
 	}

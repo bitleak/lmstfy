@@ -25,7 +25,7 @@ func CreatePresetForTest(version string, pools ...string) (*PresetConfigForTest,
 		AdminPort: 7778,
 		LogLevel:  "INFO",
 		Pool:      make(map[string]RedisConf),
-		SecondaryStorage: &SecondStorage{
+		SecondaryStorage: &SecondaryStorage{
 			Spanner: SpannerEmulator,
 		},
 	}

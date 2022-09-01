@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-
 	"strconv"
 	"strings"
 	"sync"
@@ -192,6 +191,9 @@ func isHighRedisMemUsage(cli *redis.Client) bool {
 		default:
 			continue
 		}
+	}
+	if maxMem == 0 {
+		return false
 	}
 	return float64(usedMem)/float64(maxMem) > redisMemoryUsageWatermark
 }

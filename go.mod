@@ -22,7 +22,10 @@ require (
 	google.golang.org/grpc v1.42.0
 )
 
-require github.com/go-redsync/redsync/v4 v4.5.1
+require (
+	github.com/go-redsync/redsync/v4 v4.5.1
+	go.uber.org/atomic v1.9.0
+)
 
 require (
 	cloud.google.com/go v0.100.2 // indirect
@@ -77,7 +80,6 @@ require (
 	github.com/subosito/gotenv v1.2.0 // indirect
 	github.com/ugorji/go/codec v1.1.7 // indirect
 	go.opencensus.io v0.23.0 // indirect
-	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.7.0 // indirect
 	go.uber.org/zap v1.19.1 // indirect
 	golang.org/x/crypto v0.0.0-20210817164053-32db794688a5 // indirect

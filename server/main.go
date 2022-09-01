@@ -195,15 +195,17 @@ func main() {
 		panic(fmt.Sprintf("Failed to post validate the config file: %s", err))
 	}
 	shutdown := make(chan struct{})
-	accessLogger, errorLogger, err := log.SetupLogger(conf.LogFormat, conf.LogDir, conf.LogLevel, Flags.BackTrackLevel)
+	err = log.Setup(conf.LogFormat, conf.LogDir, conf.LogLevel, Flags.BackTrackLevel)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to setup logger: %s", err))
 	}
+
+	logger := log.Get()
 	maxprocs.Logger(func(format string, args ...interface{}) {
-		errorLogger.Infof(format, args...)
+		logger.Infof(format, args...)
 	})
 	registerSignal(shutdown, func() {
-		log.ReopenLogs(conf.LogDir, accessLogger, errorLogger)
+		log.ReopenLogs(conf.LogDir)
 	})
 	// set up data manager
 	if conf.HasSecondaryStorage() {
@@ -211,7 +213,7 @@ func main() {
 			panic(fmt.Sprintf("Failed to init data manager for secondary storage: %s", err))
 		}
 	}
-	if err := setupEngines(conf, errorLogger); err != nil {
+	if err := setupEngines(conf, logger); err != nil {
 		panic(fmt.Sprintf("Failed to setup engines, err: %s", err.Error()))
 	}
 	if err := auth.Setup(conf); err != nil {
@@ -220,17 +222,18 @@ func main() {
 	if conf.EnableAccessLog {
 		middleware.EnableAccessLog()
 	}
-	apiSrv := apiServer(conf, accessLogger, errorLogger, Flags.SkipVerification)
-	adminSrv := adminServer(conf, accessLogger, errorLogger)
+	apiSrv := apiServer(conf, log.GetAccessLogger(), logger, Flags.SkipVerification)
+	adminSrv := adminServer(conf, log.GetAccessLogger(), logger)
 
-	createPidFile(errorLogger)
+	createPidFile(logger)
 
 	<-shutdown
-	errorLogger.Infof("[%d] Shutting down...", os.Getpid())
+	logger.Infof("[%d] Shutting down...", os.Getpid())
 	removePidFile()
 	adminSrv.Close() // Admin server does not need to be stopped gracefully
 	apiSrv.Shutdown(context.Background())
 
+	storage.Get().Shutdown()
 	throttler.GetThrottler().Shutdown()
-	errorLogger.Infof("[%d] Bye bye", os.Getpid())
+	logger.Infof("[%d] Bye bye", os.Getpid())
 }

@@ -87,7 +87,7 @@ func TestBackupTimer_BeforeOldestScore(t *testing.T) {
 	}
 	// make sure all jobs are in the ready queue and consume them without ACK,
 	// so they should appear in the backup queue.
-	time.Sleep(time.Second)
+	time.Sleep(2 * time.Second)
 	assert.Equal(t, int64(count), R.Conn.ZCard(dummyCtx, timer.BackupName()).Val())
 	for i := 0; i < count/2; i++ {
 		_, err := R.Conn.BRPop(dummyCtx, time.Second, queue.Name()).Result()

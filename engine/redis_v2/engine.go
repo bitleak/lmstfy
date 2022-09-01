@@ -205,12 +205,26 @@ func (e *Engine) Peek(namespace, queue, optionalJobID string) (job engine.Job, e
 	}
 	body, ttl, err := e.pool.Get(namespace, queue, jobID)
 	// Tricky: we shouldn't return the not found error when the job was not found,
-	// since the job may expired(TTL was reached) and it would confuse the user, so
+	// since the job may be expired(TTL was reached) and it would confuse the user, so
 	// we return the nil job instead of the not found error here. But if the `optionalJobID`
 	// was assigned we should return the not fond error.
 	if optionalJobID == "" && err == engine.ErrNotFound {
 		// return jobID with nil body if the job is expired
 		return engine.NewJobWithID(namespace, queue, nil, 0, 0, jobID), nil
+	}
+
+	// look up job data in storage
+	if err == engine.ErrNotFound && e.cfg.EnableSecondaryStorage {
+		res, err := storage.Get().GetJobByID(context.TODO(), optionalJobID)
+		if err != nil {
+			return nil, err
+		}
+		if len(res) == 0 {
+			return nil, engine.ErrNotFound
+		}
+		j := res[0]
+		return engine.NewJobWithID(j.Namespace, j.Queue, j.Body,
+			uint32(j.ExpiredTime-time.Now().Unix()), uint16(j.Tries), j.JobID), nil
 	}
 	if err != nil {
 		return nil, err

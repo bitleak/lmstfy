@@ -163,6 +163,34 @@ func (s *Spanner) GetReadyJobs(ctx context.Context, req *model.JobDataReq) (jobs
 	return jobs, nil
 }
 
+// BatchGetJobsByID returns job data by job ID
+func (s *Spanner) BatchGetJobsByID(ctx context.Context, IDs []string) (jobs []*model.JobData, err error) {
+	txn := s.cli.ReadOnlyTransaction()
+	defer txn.Close()
+
+	iter := txn.Query(ctx, spanner.Statement{
+		SQL: "SELECT pool_name, job_id, namespace, queue, body, ready_time, expired_time, created_time, tries " +
+			"FROM lmstfy_jobs WHERE job_id IN UNNEST(@ids) LIMIT @limit",
+		Params: map[string]interface{}{
+			"ids":   IDs,
+			"limit": len(IDs),
+		},
+	})
+	err = iter.Do(func(row *spanner.Row) error {
+		elem := &model.JobData{}
+		if err = row.ToStruct(elem); err != nil {
+			return err
+		}
+		jobs = append(jobs, elem)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return jobs, nil
+}
+
 func validateReq(req []*model.JobData) error {
 	if len(req) == 0 {
 		return errors.New("invalid req, null jobs list")

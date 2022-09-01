@@ -113,6 +113,10 @@ func (m *Manager) AddJob(ctx context.Context, job *model.JobData) error {
 	return m.storage.BatchAddJobs(ctx, []*model.JobData{job})
 }
 
+func (m *Manager) GetJobByID(ctx context.Context, ID string) ([]*model.JobData, error) {
+	return m.storage.BatchGetJobsByID(ctx, []string{ID})
+}
+
 func (m *Manager) Shutdown() {
 	// Stop and release pumper here
 }

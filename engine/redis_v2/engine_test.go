@@ -3,13 +3,13 @@ package redis_v2
 import (
 	"bytes"
 	"fmt"
-	"github.com/bitleak/lmstfy/engine"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 
+  "github.com/bitleak/lmstfy/engine"
 	"github.com/bitleak/lmstfy/config"
 	"github.com/bitleak/lmstfy/storage"
 	"github.com/bitleak/lmstfy/storage/lock"
@@ -229,6 +229,39 @@ func TestEngine_Peek(t *testing.T) {
 	if job.ID() != jobID || !bytes.Equal(job.Body(), body) {
 		t.Fatal("Mismatched job")
 	}
+}
+
+func TestEngine_Peek_SecondaryStorage(t *testing.T) {
+	initSpanner()
+	Cfg.Config.SecondaryStorage = SecStgConf
+
+	if err := storage.Init(Cfg.Config); err != nil {
+		panic(fmt.Sprintf("Failed to init data manager for secondary storage: %s", err))
+	}
+	dataMgr := storage.Get()
+	if dataMgr == nil {
+		panic(fmt.Sprint("Failed to find data manager"))
+	}
+
+	e, err := NewEngine(R.Name, StoragePoolConf, R.Conn)
+	if err != nil {
+		panic(fmt.Sprintf("Setup engine error: %s", err))
+	}
+	defer e.Shutdown()
+
+	// Publish long-delay job
+	body := []byte("engine peek long delay job")
+	j := engine.NewJob("ns-engine", "qst", body, 120, 15, 1, "")
+	jobID, err := e.Publish(j)
+	t.Log(jobID)
+	assert.Nil(t, err)
+	job, err := e.Peek("ns-engine", "qst", "")
+	assert.Nil(t, job)
+	assert.EqualValues(t, engine.ErrEmptyQueue, err)
+	job, err = e.Peek("ns-engine", "qst", jobID)
+	assert.Nil(t, err)
+	assert.EqualValues(t, jobID, job.ID())
+	assert.EqualValues(t, body, job.Body())
 }
 
 func TestEngine_BatchConsume(t *testing.T) {

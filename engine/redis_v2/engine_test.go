@@ -3,50 +3,27 @@ package redis_v2
 import (
 	"bytes"
 	"fmt"
-	"os"
 	"testing"
-	"time"
-
-	"github.com/stretchr/testify/assert"
 
 	"github.com/bitleak/lmstfy/config"
 	"github.com/bitleak/lmstfy/engine"
-	"github.com/bitleak/lmstfy/log"
 	"github.com/bitleak/lmstfy/storage"
-	"github.com/bitleak/lmstfy/storage/lock"
-	"github.com/bitleak/lmstfy/storage/persistence/spanner"
-	"github.com/bitleak/lmstfy/storage/pumper"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var (
-	db              = "projects/test-project/instances/test-instance/databases/test-db1"
-	StoragePoolConf = &config.RedisConf{EnableSecondaryStorage: true, SecondaryStorageThresholdSeconds: 10}
-	PoolConf        = &config.RedisConf{}
-	SecStgConf      = &config.SpannerConfig{
-		Project:   "test-project",
-		Instance:  "test-instance",
-		Database:  "test-db1",
-		TableName: "lmstfy_jobs",
+	db                  = "projects/test-project/instances/test-instance/databases/test-db1"
+	enableSecondStorage = &config.RedisConf{
+		EnableSecondaryStorage:           true,
+		SecondaryStorageThresholdSeconds: 10,
 	}
 	redisMaxMemory = "10000000"
+	dummyPoolConf  = &config.RedisConf{}
 )
 
-func initSpanner() {
-	if os.Getenv("SPANNER_EMULATOR_HOST") == "" {
-		panic(fmt.Sprintf("failed to find $SPANNER_EMULATOR_HOST value"))
-	}
-	err := spanner.CreateInstance(dummyCtx, db)
-	if err != nil {
-		panic(fmt.Sprintf("create instance error: %v", err))
-	}
-	err = spanner.CreateDatabase(dummyCtx, db)
-	if err != nil {
-		panic(fmt.Sprintf("create db error: %v", err))
-	}
-}
-
 func TestEngine_Publish(t *testing.T) {
-	e, err := NewEngine(R.Name, PoolConf, R.Conn)
+	e, err := NewEngine(R.Name, dummyPoolConf, R.Conn)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
@@ -69,19 +46,13 @@ func TestEngine_Publish(t *testing.T) {
 }
 
 func TestEngine_Publish_SecondaryStorage(t *testing.T) {
-	initSpanner()
-	Cfg.Config.SecondaryStorage = SecStgConf
+	manager, err := storage.NewManger(testConfig.Config)
+	require.Nil(t, err)
 
-	log.Setup(Cfg.LogFormat, Cfg.LogDir, Cfg.LogLevel, "error")
-	if err := storage.Init(Cfg.Config); err != nil {
-		panic(fmt.Sprintf("Failed to init data manager for secondary storage: %s", err))
-	}
-	dataMgr := storage.Get()
-	if dataMgr == nil {
-		panic(fmt.Sprint("Failed to find data manager"))
-	}
-
-	e, err := NewEngine(R.Name, StoragePoolConf, R.Conn)
+	e, err := NewEngine(R.Name, &config.RedisConf{
+		EnableSecondaryStorage:           true,
+		SecondaryStorageThresholdSeconds: 0,
+	}, R.Conn)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
@@ -90,28 +61,24 @@ func TestEngine_Publish_SecondaryStorage(t *testing.T) {
 	err = R.Conn.ConfigSet(dummyCtx, "maxmemory", redisMaxMemory).Err()
 	assert.Nil(t, err)
 
-	redisLock := lock.NewRedisLock(R.Conn, R.Name, 10*time.Second)
-	pumper := pumper.NewDefault(redisLock, 5*time.Second)
-	go pumper.Loop(dataMgr.PumpFn(R.Name, e, 10))
-
+	defer manager.Shutdown()
+	manager.AddPool(R.Name, e, 0)
 	// Publish long-delay job
 	body := []byte("hello msg long delay job")
-	j := engine.NewJob("ns-engine", "qs", body, 120, 15, 1, "")
+	j := engine.NewJob("ns-engine", "qs", body, 120, 1, 1, "")
 	jobID, err := e.Publish(j)
-	t.Log(jobID)
 	assert.Nil(t, err)
 
 	//wait for data mgr to pump job from secondary storage to engine
-	time.Sleep(20 * time.Second)
 
-	job, err := e.Consume("ns-engine", []string{"qs"}, 3, 0)
+	job, err := e.Consume("ns-engine", []string{"qs"}, 3, 10)
 	assert.Nil(t, err)
 	assert.EqualValues(t, jobID, job.ID())
 	assert.EqualValues(t, body, job.Body())
 }
 
 func TestEngine_Consume(t *testing.T) {
-	e, err := NewEngine(R.Name, PoolConf, R.Conn)
+	e, err := NewEngine(R.Name, dummyPoolConf, R.Conn)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
@@ -151,7 +118,7 @@ func TestEngine_Consume(t *testing.T) {
 
 // Consume the first one from multi publish
 func TestEngine_Consume2(t *testing.T) {
-	e, err := NewEngine(R.Name, PoolConf, R.Conn)
+	e, err := NewEngine(R.Name, dummyPoolConf, R.Conn)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
@@ -177,7 +144,7 @@ func TestEngine_Consume2(t *testing.T) {
 }
 
 func TestEngine_ConsumeMulti(t *testing.T) {
-	e, err := NewEngine(R.Name, PoolConf, R.Conn)
+	e, err := NewEngine(R.Name, dummyPoolConf, R.Conn)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
@@ -218,7 +185,7 @@ func TestEngine_ConsumeMulti(t *testing.T) {
 }
 
 func TestEngine_Peek(t *testing.T) {
-	e, err := NewEngine(R.Name, PoolConf, R.Conn)
+	e, err := NewEngine(R.Name, dummyPoolConf, R.Conn)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
@@ -239,22 +206,19 @@ func TestEngine_Peek(t *testing.T) {
 }
 
 func TestEngine_Peek_SecondaryStorage(t *testing.T) {
-	initSpanner()
-	Cfg.Config.SecondaryStorage = SecStgConf
-
-	if err := storage.Init(Cfg.Config); err != nil {
-		panic(fmt.Sprintf("Failed to init data manager for secondary storage: %s", err))
-	}
-	dataMgr := storage.Get()
-	if dataMgr == nil {
-		panic(fmt.Sprint("Failed to find data manager"))
-	}
-
-	e, err := NewEngine(R.Name, StoragePoolConf, R.Conn)
+	e, err := NewEngine(R.Name, &config.RedisConf{
+		EnableSecondaryStorage:           true,
+		SecondaryStorageThresholdSeconds: 10,
+	}, R.Conn)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
 	defer e.Shutdown()
+
+	manager, err := storage.NewManger(testConfig.Config)
+	defer manager.Shutdown()
+	require.Nil(t, err)
+	manager.AddPool(R.Name, e, 30)
 
 	// Publish long-delay job
 	body := []byte("engine peek long delay job")
@@ -272,7 +236,7 @@ func TestEngine_Peek_SecondaryStorage(t *testing.T) {
 }
 
 func TestEngine_BatchConsume(t *testing.T) {
-	e, err := NewEngine(R.Name, PoolConf, R.Conn)
+	e, err := NewEngine(R.Name, dummyPoolConf, R.Conn)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}
@@ -350,7 +314,7 @@ func TestEngine_BatchConsume(t *testing.T) {
 }
 
 func TestEngine_PublishWithJobID(t *testing.T) {
-	e, err := NewEngine(R.Name, PoolConf, R.Conn)
+	e, err := NewEngine(R.Name, dummyPoolConf, R.Conn)
 	if err != nil {
 		panic(fmt.Sprintf("Setup engine error: %s", err))
 	}

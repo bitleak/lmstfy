@@ -7,12 +7,13 @@ import (
 
 	"github.com/bitleak/lmstfy/config"
 	"github.com/bitleak/lmstfy/helper"
+	"github.com/bitleak/lmstfy/log"
 	"github.com/sirupsen/logrus"
 )
 
 var (
-	R   *RedisInstance
-	Cfg *config.PresetConfigForTest
+	R          *RedisInstance
+	testConfig *config.PresetConfigForTest
 )
 
 func setup(CONF *config.Config) {
@@ -20,6 +21,7 @@ func setup(CONF *config.Config) {
 	level, _ := logrus.ParseLevel(CONF.LogLevel)
 	logger.SetLevel(level)
 
+	log.Setup(CONF.LogFormat, CONF.LogDir, CONF.LogLevel, "ERROR")
 	poolConf := CONF.Pool["default"]
 	conn := helper.NewRedisClient(&poolConf, nil)
 	err := conn.Ping(dummyCtx).Err()
@@ -48,7 +50,7 @@ func TestMain(m *testing.M) {
 	}
 	defer presetConfig.Destroy()
 	setup(presetConfig.Config)
-	Cfg = presetConfig
+	testConfig = presetConfig
 	ret := m.Run()
 	os.Exit(ret)
 }

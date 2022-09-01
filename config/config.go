@@ -15,6 +15,32 @@ const (
 	minSecondaryStorageThresholdSeconds = 60 * 60
 )
 
+type SpannerConfig struct {
+	Project         string
+	Instance        string
+	Database        string
+	CredentialsFile string
+	TableName       string
+}
+
+func (spanner *SpannerConfig) validate() error {
+	if spanner == nil {
+		return nil
+	}
+	if spanner.Instance == "" || spanner.Project == "" || spanner.Database == "" || spanner.TableName == "" {
+		return errors.New("'Instance'/'Project'/'Database'/'TableName' should NOT be empty")
+	}
+	return nil
+}
+
+type SecondStorage struct {
+	Spanner *SpannerConfig
+}
+
+func (storage *SecondStorage) validate() error {
+	return storage.Spanner.validate()
+}
+
 type Config struct {
 	Host             string
 	Port             int
@@ -27,7 +53,7 @@ type Config struct {
 	EnableAccessLog  bool
 	AdminRedis       RedisConf
 	Pool             RedisPool
-	SecondaryStorage *SpannerConfig
+	SecondaryStorage *SecondStorage
 
 	// Default publish params
 	TTLSecond   int
@@ -56,14 +82,6 @@ type RedisConf struct {
 	SecondaryStorageThresholdSeconds int64
 }
 
-type SpannerConfig struct {
-	Project         string `mapstructure:"project" validate:"required"`
-	Instance        string `mapstructure:"instance" validate:"required"`
-	Database        string `mapstructure:"db" validate:"required"`
-	CredentialsFile string `mapstructure:"credentials_file"`
-	TableName       string `mapstructure:"table_name"`
-}
-
 func (c *Config) HasSecondaryStorage() bool {
 	return c.SecondaryStorage != nil
 }
@@ -84,13 +102,6 @@ func (rc *RedisConf) validate() error {
 // IsSentinel return whether the pool was running in sentinel mode
 func (rc *RedisConf) IsSentinel() bool {
 	return rc.MasterName != ""
-}
-
-func verifySecStorageConf(cfg *SpannerConfig) error {
-	if cfg == nil || cfg.Instance == "" || cfg.Project == "" || cfg.Database == "" || cfg.TableName == "" {
-		return errors.New("invalid secondary storage config")
-	}
-	return nil
 }
 
 // MustLoad load config file with specified path, an error returned if any condition not met
@@ -140,7 +151,7 @@ func MustLoad(path string) (*Config, error) {
 	}
 
 	if conf.SecondaryStorage != nil {
-		if err = verifySecStorageConf(conf.SecondaryStorage); err != nil {
+		if err := conf.SecondaryStorage.validate(); err != nil {
 			return nil, err
 		}
 	}

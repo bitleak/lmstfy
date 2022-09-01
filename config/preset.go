@@ -5,6 +5,13 @@ import (
 	"github.com/orlangure/gnomock/preset/redis"
 )
 
+var SpannerEmulator = &SpannerConfig{
+	Project:   "test-project",
+	Instance:  "test-instance",
+	Database:  "test-db",
+	TableName: "lmstfy_jobs",
+}
+
 type PresetConfigForTest struct {
 	*Config
 	containers []*gnomock.Container
@@ -18,6 +25,9 @@ func CreatePresetForTest(version string, pools ...string) (*PresetConfigForTest,
 		AdminPort: 7778,
 		LogLevel:  "INFO",
 		Pool:      make(map[string]RedisConf),
+		SecondaryStorage: &SecondStorage{
+			Spanner: SpannerEmulator,
+		},
 	}
 
 	p := redis.Preset()

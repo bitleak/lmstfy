@@ -22,7 +22,7 @@ const (
 func setupMetrics() {
 	cv := newCounterVecHelper
 	metrics = &Metrics{
-		storageAddJobs: cv("storage_add_jobs", "namespace", "queue"),
+		storageAddJobs: cv("storage_add_jobs", "namespace", "queue", "status"),
 		storageDelJobs: cv("storage_del_jobs"),
 	}
 }

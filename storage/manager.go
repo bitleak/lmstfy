@@ -25,6 +25,9 @@ const (
 
 	defaultLockExpiry   = 15 * time.Second
 	defaultPumpInterval = 3 * time.Second
+
+	addJobSuccessStatus = "success"
+	addJobFailedStatus  = "failed"
 )
 
 type Manager struct {
@@ -130,11 +133,15 @@ func (m *Manager) AddPool(name string, pool engine.Engine, threshold int64) {
 	}()
 }
 
-func (m *Manager) AddJob(ctx context.Context, name string, job *model.JobData) error {
+func (m *Manager) AddJob(ctx context.Context, job *model.JobData) error {
+	var status string
 	err := m.storage.BatchAddJobs(ctx, []*model.JobData{job})
 	if err == nil {
-		metrics.storageAddJobs.WithLabelValues(name, job.Namespace, job.Queue).Inc()
+		status = addJobSuccessStatus
+	} else {
+		status = addJobFailedStatus
 	}
+	metrics.storageAddJobs.WithLabelValues(job.PoolName, job.Namespace, job.Queue, status).Inc()
 	return err
 }
 

@@ -38,12 +38,14 @@ type jobImpl struct {
 // NOTE: there is a trick in this factory, the delay is embedded in the jobID.
 // By doing this we can delete the job that's located in hourly AOF, by placing
 // a tombstone record in that AOF.
-func NewJob(namespace, queue string, body []byte, ttl, delay uint32, tries uint16) Job {
-	id := uuid.GenUniqueJobIDWithDelay(delay)
+func NewJob(namespace, queue string, body []byte, ttl, delay uint32, tries uint16, jobID string) Job {
+	if jobID == "" {
+		jobID = uuid.GenUniqueJobIDWithDelay(delay)
+	}
 	return &jobImpl{
 		namespace: namespace,
 		queue:     queue,
-		id:        id,
+		id:        jobID,
 		body:      body,
 		ttl:       ttl,
 		delay:     delay,

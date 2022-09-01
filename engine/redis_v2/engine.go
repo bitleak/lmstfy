@@ -67,45 +67,14 @@ func NewEngine(redisName string, cfg *config.RedisConf, conn *go_redis.Client) (
 	}, nil
 }
 
-func (e *Engine) Publish(namespace, queue string, body []byte, ttlSecond, delaySecond uint32, tries uint16) (jobID string, err error) {
+func (e *Engine) Publish(job engine.Job) (jobID string, err error) {
 	defer func() {
 		if err == nil {
 			metrics.publishJobs.WithLabelValues(e.redis.Name).Inc()
-			metrics.publishQueueJobs.WithLabelValues(e.redis.Name, namespace, queue).Inc()
+			metrics.publishQueueJobs.WithLabelValues(e.redis.Name, job.Namespace(), job.Queue()).Inc()
 		}
 	}()
-	e.meta.RecordIfNotExist(namespace, queue)
-	e.monitor.MonitorIfNotExist(namespace, queue)
-	job := engine.NewJob(namespace, queue, body, ttlSecond, delaySecond, tries)
-	if tries == 0 {
-		return job.ID(), nil
-	}
-
-	if e.cfg.EnableSecondaryStorage &&
-		storage.Get() != nil &&
-		delaySecond > uint32(e.cfg.SecondaryStorageThresholdSeconds) {
-		if err := e.sink2SecondStorage(context.TODO(), job); err == nil {
-			return job.ID(), nil
-		}
-	}
-	err = e.pool.Add(job)
-	if err != nil {
-		return job.ID(), fmt.Errorf("pool: %s", err)
-	}
-
-	if delaySecond == 0 {
-		q := NewQueue(namespace, queue, e.redis, e.timer)
-		err = q.Push(job)
-		if err != nil {
-			err = fmt.Errorf("queue: %s", err)
-		}
-		return job.ID(), err
-	}
-	err = e.timer.Add(namespace, queue, job.ID(), delaySecond, tries)
-	if err != nil {
-		err = fmt.Errorf("timer: %s", err)
-	}
-	return job.ID(), err
+	return e.publishJob(job)
 }
 
 func (e *Engine) sink2SecondStorage(ctx context.Context, job engine.Job) error {
@@ -306,4 +275,38 @@ func (e *Engine) DumpInfo(out io.Writer) error {
 	enc := json.NewEncoder(out)
 	enc.SetIndent("", "    ")
 	return enc.Encode(metadata)
+}
+
+func (e *Engine) publishJob(job engine.Job) (jobID string, err error) {
+	e.meta.RecordIfNotExist(job.Namespace(), job.Queue())
+	e.monitor.MonitorIfNotExist(job.Namespace(), job.Queue())
+	if job.Tries() == 0 {
+		return job.ID(), nil
+	}
+	delaySecond := job.Delay()
+	if e.cfg.EnableSecondaryStorage &&
+		storage.Get() != nil &&
+		delaySecond > uint32(e.cfg.SecondaryStorageThresholdSeconds) {
+		if err := e.sink2SecondStorage(context.TODO(), job); err == nil {
+			return job.ID(), nil
+		}
+	}
+	err = e.pool.Add(job)
+	if err != nil {
+		return job.ID(), fmt.Errorf("pool: %s", err)
+	}
+
+	if delaySecond == 0 {
+		q := NewQueue(job.Namespace(), job.Queue(), e.redis, e.timer)
+		err = q.Push(job)
+		if err != nil {
+			err = fmt.Errorf("queue: %s", err)
+		}
+		return job.ID(), err
+	}
+	err = e.timer.Add(job.Namespace(), job.Queue(), job.ID(), delaySecond, job.Tries())
+	if err != nil {
+		err = fmt.Errorf("timer: %s", err)
+	}
+	return job.ID(), err
 }

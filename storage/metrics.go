@@ -8,7 +8,6 @@ import (
 type Metrics struct {
 	storageAddJobs *prometheus.CounterVec
 	storageDelJobs *prometheus.CounterVec
-	storageSizes   *prometheus.GaugeVec
 }
 
 var (
@@ -22,11 +21,9 @@ const (
 
 func setupMetrics() {
 	cv := newCounterVecHelper
-	gv := newGaugeVecHelper
 	metrics = &Metrics{
-		storageAddJobs: cv("timer_add_jobs"),
-		storageDelJobs: cv("timer_del_jobs"),
-		storageSizes:   gv("timer_sizes"),
+		storageAddJobs: cv("storage_add_jobs"),
+		storageDelJobs: cv("storage_del_jobs"),
 	}
 }
 
@@ -40,18 +37,6 @@ func newCounterVecHelper(name string, labels ...string) *prometheus.CounterVec {
 	counters := prometheus.NewCounterVec(opts, labels)
 	prometheus.MustRegister(counters)
 	return counters
-}
-
-func newGaugeVecHelper(name string, labels ...string) *prometheus.GaugeVec {
-	labels = append([]string{"pool"}, labels...)
-	opts := prometheus.GaugeOpts{}
-	opts.Namespace = Namespace
-	opts.Subsystem = Subsystem
-	opts.Name = name
-	opts.Help = name
-	gauges := prometheus.NewGaugeVec(opts, labels)
-	prometheus.MustRegister(gauges)
-	return gauges
 }
 
 func init() {

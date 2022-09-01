@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -28,6 +30,8 @@ const (
 
 	addJobSuccessStatus = "success"
 	addJobFailedStatus  = "failed"
+
+	redisMemoryUsageWatermark = 0.6 //  used_memory / max_memory
 )
 
 type Manager struct {
@@ -73,6 +77,11 @@ func NewManger(cfg *config.Config) (*Manager, error) {
 
 func (m *Manager) PumpFn(name string, pool engine.Engine, threshold int64) func() bool {
 	return func() bool {
+		logger := log.Get().WithField("pool", name)
+		if isHighRedisMemUsage(m.redisCli) {
+			logger.Error("High redis usage, storage stops pumping data")
+			return false
+		}
 		now := time.Now()
 		req := &model.JobDataReq{
 			PoolName:  name,
@@ -80,7 +89,6 @@ func (m *Manager) PumpFn(name string, pool engine.Engine, threshold int64) func(
 			Count:     maxJobBatchSize,
 		}
 		ctx := context.TODO()
-		logger := log.Get().WithField("pool", name)
 		jobs, err := m.storage.GetReadyJobs(ctx, req)
 		if err != nil {
 			logger.WithError(err).Errorf("Failed to get ready jobs from storage")
@@ -161,4 +169,31 @@ func (m *Manager) Shutdown() {
 
 	_ = m.redisCli.Close()
 	m.storage.Close()
+}
+
+func isHighRedisMemUsage(cli *redis.Client) bool {
+	memoryInfo, err := cli.Info(context.TODO(), "memory").Result()
+	if err != nil {
+		return false
+	}
+	var usedMem, maxMem int64
+	lines := strings.Split(memoryInfo, "\r\n")
+	for _, line := range lines {
+		fields := strings.Split(line, ":")
+		if len(fields) != 2 {
+			continue
+		}
+		switch fields[0] {
+		case "used_memory":
+			usedMem, _ = strconv.ParseInt(fields[1], 10, 64)
+		case "maxmemory":
+			maxMem, _ = strconv.ParseInt(fields[1], 10, 64)
+		default:
+			continue
+		}
+	}
+	if maxMem == 0 {
+		return false
+	}
+	return float64(usedMem)/float64(maxMem) > redisMemoryUsageWatermark
 }

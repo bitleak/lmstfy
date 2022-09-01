@@ -28,6 +28,7 @@ var (
 		Database:  "test-db1",
 		TableName: "lmstfy_jobs",
 	}
+	redisMaxMemory = "10000000"
 )
 
 func initSpanner() {
@@ -86,6 +87,9 @@ func TestEngine_Publish_SecondaryStorage(t *testing.T) {
 	}
 	defer e.Shutdown()
 
+	err = R.Conn.ConfigSet(dummyCtx, "maxmemory", redisMaxMemory).Err()
+	assert.Nil(t, err)
+
 	redisLock := lock.NewRedisLock(R.Conn, R.Name, 10*time.Second)
 	pumper := pumper.NewDefault(redisLock, 5*time.Second)
 	go pumper.Loop(dataMgr.PumpFn(R.Name, e, 10))
@@ -96,6 +100,7 @@ func TestEngine_Publish_SecondaryStorage(t *testing.T) {
 	jobID, err := e.Publish(j)
 	t.Log(jobID)
 	assert.Nil(t, err)
+
 	//wait for data mgr to pump job from secondary storage to engine
 	time.Sleep(20 * time.Second)
 

@@ -133,7 +133,7 @@ func (m *Manager) AddPool(name string, pool engine.Engine, threshold int64) {
 func (m *Manager) AddJob(ctx context.Context, name string, job *model.JobData) error {
 	err := m.storage.BatchAddJobs(ctx, []*model.JobData{job})
 	if err == nil {
-		metrics.storageAddJobs.WithLabelValues(name).Inc()
+		metrics.storageAddJobs.WithLabelValues(name, job.Namespace, job.Queue).Inc()
 	}
 	return err
 }

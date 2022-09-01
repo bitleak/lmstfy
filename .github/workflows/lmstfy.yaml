@@ -61,6 +61,7 @@ jobs:
         args: >
           -Dsonar.organization=bitleak
           -Dsonar.projectKey=lmstfy
+          -Dsonar.sources=.
           -Dsonar.go.coverage.reportPaths=coverage.out
           -Dsonar.exclusions=**/*_test.go,**/*.gen.go,**/*.py,cmd/**,**/mock/*.go
           -Dsonar.verbose=true

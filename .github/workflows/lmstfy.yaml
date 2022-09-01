@@ -48,9 +48,19 @@ jobs:
     - name: Test
       run: make test
 
-    - name: Upload Coverage Report
-      uses: codecov/codecov-action@v1
+    - name: SonarCloud Scan
+      uses: sonarsource/sonarcloud-github-action@master
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+    - name: Analyze with SonarCloud
+      uses: sonarsource/sonarcloud-github-action@master
       with:
-        file: ./coverage.out
-        flags: unittests
-        name: codecov-umbrella
+        projectBaseDir: .
+        args: >
+          -Dsonar.organization=bitleak
+          -Dsonar.projectKey=lmstfy
+          -Dsonar.go.coverage.reportPaths=coverage.out
+          -Dsonar.exclusions=**/*_test.go,**/*.gen.go,**/*.py,cmd/**,**/mock/*.go
+          -Dsonar.verbose=true

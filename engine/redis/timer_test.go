@@ -14,7 +14,7 @@ func TestTimer_Add(t *testing.T) {
 	if err != nil {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))
 	}
-	job := engine.NewJob("ns-timer", "q1", []byte("hello msg 1"), 10, 0, 1)
+	job := engine.NewJob("ns-timer", "q1", []byte("hello msg 1"), 10, 0, 1, "")
 	if err = timer.Add(job.Namespace(), job.Queue(), job.ID(), 10, 1); err != nil {
 		t.Errorf("Failed to add job to timer: %s", err)
 	}
@@ -26,7 +26,7 @@ func TestTimer_Tick(t *testing.T) {
 		panic(fmt.Sprintf("Failed to new timer: %s", err))
 	}
 	defer timer.Shutdown()
-	job := engine.NewJob("ns-timer", "q2", []byte("hello msg 2"), 5, 0, 1)
+	job := engine.NewJob("ns-timer", "q2", []byte("hello msg 2"), 5, 0, 1, "")
 	pool := NewPool(R)
 	pool.Add(job)
 	timer.Add(job.Namespace(), job.Queue(), job.ID(), 3, 1)
@@ -80,7 +80,7 @@ func benchmarkTimer_Add(timer *Timer) func(b *testing.B) {
 	pool := NewPool(R)
 	return func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			job := engine.NewJob("ns-timer", "q3", []byte("hello msg 1"), 100, 0, 1)
+			job := engine.NewJob("ns-timer", "q3", []byte("hello msg 1"), 100, 0, 1, "")
 			pool.Add(job)
 			timer.Add(job.Namespace(), job.Queue(), job.ID(), 1, 1)
 		}
@@ -93,7 +93,7 @@ func benchmarkTimer_Pop(timer *Timer) func(b *testing.B) {
 		b.StopTimer()
 		pool := NewPool(R)
 		for i := 0; i < b.N; i++ {
-			job := engine.NewJob("ns-timer", "q3", []byte("hello msg 1"), 100, 0, 1)
+			job := engine.NewJob("ns-timer", "q3", []byte("hello msg 1"), 100, 0, 1, "")
 			pool.Add(job)
 			timer.Add(job.Namespace(), job.Queue(), job.ID(), 1, 1)
 		}
@@ -119,7 +119,7 @@ func BenchmarkTimer_Pump(b *testing.B) {
 	}
 	timer.Shutdown()
 	for i := 0; i < 10000; i++ {
-		job := engine.NewJob("ns-timer", "q4", []byte("hello msg 1"), 100, 0, 1)
+		job := engine.NewJob("ns-timer", "q4", []byte("hello msg 1"), 100, 0, 1, "")
 		pool.Add(job)
 		timer.Add(job.Namespace(), job.Queue(), job.ID(), 1, 1)
 	}

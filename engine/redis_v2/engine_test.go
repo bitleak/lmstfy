@@ -3,12 +3,13 @@ package redis_v2
 import (
 	"bytes"
 	"fmt"
-	"github.com/bitleak/lmstfy/engine"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
+  "github.com/bitleak/lmstfy/engine"
 	"github.com/bitleak/lmstfy/config"
 	"github.com/bitleak/lmstfy/storage"
 	"github.com/bitleak/lmstfy/storage/lock"
@@ -49,14 +50,16 @@ func TestEngine_Publish(t *testing.T) {
 	}
 	defer e.Shutdown()
 	body := []byte("hello msg 1")
-	jobID, err := e.Publish("ns-engine", "q1", body, 10, 2, 1)
+	j := engine.NewJob("ns-engine", "q1", body, 10, 2, 1, "")
+	jobID, err := e.Publish(j)
 	t.Log(jobID)
 	if err != nil {
 		t.Fatalf("Failed to publish: %s", err)
 	}
 
 	// Publish no-delay job
-	jobID, err = e.Publish("ns-engine", "q1", body, 10, 0, 1)
+	j = engine.NewJob("ns-engine", "q1", body, 10, 0, 1, "")
+	jobID, err = e.Publish(j)
 	t.Log(jobID)
 	if err != nil {
 		t.Fatalf("Failed to publish: %s", err)
@@ -87,22 +90,17 @@ func TestEngine_Publish_SecondaryStorage(t *testing.T) {
 
 	// Publish long-delay job
 	body := []byte("hello msg long delay job")
-	jobID, err := e.Publish("ns-engine", "qs", body, 120, 15, 1)
+	j := engine.NewJob("ns-engine", "qs", body, 120, 15, 1, "")
+	jobID, err := e.Publish(j)
 	t.Log(jobID)
-	if err != nil {
-		t.Fatalf("Failed to publish: %s", err)
-	}
-
+	assert.Nil(t, err)
 	//wait for data mgr to pump job from secondary storage to engine
 	time.Sleep(20 * time.Second)
 
 	job, err := e.Consume("ns-engine", []string{"qs"}, 3, 0)
-	if err != nil {
-		t.Fatalf("Failed to consume job from secondary storage: %s", err)
-	}
-	if !bytes.Equal(body, job.Body()) {
-		t.Fatalf("Mistmatched job data")
-	}
+	assert.Nil(t, err)
+	assert.EqualValues(t, jobID, job.ID())
+	assert.EqualValues(t, body, job.Body())
 }
 
 func TestEngine_Consume(t *testing.T) {
@@ -112,7 +110,8 @@ func TestEngine_Consume(t *testing.T) {
 	}
 	defer e.Shutdown()
 	body := []byte("hello msg 2")
-	jobID, err := e.Publish("ns-engine", "q2", body, 10, 2, 1)
+	j := engine.NewJob("ns-engine", "q2", body, 10, 2, 1, "")
+	jobID, err := e.Publish(j)
 	if err != nil {
 		t.Fatalf("Failed to publish: %s", err)
 	}
@@ -128,7 +127,8 @@ func TestEngine_Consume(t *testing.T) {
 	}
 
 	// Consume job that's published in no-delay way
-	jobID, err = e.Publish("ns-engine", "q2", body, 10, 0, 1)
+	j = engine.NewJob("ns-engine", "q2", body, 10, 0, 1, "")
+	jobID, err = e.Publish(j)
 	t.Log(jobID)
 	if err != nil {
 		t.Fatalf("Failed to publish: %s", err)
@@ -150,8 +150,10 @@ func TestEngine_Consume2(t *testing.T) {
 	}
 	defer e.Shutdown()
 	body := []byte("hello msg 3")
-	_, err = e.Publish("ns-engine", "q3", []byte("delay msg"), 10, 5, 1)
-	jobID, err := e.Publish("ns-engine", "q3", body, 10, 2, 1)
+	j := engine.NewJob("ns-engine", "q3", []byte("delay msg"), 10, 5, 1, "")
+	_, err = e.Publish(j)
+	j = engine.NewJob("ns-engine", "q3", body, 10, 2, 1, "")
+	jobID, err := e.Publish(j)
 	if err != nil {
 		t.Fatalf("Failed to publish: %s", err)
 	}
@@ -174,11 +176,13 @@ func TestEngine_ConsumeMulti(t *testing.T) {
 	}
 	defer e.Shutdown()
 	body := []byte("hello msg 4")
-	jobID, err := e.Publish("ns-engine", "q4", body, 10, 3, 1)
+	j := engine.NewJob("ns-engine", "q4", body, 10, 3, 1, "")
+	jobID, err := e.Publish(j)
 	if err != nil {
 		t.Fatalf("Failed to publish: %s", err)
 	}
-	jobID2, err := e.Publish("ns-engine", "q5", body, 10, 1, 1)
+	j = engine.NewJob("ns-engine", "q5", body, 10, 1, 1, "")
+	jobID2, err := e.Publish(j)
 	if err != nil {
 		t.Fatalf("Failed to publish: %s", err)
 	}
@@ -213,7 +217,8 @@ func TestEngine_Peek(t *testing.T) {
 	}
 	defer e.Shutdown()
 	body := []byte("hello msg 6")
-	jobID, err := e.Publish("ns-engine", "q6", body, 10, 0, 1)
+	j := engine.NewJob("ns-engine", "q6", body, 10, 0, 1, "")
+	jobID, err := e.Publish(j)
 	if err != nil {
 		t.Fatalf("Failed to publish: %s", err)
 	}
@@ -246,7 +251,8 @@ func TestEngine_Peek_SecondaryStorage(t *testing.T) {
 
 	// Publish long-delay job
 	body := []byte("engine peek long delay job")
-	jobID, err := e.Publish("ns-engine", "qst", body, 120, 15, 1)
+	j := engine.NewJob("ns-engine", "qst", body, 120, 15, 1, "")
+	jobID, err := e.Publish(j)
 	t.Log(jobID)
 	assert.Nil(t, err)
 	job, err := e.Peek("ns-engine", "qst", "")
@@ -265,7 +271,8 @@ func TestEngine_BatchConsume(t *testing.T) {
 	}
 	defer e.Shutdown()
 	body := []byte("hello msg 7")
-	jobID, err := e.Publish("ns-engine", "q7", body, 10, 3, 1)
+	j := engine.NewJob("ns-engine", "q7", body, 10, 3, 1, "")
+	jobID, err := e.Publish(j)
 	t.Log(jobID)
 	if err != nil {
 		t.Fatalf("Failed to publish: %s", err)
@@ -290,7 +297,8 @@ func TestEngine_BatchConsume(t *testing.T) {
 	// Consume some jobs
 	jobIDMap := map[string]bool{}
 	for i := 0; i < 4; i++ {
-		jobID, err := e.Publish("ns-engine", "q7", body, 10, 0, 1)
+		j := engine.NewJob("ns-engine", "q7", body, 10, 0, 1, "")
+		jobID, err := e.Publish(j)
 		t.Log(jobID)
 		if err != nil {
 			t.Fatalf("Failed to publish: %s", err)
@@ -332,4 +340,21 @@ func TestEngine_BatchConsume(t *testing.T) {
 	if len(jobs) != 0 {
 		t.Fatalf("Mistmatched jobs count")
 	}
+}
+
+func TestEngine_PublishWithJobID(t *testing.T) {
+	e, err := NewEngine(R.Name, PoolConf, R.Conn)
+	if err != nil {
+		panic(fmt.Sprintf("Setup engine error: %s", err))
+	}
+	defer e.Shutdown()
+	body := []byte("hello msg 1")
+	j := engine.NewJob("ns-engine", "q8", body, 10, 0, 1, "jobID1")
+	jobID, err := e.Publish(j)
+	t.Log(jobID)
+	assert.Nil(t, err)
+
+	// Make sure the engine received the job
+	job, err := e.Consume("ns-engine", []string{"q8"}, 3, 0)
+	assert.EqualValues(t, jobID, job.ID())
 }

@@ -7,6 +7,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-redis/redis/v8"
+	"github.com/sirupsen/logrus"
+
 	"github.com/bitleak/lmstfy/config"
 	"github.com/bitleak/lmstfy/engine"
 	"github.com/bitleak/lmstfy/helper"
@@ -15,8 +18,6 @@ import (
 	"github.com/bitleak/lmstfy/storage/persistence/model"
 	"github.com/bitleak/lmstfy/storage/persistence/spanner"
 	"github.com/bitleak/lmstfy/storage/pumper"
-	"github.com/go-redis/redis/v8"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -24,6 +25,9 @@ const (
 
 	defaultLockExpiry   = 15 * time.Second
 	defaultPumpInterval = 3 * time.Second
+
+	addJobSuccessStatus = "success"
+	addJobFailedStatus  = "failed"
 )
 
 type Manager struct {
@@ -110,6 +114,7 @@ func (m *Manager) PumpFn(name string, pool engine.Engine, threshold int64) func(
 			}).Errorf("Failed to delete jobs from storage")
 			return false
 		}
+		metrics.storageDelJobs.WithLabelValues(name).Add(float64(len(jobsID)))
 		return len(jobsID) == maxJobBatchSize
 	}
 }
@@ -129,7 +134,15 @@ func (m *Manager) AddPool(name string, pool engine.Engine, threshold int64) {
 }
 
 func (m *Manager) AddJob(ctx context.Context, job *model.JobData) error {
-	return m.storage.BatchAddJobs(ctx, []*model.JobData{job})
+	var status string
+	err := m.storage.BatchAddJobs(ctx, []*model.JobData{job})
+	if err == nil {
+		status = addJobSuccessStatus
+	} else {
+		status = addJobFailedStatus
+	}
+	metrics.storageAddJobs.WithLabelValues(job.PoolName, job.Namespace, job.Queue, status).Inc()
+	return err
 }
 
 func (m *Manager) GetJobByID(ctx context.Context, ID string) ([]*model.JobData, error) {

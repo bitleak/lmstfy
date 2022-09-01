@@ -18,4 +18,6 @@ type Persistence interface {
 	DelJobs(ctx context.Context, jobIDs []string) (count int64, err error)
 	// GetReadyJobs return jobs which are ready based on input ready time from data storage
 	GetReadyJobs(ctx context.Context, req *model.JobDataReq) (jobs []*model.JobData, err error)
+	// BatchGetJobsByID returns job data by job ID
+	BatchGetJobsByID(ctx context.Context, IDs []string) (jobs []*model.JobData, err error)
 }

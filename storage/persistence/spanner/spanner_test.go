@@ -1,32 +1,12 @@
 package spanner
 
 import (
-	"context"
 	"fmt"
-	"os"
 	"testing"
 
 	"github.com/bitleak/lmstfy/config"
 	"github.com/stretchr/testify/assert"
 )
-
-var (
-	dummyCtx = context.TODO()
-)
-
-func init() {
-	if os.Getenv("SPANNER_EMULATOR_HOST") == "" {
-		panic(fmt.Sprintf("failed to find $SPANNER_EMULATOR_HOST value"))
-	}
-	err := CreateInstance(dummyCtx, config.SpannerEmulator)
-	if err != nil {
-		panic(fmt.Sprintf("create instance error: %v", err))
-	}
-	err = CreateDatabase(dummyCtx, config.SpannerEmulator)
-	if err != nil {
-		panic(fmt.Sprintf("create db error: %v", err))
-	}
-}
 
 func TestCreateSpannerClient(t *testing.T) {
 	_, err := createSpannerClient(config.SpannerEmulator)

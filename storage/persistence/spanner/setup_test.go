@@ -3,7 +3,8 @@ package spanner
 import (
 	"context"
 	"fmt"
-	"regexp"
+	"io/ioutil"
+	"strings"
 	"time"
 
 	"github.com/bitleak/lmstfy/storage/persistence/model"
@@ -18,25 +19,14 @@ import (
 	"github.com/bitleak/lmstfy/config"
 )
 
-var cfg = &config.SpannerConfig{
-	Project:   "test-project",
-	Instance:  "test-instance",
-	Database:  "test-db",
-	TableName: "lmstfy_jobs",
-}
-
 var (
 	poolName = "default"
 	jobIDs   = []string{"1", "2", "3"}
 	ctx      = context.Background()
 )
 
-func CreateInstance(ctx context.Context, uri string) error {
-	matches := regexp.MustCompile("projects/(.*)/instances/(.*)/databases/.*").FindStringSubmatch(uri)
-	if matches == nil || len(matches) != 3 {
-		return fmt.Errorf("invalid instance id %s", uri)
-	}
-	instanceName := "projects/" + matches[1] + "/instances/" + matches[2]
+func CreateInstance(ctx context.Context, cfg *config.SpannerConfig) error {
+	instanceName := fmt.Sprintf("projects/%s/instances/%s", cfg.Project, cfg.Instance)
 
 	instanceAdminClient, err := instance.NewInstanceAdminClient(ctx)
 	if err != nil {
@@ -55,26 +45,20 @@ func CreateInstance(ctx context.Context, uri string) error {
 	}
 
 	_, err = instanceAdminClient.CreateInstance(ctx, &instancepb.CreateInstanceRequest{
-		Parent:     "projects/" + matches[1],
-		InstanceId: matches[2],
+		Parent:     "projects/" + cfg.Project,
+		InstanceId: cfg.Instance,
 	})
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
-func CreateDatabase(ctx context.Context, uri string) error {
-	matches := regexp.MustCompile("^(.*)/databases/(.*)$").FindStringSubmatch(uri)
-	if matches == nil || len(matches) != 3 {
-		return fmt.Errorf("invalid database id %s", uri)
-	}
-
+func CreateDatabase(ctx context.Context, cfg *config.SpannerConfig) error {
 	databaseAdminClient, err := database.NewDatabaseAdminClient(ctx)
 	if err != nil {
 		return err
 	}
-	_, err = databaseAdminClient.GetDatabase(ctx, &databasepb.GetDatabaseRequest{Name: uri})
+	instanceName := fmt.Sprintf("projects/%s/instances/%s", cfg.Project, cfg.Instance)
+	dbName := fmt.Sprintf("%s/databases/%s", instanceName, cfg.Database)
+	_, err = databaseAdminClient.GetDatabase(ctx, &databasepb.GetDatabaseRequest{Name: dbName})
 	if err != nil && spanner.ErrCode(err) != codes.NotFound {
 		return err
 	}
@@ -83,30 +67,27 @@ func CreateDatabase(ctx context.Context, uri string) error {
 		return nil
 	}
 
+	ddlBytes, err := ioutil.ReadFile("../../../scripts/schemas/spanner/ddls.sql")
+	if err != nil {
+		return fmt.Errorf("read ddls file: %w", err)
+	}
+	ddls := make([]string, 0)
+	for _, ddl := range strings.Split(string(ddlBytes), ";") {
+		ddl = strings.TrimSpace(ddl)
+		if len(ddl) != 0 {
+			ddls = append(ddls, ddl)
+		}
+	}
 	op, err := databaseAdminClient.CreateDatabase(ctx, &databasepb.CreateDatabaseRequest{
-		Parent:          matches[1],
-		CreateStatement: "CREATE DATABASE `" + matches[2] + "`",
-		ExtraStatements: []string{
-			`CREATE TABLE lmstfy_jobs (
-								pool_name    STRING(1024),
-								job_id       STRING(1024),
-								namespace    STRING(1024),
-								queue        STRING(1024),
-								body         BYTES(MAX),
-								expired_time INT64 NOT NULL,
-								ready_time   INT64 NOT NULL,
-								tries        INT64 NOT NULL,
-                                created_time  INT64 NOT NULL
-			                       ) PRIMARY KEY (job_id)`,
-		},
+		Parent:          instanceName,
+		CreateStatement: "CREATE DATABASE `" + cfg.Database + "`",
+		ExtraStatements: ddls,
 	})
 	if err != nil {
 		return err
 	}
-	if _, err = op.Wait(ctx); err != nil {
-		return err
-	}
-	return nil
+	_, err = op.Wait(ctx)
+	return err
 }
 
 func createTestJobsData() []*model.JobData {

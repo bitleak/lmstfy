@@ -6,11 +6,11 @@ import (
 	"os"
 	"testing"
 
+	"github.com/bitleak/lmstfy/config"
 	"github.com/stretchr/testify/assert"
 )
 
 var (
-	db       = "projects/test-project/instances/test-instance/databases/test-db"
 	dummyCtx = context.TODO()
 )
 
@@ -18,23 +18,23 @@ func init() {
 	if os.Getenv("SPANNER_EMULATOR_HOST") == "" {
 		panic(fmt.Sprintf("failed to find $SPANNER_EMULATOR_HOST value"))
 	}
-	err := CreateInstance(dummyCtx, db)
+	err := CreateInstance(dummyCtx, config.SpannerEmulator)
 	if err != nil {
 		panic(fmt.Sprintf("create instance error: %v", err))
 	}
-	err = CreateDatabase(dummyCtx, db)
+	err = CreateDatabase(dummyCtx, config.SpannerEmulator)
 	if err != nil {
 		panic(fmt.Sprintf("create db error: %v", err))
 	}
 }
 
 func TestCreateSpannerClient(t *testing.T) {
-	_, err := CreateSpannerClient(cfg)
+	_, err := createSpannerClient(config.SpannerEmulator)
 	assert.Nil(t, err)
 }
 
 func TestSpanner_BatchAddDelJobs(t *testing.T) {
-	mgr, err := NewSpanner(cfg)
+	mgr, err := NewSpanner(config.SpannerEmulator)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to create spanner client with error: %s", err))
 	}
@@ -53,7 +53,7 @@ func TestSpanner_BatchAddDelJobs(t *testing.T) {
 }
 
 func TestSpanner_BatchGetJobs(t *testing.T) {
-	mgr, err := NewSpanner(cfg)
+	mgr, err := NewSpanner(config.SpannerEmulator)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to create spanner client with error: %s", err))
 	}
@@ -68,7 +68,7 @@ func TestSpanner_BatchGetJobs(t *testing.T) {
 }
 
 func TestSpanner_GetQueueSize(t *testing.T) {
-	mgr, err := NewSpanner(cfg)
+	mgr, err := NewSpanner(config.SpannerEmulator)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to create spanner client with error: %s", err))
 	}
@@ -86,7 +86,7 @@ func TestSpanner_GetQueueSize(t *testing.T) {
 }
 
 func TestSpanner_GetReadyJobs(t *testing.T) {
-	mgr, err := NewSpanner(cfg)
+	mgr, err := NewSpanner(config.SpannerEmulator)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to create spanner client with error: %s", err))
 	}
@@ -102,7 +102,7 @@ func TestSpanner_GetReadyJobs(t *testing.T) {
 }
 
 func TestSpanner_BatchGetJobsByID(t *testing.T) {
-	mgr, err := NewSpanner(cfg)
+	mgr, err := NewSpanner(config.SpannerEmulator)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to create spanner client with error: %s", err))
 	}

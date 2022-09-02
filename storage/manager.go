@@ -55,11 +55,18 @@ func Get() *Manager {
 	return manager
 }
 
+func createPersistStorage(cfg *config.SecondaryStorage) (Persistence, error) {
+	if cfg.Spanner != nil {
+		return spanner.NewSpanner(cfg.Spanner)
+	}
+	return nil, errors.New("require at least one of [Spanner]")
+}
+
 func NewManger(cfg *config.Config) (*Manager, error) {
 	if cfg.SecondaryStorage == nil {
 		return nil, errors.New("nil second storage config")
 	}
-	storage, err := spanner.NewSpanner(cfg.SecondaryStorage)
+	storage, err := createPersistStorage(cfg.SecondaryStorage)
 	if err != nil {
 		return nil, err
 	}
@@ -133,6 +140,7 @@ func (m *Manager) AddPool(name string, pool engine.Engine, threshold int64) {
 
 	redisLock := lock.NewRedisLock(m.redisCli, name, defaultLockExpiry)
 	pumper := pumper.NewDefault(redisLock, defaultPumpInterval)
+	m.pumpers[name] = pumper
 
 	m.wg.Add(1)
 	go func() {

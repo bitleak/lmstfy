@@ -16,21 +16,18 @@ import (
 var dummyCtx = context.TODO()
 
 func TestNewManager(t *testing.T) {
-	cfg := &config.Config{}
+	cfg := testConfig.Config
+	cfg.SecondaryStorage = nil
 	_, err := NewManger(cfg)
 	assert.NotNil(t, err)
-	cfg.SecondaryStorage = &config.SecondaryStorage{
-		Spanner: config.SpannerEmulator,
-	}
+
+	cfg.SecondaryStorage = &config.SecondaryStorage{Spanner: config.SpannerEmulator}
 	_, err = NewManger(cfg)
 	assert.Nil(t, err)
 }
 
 func TestManager_AddJob_GetJob(t *testing.T) {
-	cfg := &config.Config{}
-	cfg.SecondaryStorage = &config.SecondaryStorage{
-		Spanner: config.SpannerEmulator,
-	}
+	cfg := testConfig.Config
 	mgr, err := NewManger(cfg)
 	assert.Nil(t, err)
 

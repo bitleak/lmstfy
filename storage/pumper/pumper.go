@@ -52,6 +52,11 @@ func (p *Default) Loop(fn func() bool) {
 		case <-pumpTicker.C:
 			continueLoop := true
 			for isLeader && continueLoop {
+				select {
+				case <-p.shutdown:
+					return
+				default:
+				}
 				continueLoop = fn()
 			}
 		case <-electTicker.C:

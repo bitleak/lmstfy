@@ -69,7 +69,7 @@ func validateRedisPersistConfig(ctx context.Context, cli *redis.Client, conf *co
 		return errors.New("redis appendonly MUST be 'yes' to prevent data loss")
 	}
 	if conf.EnableSecondaryStorage && maxMem == 0 {
-		return errors.New("redis maxmemory MUST be greater than zero when secondary storage is enabled")
+		return errors.New("redis maxmemory MUST be assigned when secondary storage is enabled")
 	}
 	return nil
 }

@@ -3,6 +3,7 @@ package helper
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 
 	"github.com/bitleak/lmstfy/config"
@@ -39,12 +40,13 @@ func NewRedisClient(conf *config.RedisConf, opt *redis.Options) (client *redis.C
 }
 
 // validateRedisPersistConfig will check whether persist config of Redis is good or not
-func validateRedisPersistConfig(ctx context.Context, cli *redis.Client) error {
+func validateRedisPersistConfig(ctx context.Context, cli *redis.Client, conf *config.RedisConf) error {
 	infoStr, err := cli.Info(ctx).Result()
 	if err != nil {
 		return err
 	}
 	isNoEvctionPolicy, isAppendOnlyEnabled := false, false
+	var maxMem int64
 	lines := strings.Split(infoStr, "\r\n")
 	for _, line := range lines {
 		fields := strings.Split(line, ":")
@@ -56,6 +58,8 @@ func validateRedisPersistConfig(ctx context.Context, cli *redis.Client) error {
 			isNoEvctionPolicy = fields[1] == "noeviction"
 		case "aof_enabled":
 			isAppendOnlyEnabled = fields[1] == "1"
+		case "maxmemory":
+			maxMem, _ = strconv.ParseInt(fields[1], 10, 64)
 		}
 	}
 	if !isNoEvctionPolicy {
@@ -63,6 +67,9 @@ func validateRedisPersistConfig(ctx context.Context, cli *redis.Client) error {
 	}
 	if !isAppendOnlyEnabled {
 		return errors.New("redis appendonly MUST be 'yes' to prevent data loss")
+	}
+	if conf.EnableSecondaryStorage && maxMem == 0 {
+		return errors.New("redis maxmemory MUST be greater than zero when secondary storage is enabled")
 	}
 	return nil
 }
@@ -73,5 +80,5 @@ func ValidateRedisConfig(ctx context.Context, conf *config.RedisConf) error {
 	redisCli := NewRedisClient(conf, &redis.Options{PoolSize: 1})
 	defer redisCli.Close()
 
-	return validateRedisPersistConfig(ctx, redisCli)
+	return validateRedisPersistConfig(ctx, redisCli, conf)
 }

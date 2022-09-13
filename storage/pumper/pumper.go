@@ -71,7 +71,7 @@ func (p *Default) Loop(fn func() bool) {
 					// Become Leader
 					isLeader = true
 					logger.Info("Acquired the pumper lock, I'm leader now")
-					return
+					continue
 				}
 			}
 		case <-p.shutdown:

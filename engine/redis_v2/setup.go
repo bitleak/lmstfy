@@ -63,7 +63,7 @@ func Setup(conf *config.Config) error {
 			if threshold >= maxPumpInThresholdSeconds {
 				threshold = maxPumpInThresholdSeconds
 			}
-			storage.Get().AddPool(name, e, threshold)
+			storage.Get().AddPool(name, e, threshold, poolConf.MaxJobPumpBatchSize)
 		}
 	}
 	return nil

@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	maxJobBatchSize = 128
+	defaultMaxJobPumpBatchSize = 512
 
 	defaultLockExpiry   = 15 * time.Second
 	defaultPumpInterval = 3 * time.Second
@@ -82,18 +82,22 @@ func NewManger(cfg *config.Config) (*Manager, error) {
 	}, nil
 }
 
-func (m *Manager) PumpFn(name string, pool engine.Engine, threshold int64) func() bool {
+func (m *Manager) PumpFn(name string, pool engine.Engine, threshold int64, maxPumpBatchSize int64) func() bool {
 	return func() bool {
 		logger := log.Get().WithField("pool", name)
 		if isHighRedisMemUsage(m.redisCli) {
 			logger.Error("High redis usage, storage stops pumping data")
 			return false
 		}
+		var batchSize int64
+		if maxPumpBatchSize == 0 || maxPumpBatchSize > defaultMaxJobPumpBatchSize {
+			batchSize = defaultMaxJobPumpBatchSize
+		}
 		now := time.Now()
 		req := &model.JobDataReq{
 			PoolName:  name,
 			ReadyTime: now.Unix() + threshold,
-			Count:     maxJobBatchSize,
+			Count:     batchSize,
 		}
 		ctx := context.TODO()
 		jobs, err := m.storage.GetReadyJobs(ctx, req)
@@ -130,11 +134,11 @@ func (m *Manager) PumpFn(name string, pool engine.Engine, threshold int64) func(
 			return false
 		}
 		metrics.storageDelJobs.WithLabelValues(name).Add(float64(len(jobsID)))
-		return len(jobsID) == maxJobBatchSize
+		return int64(len(jobsID)) == batchSize
 	}
 }
 
-func (m *Manager) AddPool(name string, pool engine.Engine, threshold int64) {
+func (m *Manager) AddPool(name string, pool engine.Engine, threshold int64, maxPumpBatchSize int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -145,7 +149,7 @@ func (m *Manager) AddPool(name string, pool engine.Engine, threshold int64) {
 	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()
-		pumper.Loop(m.PumpFn(name, pool, threshold))
+		pumper.Loop(m.PumpFn(name, pool, threshold, maxPumpBatchSize))
 	}()
 }
 

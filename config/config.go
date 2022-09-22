@@ -80,6 +80,9 @@ type RedisConf struct {
 	// number of seconds. when job's delay second is greater than pumpStorageThresh,
 	//it will be written to storage if enabled
 	SecondaryStorageThresholdSeconds int64
+
+	// max number of jobs that storage pumps per batch
+	MaxJobPumpBatchSize int64
 }
 
 func (c *Config) HasSecondaryStorage() bool {

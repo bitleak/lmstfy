@@ -15,6 +15,7 @@ import (
 const (
 	maxBatchConsumeSize = 100
 	maxBulkPublishSize  = 64
+	maxBody = 1024 * 1024
 )
 
 // PUT /:namespace/:queue
@@ -79,7 +80,7 @@ func Publish(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read body"})
 		return
 	}
-	if len(body) > math.MaxUint16 { // Larger than 64 KB
+	if len(body) > maxBody { // Larger than 64 KB
 		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "body too large"})
 		return
 	}

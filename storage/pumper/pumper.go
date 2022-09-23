@@ -58,7 +58,6 @@ func (p *Default) Loop(fn func() bool) {
 				default:
 				}
 				continueLoop = fn()
-				pumpTicker.Reset(p.interval)
 			}
 		case <-electTicker.C:
 			if isLeader {

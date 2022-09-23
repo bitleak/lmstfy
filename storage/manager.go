@@ -88,7 +88,7 @@ func (m *Manager) PumpFn(name string, pool engine.Engine, threshold int64) func(
 	return func() bool {
 		logger := log.Get().WithField("pool", name)
 		if isHighRedisMemUsage(m.redisCli) {
-			logger.Error("High redis usage, storage stops pumping data")
+			logger.Error("High redis usage, storage stops pumping ready jobs")
 			return false
 		}
 
@@ -136,6 +136,7 @@ func (m *Manager) PumpFn(name string, pool engine.Engine, threshold int64) func(
 			return false
 		}
 		metrics.storageDelJobs.WithLabelValues(name).Add(float64(len(jobsID)))
+		logger.Infof("pump ready jobs num:%v", len(jobsID))
 		return int64(len(jobsID)) == m.maxPumpBatchSize
 	}
 }

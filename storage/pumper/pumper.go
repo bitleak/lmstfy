@@ -70,8 +70,8 @@ func (p *Default) Loop(fn func() bool) {
 				if err := p.lock.Acquire(); err == nil {
 					// Become Leader
 					isLeader = true
-					logger.Info("Acquired the pumper lock, I'm leader now")
-					return
+					logger.Info("Acquired the pumper lock, I'm the elected leader now")
+					continue
 				}
 			}
 		case <-p.shutdown:

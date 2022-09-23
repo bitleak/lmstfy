@@ -62,7 +62,7 @@ func TestEngine_Publish_SecondaryStorage(t *testing.T) {
 	assert.Nil(t, err)
 
 	defer manager.Shutdown()
-	manager.AddPool(R.Name, e, 0, 100)
+	manager.AddPool(R.Name, e, 0)
 	// Publish long-delay job
 	body := []byte("hello msg long delay job")
 	j := engine.NewJob("ns-engine", "qs", body, 120, 1, 1, "")
@@ -218,7 +218,7 @@ func TestEngine_Peek_SecondaryStorage(t *testing.T) {
 	manager, err := storage.NewManger(testConfig.Config)
 	defer manager.Shutdown()
 	require.Nil(t, err)
-	manager.AddPool(R.Name, e, 30, 100)
+	manager.AddPool(R.Name, e, 30)
 
 	// Publish long-delay job
 	body := []byte("engine peek long delay job")

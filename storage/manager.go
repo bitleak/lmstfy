@@ -40,8 +40,9 @@ type Manager struct {
 	pools   map[string]engine.Engine
 	pumpers map[string]pumper.Pumper
 
-	redisCli *redis.Client
-	storage  Persistence
+	redisCli         *redis.Client
+	storage          Persistence
+	maxPumpBatchSize int64
 }
 
 var manager *Manager
@@ -75,29 +76,30 @@ func NewManger(cfg *config.Config) (*Manager, error) {
 		return nil, fmt.Errorf("create redis client err: %w", err)
 	}
 	return &Manager{
-		redisCli: redisCli,
-		storage:  storage,
-		pools:    make(map[string]engine.Engine),
-		pumpers:  make(map[string]pumper.Pumper),
+		redisCli:         redisCli,
+		storage:          storage,
+		pools:            make(map[string]engine.Engine),
+		pumpers:          make(map[string]pumper.Pumper),
+		maxPumpBatchSize: cfg.SecondaryStorage.MaxJobPumpBatchSize,
 	}, nil
 }
 
-func (m *Manager) PumpFn(name string, pool engine.Engine, threshold int64, maxPumpBatchSize int64) func() bool {
+func (m *Manager) PumpFn(name string, pool engine.Engine, threshold int64) func() bool {
 	return func() bool {
 		logger := log.Get().WithField("pool", name)
 		if isHighRedisMemUsage(m.redisCli) {
 			logger.Error("High redis usage, storage stops pumping data")
 			return false
 		}
-		var batchSize int64
-		if maxPumpBatchSize == 0 || maxPumpBatchSize > defaultMaxJobPumpBatchSize {
-			batchSize = defaultMaxJobPumpBatchSize
+
+		if m.maxPumpBatchSize == 0 || m.maxPumpBatchSize > defaultMaxJobPumpBatchSize {
+			m.maxPumpBatchSize = defaultMaxJobPumpBatchSize
 		}
 		now := time.Now()
 		req := &model.JobDataReq{
 			PoolName:  name,
 			ReadyTime: now.Unix() + threshold,
-			Count:     batchSize,
+			Count:     m.maxPumpBatchSize,
 		}
 		ctx := context.TODO()
 		jobs, err := m.storage.GetReadyJobs(ctx, req)
@@ -134,11 +136,11 @@ func (m *Manager) PumpFn(name string, pool engine.Engine, threshold int64, maxPu
 			return false
 		}
 		metrics.storageDelJobs.WithLabelValues(name).Add(float64(len(jobsID)))
-		return int64(len(jobsID)) == batchSize
+		return int64(len(jobsID)) == m.maxPumpBatchSize
 	}
 }
 
-func (m *Manager) AddPool(name string, pool engine.Engine, threshold int64, maxPumpBatchSize int64) {
+func (m *Manager) AddPool(name string, pool engine.Engine, threshold int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -149,7 +151,7 @@ func (m *Manager) AddPool(name string, pool engine.Engine, threshold int64, maxP
 	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()
-		pumper.Loop(m.PumpFn(name, pool, threshold, maxPumpBatchSize))
+		pumper.Loop(m.PumpFn(name, pool, threshold))
 	}()
 }
 

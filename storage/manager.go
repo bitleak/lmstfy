@@ -95,6 +95,7 @@ func (m *Manager) PumpFn(name string, pool engine.Engine, threshold int64) func(
 		if m.maxPumpBatchSize == 0 || m.maxPumpBatchSize > defaultMaxJobPumpBatchSize {
 			m.maxPumpBatchSize = defaultMaxJobPumpBatchSize
 		}
+		logger.Infof("get max job pump batch size:%v", m.maxPumpBatchSize)
 		now := time.Now()
 		req := &model.JobDataReq{
 			PoolName:  name,
@@ -107,6 +108,7 @@ func (m *Manager) PumpFn(name string, pool engine.Engine, threshold int64) func(
 			logger.WithError(err).Errorf("Failed to get ready jobs from storage")
 			return false
 		}
+		logger.Infof("finish get ready job at:%v", time.Now())
 
 		if len(jobs) == 0 {
 			return false
@@ -117,7 +119,7 @@ func (m *Manager) PumpFn(name string, pool engine.Engine, threshold int64) func(
 		for _, job := range jobs {
 			j := engine.NewJob(job.Namespace, job.Queue, job.Body, uint32(job.ExpiredTime),
 				uint32(job.ReadyTime-now.Unix()), uint16(job.Tries), job.JobID)
-			_, err := pool.Publish(j)
+			_, err = pool.Publish(j)
 			if err != nil {
 				logger.WithFields(logrus.Fields{
 					"job": j,
@@ -128,6 +130,8 @@ func (m *Manager) PumpFn(name string, pool engine.Engine, threshold int64) func(
 			jobsID = append(jobsID, job.JobID)
 		}
 
+		logger.Infof("finish publish ready job at:%v", time.Now())
+
 		if _, err := m.storage.DelJobs(ctx, jobsID); err != nil {
 			logger.WithFields(logrus.Fields{
 				"jobs": jobsID,
@@ -135,6 +139,7 @@ func (m *Manager) PumpFn(name string, pool engine.Engine, threshold int64) func(
 			}).Errorf("Failed to delete jobs from storage")
 			return false
 		}
+		logger.Infof("finish delete ready job at:%v", time.Now())
 		metrics.storageDelJobs.WithLabelValues(name).Add(float64(len(jobsID)))
 		return int64(len(jobsID)) == m.maxPumpBatchSize
 	}

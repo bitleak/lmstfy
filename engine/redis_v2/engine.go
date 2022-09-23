@@ -304,6 +304,7 @@ func (e *Engine) publishJob(job engine.Job) (jobID string, err error) {
 		if err := e.sink2SecondStorage(context.TODO(), job); err == nil {
 			return job.ID(), nil
 		}
+		logger.Errorf("add job to storage error:%v", err)
 	}
 	err = e.pool.Add(job)
 	if err != nil {

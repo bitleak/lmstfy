@@ -95,6 +95,7 @@ func (m *Manager) PumpFn(name string, pool engine.Engine, threshold int64) func(
 		if m.maxPumpBatchSize == 0 || m.maxPumpBatchSize > defaultMaxJobPumpBatchSize {
 			m.maxPumpBatchSize = defaultMaxJobPumpBatchSize
 		}
+		batchSize := strconv.Itoa(int(m.maxPumpBatchSize))
 		now := time.Now()
 		req := &model.JobDataReq{
 			PoolName:  name,
@@ -111,7 +112,7 @@ func (m *Manager) PumpFn(name string, pool engine.Engine, threshold int64) func(
 		if len(jobs) == 0 {
 			return false
 		}
-		metrics.pumperLatency.WithLabelValues("step_get_jobs", strconv.Itoa(int(m.maxPumpBatchSize))).Observe(float64(time.Since(now).Milliseconds()))
+		metrics.pumperLatency.WithLabelValues("step_get_jobs", batchSize).Observe(float64(time.Since(now).Milliseconds()))
 		logger.Debugf("Got %d ready jobs from storage", len(jobs))
 
 		jobsID := make([]string, 0)
@@ -128,7 +129,7 @@ func (m *Manager) PumpFn(name string, pool engine.Engine, threshold int64) func(
 			}
 			jobsID = append(jobsID, job.JobID)
 		}
-		metrics.pumperLatency.WithLabelValues("step_publish_jobs", strconv.Itoa(int(m.maxPumpBatchSize))).Observe(float64(time.Since(now).Milliseconds()))
+		metrics.pumperLatency.WithLabelValues("step_publish_jobs", batchSize).Observe(float64(time.Since(now).Milliseconds()))
 
 		if _, err := m.storage.DelJobs(ctx, jobsID); err != nil {
 			logger.WithFields(logrus.Fields{
@@ -138,7 +139,7 @@ func (m *Manager) PumpFn(name string, pool engine.Engine, threshold int64) func(
 			return false
 		}
 		metrics.storageDelJobs.WithLabelValues(name).Add(float64(len(jobsID)))
-		metrics.pumperLatency.WithLabelValues("step_delete_jobs", strconv.Itoa(int(m.maxPumpBatchSize))).Observe(float64(time.Since(now).Milliseconds()))
+		metrics.pumperLatency.WithLabelValues("step_delete_jobs", batchSize).Observe(float64(time.Since(now).Milliseconds()))
 		return int64(len(jobsID)) == m.maxPumpBatchSize
 	}
 }

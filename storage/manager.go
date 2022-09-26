@@ -115,7 +115,7 @@ func (m *Manager) PumpFn(name string, pool engine.Engine, threshold int64) func(
 		metrics.pumperGetJobLatency.WithLabelValues(batchSize).Observe(float64(time.Since(now).Milliseconds()))
 		logger.Debugf("Got %d ready jobs from storage", len(jobs))
 
-		t1 := time.Now()
+		startPublishTime := time.Now()
 		jobsID := make([]string, 0)
 		for _, job := range jobs {
 			j := engine.NewJob(job.Namespace, job.Queue, job.Body, uint32(job.ExpiredTime),
@@ -130,9 +130,9 @@ func (m *Manager) PumpFn(name string, pool engine.Engine, threshold int64) func(
 			}
 			jobsID = append(jobsID, job.JobID)
 		}
-		metrics.pumperPubJobLatency.WithLabelValues(batchSize).Observe(float64(time.Since(t1).Milliseconds()))
+		metrics.pumperPubJobLatency.WithLabelValues(batchSize).Observe(float64(time.Since(startPublishTime).Milliseconds()))
 
-		t2 := time.Now()
+		startDelJobsTime := time.Now()
 		if _, err := m.storage.DelJobs(ctx, jobsID); err != nil {
 			logger.WithFields(logrus.Fields{
 				"jobs": jobsID,
@@ -141,7 +141,7 @@ func (m *Manager) PumpFn(name string, pool engine.Engine, threshold int64) func(
 			return false
 		}
 		metrics.storageDelJobs.WithLabelValues(name).Add(float64(len(jobsID)))
-		metrics.pumperDelJobLatency.WithLabelValues(batchSize).Observe(float64(time.Since(t2).Milliseconds()))
+		metrics.pumperDelJobLatency.WithLabelValues(batchSize).Observe(float64(time.Since(startDelJobsTime).Milliseconds()))
 		return int64(len(jobsID)) == m.maxPumpBatchSize
 	}
 }

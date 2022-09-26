@@ -6,9 +6,11 @@ import (
 
 // Metrics contains storage related metrics
 type Metrics struct {
-	storageAddJobs *prometheus.CounterVec
-	storageDelJobs *prometheus.CounterVec
-	pumperLatency  *prometheus.HistogramVec
+	storageAddJobs      *prometheus.CounterVec
+	storageDelJobs      *prometheus.CounterVec
+	pumperGetJobLatency *prometheus.HistogramVec
+	pumperPubJobLatency *prometheus.HistogramVec
+	pumperDelJobLatency *prometheus.HistogramVec
 }
 
 var (
@@ -24,9 +26,11 @@ func setupMetrics() {
 	cv, hv := newCounterVecHelper, newHistogramHelper
 
 	metrics = &Metrics{
-		storageAddJobs: cv("storage_add_jobs", "namespace", "queue", "status"),
-		storageDelJobs: cv("storage_del_jobs"),
-		pumperLatency:  hv("pumper_latency", "step", "batch_size"),
+		storageAddJobs:      cv("storage_add_jobs", "namespace", "queue", "status"),
+		storageDelJobs:      cv("storage_del_jobs"),
+		pumperGetJobLatency: hv("pumper_get_job_latency", "batch_size"),
+		pumperPubJobLatency: hv("pumper_pub_job_latency", "batch_size"),
+		pumperDelJobLatency: hv("pumper_del_job_latency", "batch_size"),
 	}
 }
 

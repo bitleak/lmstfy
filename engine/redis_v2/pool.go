@@ -4,8 +4,11 @@ import (
 	"errors"
 	"time"
 
-	"github.com/bitleak/lmstfy/engine"
 	go_redis "github.com/go-redis/redis/v8"
+	"google.golang.org/protobuf/proto"
+
+	"github.com/bitleak/lmstfy/engine"
+	"github.com/bitleak/lmstfy/engine/redis_v2/model"
 )
 
 // Pool stores all the jobs' data. this is a global singleton per engine
@@ -35,11 +38,19 @@ func PoolJobKeyPrefix(namespace, queue string) string {
 func (p *Pool) Add(j engine.Job) error {
 	body := j.Body()
 	metrics.poolAddJobs.WithLabelValues(p.redis.Name).Inc()
+	job := &model.ExtendedJob{
+		Body: body,
+	}
+	data, err := proto.Marshal(job)
+	if err != nil {
+		return err
+	}
+
 	// SetNX return OK(true) if key didn't exist before.
-	ok, err := p.redis.Conn.SetNX(dummyCtx, PoolJobKey(j), body, time.Duration(j.TTL())*time.Second).Result()
+	ok, err := p.redis.Conn.SetNX(dummyCtx, PoolJobKey(j), data, time.Duration(j.TTL())*time.Second).Result()
 	if err != nil {
 		// Just retry once.
-		ok, err = p.redis.Conn.SetNX(dummyCtx, PoolJobKey(j), body, time.Duration(j.TTL())*time.Second).Result()
+		ok, err = p.redis.Conn.SetNX(dummyCtx, PoolJobKey(j), data, time.Duration(j.TTL())*time.Second).Result()
 	}
 	if err != nil {
 		return err
@@ -68,7 +79,13 @@ func (p *Pool) Get(namespace, queue, jobID string) (body []byte, ttlSecond uint3
 			ttl = 0
 		}
 		metrics.poolGetJobs.WithLabelValues(p.redis.Name).Inc()
-		return []byte(val), uint32(ttl), nil
+
+		res := &model.ExtendedJob{}
+		err = proto.Unmarshal([]byte(val), res)
+		if err != nil {
+			return nil, 0, err
+		}
+		return res.GetBody(), uint32(ttl), nil
 	case go_redis.Nil:
 		return nil, 0, engine.ErrNotFound
 	default:

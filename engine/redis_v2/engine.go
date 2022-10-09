@@ -80,8 +80,7 @@ func (e *Engine) Publish(job engine.Job) (jobID string, err error) {
 }
 
 func (e *Engine) sink2SecondStorage(ctx context.Context, job engine.Job) error {
-	job.SetPool(e.redis.Name)
-	return storage.Get().AddJob(ctx, job)
+	return storage.Get().AddJob(ctx, job, e.redis.Name)
 }
 
 // BatchConsume consume some jobs of a queue

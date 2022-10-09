@@ -153,15 +153,15 @@ func (m *Manager) AddPool(name string, pool engine.Engine, threshold int64) {
 	}()
 }
 
-func (m *Manager) AddJob(ctx context.Context, job engine.Job) error {
+func (m *Manager) AddJob(ctx context.Context, job engine.Job, poolName string) error {
 	var status string
-	err := m.storage.BatchAddJobs(ctx, []engine.Job{job})
+	err := m.storage.BatchAddJobs(ctx, []engine.Job{job}, poolName)
 	if err == nil {
 		status = addJobSuccessStatus
 	} else {
 		status = addJobFailedStatus
 	}
-	metrics.storageAddJobs.WithLabelValues(job.Pool(), job.Namespace(), job.Queue(), status).Inc()
+	metrics.storageAddJobs.WithLabelValues(poolName, job.Namespace(), job.Queue(), status).Inc()
 	return err
 }
 

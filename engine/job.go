@@ -5,10 +5,10 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
-	"github.com/bitleak/lmstfy/engine/model"
 
 	"google.golang.org/protobuf/proto"
 
+	"github.com/bitleak/lmstfy/engine/model"
 	"github.com/bitleak/lmstfy/uuid"
 )
 
@@ -21,8 +21,6 @@ type Job interface {
 	Delay() uint32
 	Tries() uint16
 	ElapsedMS() int64
-	SetPool(pool string)
-	Pool() string
 
 	encoding.BinaryMarshaler
 	encoding.BinaryUnmarshaler
@@ -37,7 +35,6 @@ type jobImpl struct {
 	ttl       uint32
 	delay     uint32
 	tries     uint16
-	pool      string
 
 	_elapsedMS int64
 }
@@ -127,14 +124,6 @@ func (j *jobImpl) ElapsedMS() int64 {
 	ms, _ := uuid.ElapsedMilliSecondFromUniqueID(j.id)
 	j._elapsedMS = ms
 	return ms
-}
-
-func (j *jobImpl) SetPool(pool string) {
-	j.pool = pool
-}
-
-func (j *jobImpl) Pool() string {
-	return j.pool
 }
 
 // Marshal into binary of the format:

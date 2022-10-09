@@ -46,7 +46,7 @@ func NewSpanner(cfg *config.SpannerConfig) (*Spanner, error) {
 }
 
 // BatchAddJobs write jobs data into secondary storage
-func (s *Spanner) BatchAddJobs(ctx context.Context, jobs []engine.Job) (err error) {
+func (s *Spanner) BatchAddJobs(ctx context.Context, jobs []engine.Job, poolName string) (err error) {
 	err = validateReq(jobs)
 	if err != nil {
 		return err
@@ -55,7 +55,7 @@ func (s *Spanner) BatchAddJobs(ctx context.Context, jobs []engine.Job) (err erro
 	dbJobs := make([]*model.DBJob, 0)
 	for _, job := range jobs {
 		j := &model.DBJob{
-			PoolName:    job.Pool(),
+			PoolName:    poolName,
 			JobID:       job.ID(),
 			Namespace:   job.Namespace(),
 			Queue:       job.Queue(),

@@ -96,9 +96,6 @@ func createTestJobsData() []engine.Job {
 	j2 := engine.NewJob("n1", "q2", []byte("hello_j2"), 120, 60, 1, "2")
 	j3 := engine.NewJob("n1", "q1", []byte("hello_j3"), 120, 90, 1, "3")
 	jobs = append(jobs, j1, j2, j3)
-	for _, job := range jobs {
-		job.SetPool(poolName)
-	}
 	return jobs
 }
 

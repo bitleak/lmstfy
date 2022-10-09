@@ -11,6 +11,7 @@ import (
 	"google.golang.org/api/option"
 
 	"github.com/bitleak/lmstfy/config"
+	"github.com/bitleak/lmstfy/engine"
 	"github.com/bitleak/lmstfy/storage/persistence/model"
 )
 
@@ -45,15 +46,31 @@ func NewSpanner(cfg *config.SpannerConfig) (*Spanner, error) {
 }
 
 // BatchAddJobs write jobs data into secondary storage
-func (s *Spanner) BatchAddJobs(ctx context.Context, jobs []*model.JobData) (err error) {
+func (s *Spanner) BatchAddJobs(ctx context.Context, jobs []engine.Job) (err error) {
 	err = validateReq(jobs)
 	if err != nil {
 		return err
 	}
+	now := time.Now().Unix()
+	dbJobs := make([]*model.DBJob, 0)
+	for _, job := range jobs {
+		j := &model.DBJob{
+			PoolName:    job.Pool(),
+			JobID:       job.ID(),
+			Namespace:   job.Namespace(),
+			Queue:       job.Queue(),
+			Body:        job.Body(),
+			ExpiredTime: now + int64(job.TTL()),
+			ReadyTime:   now + int64(job.Delay()),
+			Tries:       int64(job.Tries()),
+			CreatedTime: now,
+		}
+		dbJobs = append(dbJobs, j)
+	}
 
 	_, err = s.cli.ReadWriteTransaction(ctx, func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
 		mutations := make([]*spanner.Mutation, 0)
-		for _, job := range jobs {
+		for _, job := range dbJobs {
 			mut, err := spanner.InsertStruct(s.tableName, job)
 			if err != nil {
 				return err
@@ -66,8 +83,9 @@ func (s *Spanner) BatchAddJobs(ctx context.Context, jobs []*model.JobData) (err 
 }
 
 // BatchGetJobs pumps data that are due before certain due time
-func (s *Spanner) BatchGetJobs(ctx context.Context, req []*model.JobDataReq) (jobs []*model.JobData, err error) {
+func (s *Spanner) BatchGetJobs(ctx context.Context, req []*model.DBJobReq) (jobs []engine.Job, err error) {
 	txn := s.cli.ReadOnlyTransaction()
+	now := time.Now().Unix()
 	defer txn.Close()
 
 	for _, r := range req {
@@ -83,13 +101,16 @@ func (s *Spanner) BatchGetJobs(ctx context.Context, req []*model.JobDataReq) (jo
 			},
 		})
 		err = iter.Do(func(row *spanner.Row) error {
-			elem := &model.JobData{}
+			elem := &model.DBJob{}
 			if err = row.ToStruct(elem); err != nil {
 				return err
 			}
-			jobs = append(jobs, elem)
+			j := engine.NewJob(elem.Namespace, elem.Queue, elem.Body, uint32(elem.ExpiredTime),
+				uint32(elem.ReadyTime-now), uint16(elem.Tries), elem.JobID)
+			jobs = append(jobs, j)
 			return nil
 		})
+
 		if err != nil {
 			return nil, err
 		}
@@ -98,7 +119,7 @@ func (s *Spanner) BatchGetJobs(ctx context.Context, req []*model.JobDataReq) (jo
 }
 
 // GetQueueSize returns the size of data in storage which are due before certain due time
-func (s *Spanner) GetQueueSize(ctx context.Context, req []*model.JobDataReq) (count map[string]int64, err error) {
+func (s *Spanner) GetQueueSize(ctx context.Context, req []*model.DBJobReq) (count map[string]int64, err error) {
 	txn := s.cli.ReadOnlyTransaction()
 	defer txn.Close()
 	count = make(map[string]int64)
@@ -143,10 +164,11 @@ func (s *Spanner) DelJobs(ctx context.Context, jobIDs []string) (count int64, er
 }
 
 // GetReadyJobs return jobs which are ready based on input ready time from data storage
-func (s *Spanner) GetReadyJobs(ctx context.Context, req *model.JobDataReq) (jobs []*model.JobData, err error) {
+func (s *Spanner) GetReadyJobs(ctx context.Context, req *model.DBJobReq) (jobs []engine.Job, err error) {
 	if req.ReadyTime <= 0 {
 		return nil, fmt.Errorf("GetReadyJobs failed: missing readytime parameter")
 	}
+	now := time.Now().Unix()
 	txn := s.cli.ReadOnlyTransaction()
 	defer txn.Close()
 	iter := txn.Query(ctx, spanner.Statement{
@@ -156,15 +178,16 @@ func (s *Spanner) GetReadyJobs(ctx context.Context, req *model.JobDataReq) (jobs
 			"poolname":  req.PoolName,
 			"readytime": req.ReadyTime,
 			"limit":     req.Count,
-			"nowtime":   time.Now().Unix(),
 		},
 	})
 	err = iter.Do(func(row *spanner.Row) error {
-		elem := &model.JobData{}
+		elem := &model.DBJob{}
 		if err = row.ToStruct(elem); err != nil {
 			return err
 		}
-		jobs = append(jobs, elem)
+		j := engine.NewJob(elem.Namespace, elem.Queue, elem.Body, uint32(elem.ExpiredTime),
+			uint32(elem.ReadyTime-now), uint16(elem.Tries), elem.JobID)
+		jobs = append(jobs, j)
 		return nil
 	})
 	if err != nil {
@@ -174,8 +197,9 @@ func (s *Spanner) GetReadyJobs(ctx context.Context, req *model.JobDataReq) (jobs
 }
 
 // BatchGetJobsByID returns job data by job ID
-func (s *Spanner) BatchGetJobsByID(ctx context.Context, IDs []string) (jobs []*model.JobData, err error) {
+func (s *Spanner) BatchGetJobsByID(ctx context.Context, IDs []string) (jobs []engine.Job, err error) {
 	txn := s.cli.ReadOnlyTransaction()
+	now := time.Now().Unix()
 	defer txn.Close()
 
 	iter := txn.Query(ctx, spanner.Statement{
@@ -187,11 +211,13 @@ func (s *Spanner) BatchGetJobsByID(ctx context.Context, IDs []string) (jobs []*m
 		},
 	})
 	err = iter.Do(func(row *spanner.Row) error {
-		elem := &model.JobData{}
+		elem := &model.DBJob{}
 		if err = row.ToStruct(elem); err != nil {
 			return err
 		}
-		jobs = append(jobs, elem)
+		j := engine.NewJob(elem.Namespace, elem.Queue, elem.Body, uint32(elem.ExpiredTime),
+			uint32(elem.ReadyTime-now), uint16(elem.Tries), elem.JobID)
+		jobs = append(jobs, j)
 		return nil
 	})
 	if err != nil {
@@ -201,7 +227,7 @@ func (s *Spanner) BatchGetJobsByID(ctx context.Context, IDs []string) (jobs []*m
 	return jobs, nil
 }
 
-func validateReq(req []*model.JobData) error {
+func validateReq(req []engine.Job) error {
 	if len(req) == 0 {
 		return errors.New("invalid req, null jobs list")
 	}

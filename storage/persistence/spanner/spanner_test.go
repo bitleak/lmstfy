@@ -60,10 +60,11 @@ func TestSpanner_BatchGetJobs(t *testing.T) {
 	jobs := createTestJobsData()
 	mgr.BatchAddJobs(ctx, jobs)
 	req := createTestReqData()
-	_, err = mgr.BatchGetJobs(ctx, req)
+	jobs, err = mgr.BatchGetJobs(ctx, req)
 	if err != nil {
 		panic(fmt.Sprintf("BatchGetJobs failed with error: %s", err))
 	}
+	assert.EqualValues(t, 3, len(jobs))
 	mgr.DelJobs(ctx, jobIDs)
 }
 

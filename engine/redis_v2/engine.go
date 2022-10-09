@@ -9,7 +9,6 @@ import (
 
 	"github.com/bitleak/lmstfy/config"
 	"github.com/bitleak/lmstfy/storage"
-	"github.com/bitleak/lmstfy/storage/persistence/model"
 	"github.com/bitleak/lmstfy/uuid"
 	go_redis "github.com/go-redis/redis/v8"
 
@@ -78,19 +77,8 @@ func (e *Engine) Publish(job engine.Job) (jobID string, err error) {
 }
 
 func (e *Engine) sink2SecondStorage(ctx context.Context, job engine.Job) error {
-	now := time.Now().Unix()
-	dbJob := &model.JobData{
-		PoolName:    e.redis.Name,
-		JobID:       job.ID(),
-		Namespace:   job.Namespace(),
-		Queue:       job.Queue(),
-		Body:        job.Body(),
-		ExpiredTime: now + int64(job.TTL()),
-		ReadyTime:   now + int64(job.Delay()),
-		Tries:       int64(job.Tries()),
-		CreatedTime: now,
-	}
-	return storage.Get().AddJob(ctx, dbJob)
+	job.SetPool(e.redis.Name)
+	return storage.Get().AddJob(ctx, job)
 }
 
 // BatchConsume consume some jobs of a queue
@@ -222,9 +210,7 @@ func (e *Engine) Peek(namespace, queue, optionalJobID string) (job engine.Job, e
 		if len(res) == 0 {
 			return nil, engine.ErrNotFound
 		}
-		j := res[0]
-		return engine.NewJobWithID(j.Namespace, j.Queue, j.Body,
-			uint32(j.ExpiredTime-time.Now().Unix()), uint16(j.Tries), j.JobID), nil
+		return res[0], nil
 	}
 	if err != nil {
 		return nil, err

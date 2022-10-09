@@ -96,7 +96,7 @@ func (m *Manager) PumpFn(name string, pool engine.Engine, threshold int64) func(
 			m.maxPumpBatchSize = defaultMaxJobPumpBatchSize
 		}
 		now := time.Now()
-		req := &model.JobDataReq{
+		req := &model.DBJobReq{
 			PoolName:  name,
 			ReadyTime: now.Unix() + threshold,
 			Count:     m.maxPumpBatchSize,
@@ -115,20 +115,18 @@ func (m *Manager) PumpFn(name string, pool engine.Engine, threshold int64) func(
 
 		jobsID := make([]string, 0)
 		for _, job := range jobs {
-			j := engine.NewJob(job.Namespace, job.Queue, job.Body, uint32(job.ExpiredTime),
-				uint32(job.ReadyTime-now.Unix()), uint16(job.Tries), job.JobID)
-			_, err := pool.Publish(j)
+			_, err = pool.Publish(job)
 			if err != nil {
 				logger.WithFields(logrus.Fields{
-					"job": j,
+					"job": job,
 					"err": err,
 				}).Errorf("Failed to publish job")
 				continue
 			}
-			jobsID = append(jobsID, job.JobID)
+			jobsID = append(jobsID, job.ID())
 		}
 
-		if _, err := m.storage.DelJobs(ctx, jobsID); err != nil {
+		if _, err = m.storage.DelJobs(ctx, jobsID); err != nil {
 			logger.WithFields(logrus.Fields{
 				"jobs": jobsID,
 				"err":  err,
@@ -155,19 +153,19 @@ func (m *Manager) AddPool(name string, pool engine.Engine, threshold int64) {
 	}()
 }
 
-func (m *Manager) AddJob(ctx context.Context, job *model.JobData) error {
+func (m *Manager) AddJob(ctx context.Context, job engine.Job) error {
 	var status string
-	err := m.storage.BatchAddJobs(ctx, []*model.JobData{job})
+	err := m.storage.BatchAddJobs(ctx, []engine.Job{job})
 	if err == nil {
 		status = addJobSuccessStatus
 	} else {
 		status = addJobFailedStatus
 	}
-	metrics.storageAddJobs.WithLabelValues(job.PoolName, job.Namespace, job.Queue, status).Inc()
+	metrics.storageAddJobs.WithLabelValues(job.Pool(), job.Namespace(), job.Queue(), status).Inc()
 	return err
 }
 
-func (m *Manager) GetJobByID(ctx context.Context, ID string) ([]*model.JobData, error) {
+func (m *Manager) GetJobByID(ctx context.Context, ID string) ([]engine.Job, error) {
 	return m.storage.BatchGetJobsByID(ctx, []string{ID})
 }
 

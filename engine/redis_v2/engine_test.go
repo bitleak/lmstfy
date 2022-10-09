@@ -13,11 +13,6 @@ import (
 )
 
 var (
-	db                  = "projects/test-project/instances/test-instance/databases/test-db1"
-	enableSecondStorage = &config.RedisConf{
-		EnableSecondaryStorage:           true,
-		SecondaryStorageThresholdSeconds: 10,
-	}
 	redisMaxMemory = "10000000"
 	dummyPoolConf  = &config.RedisConf{}
 )

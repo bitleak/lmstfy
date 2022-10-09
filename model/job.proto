@@ -1,0 +1,8 @@
+syntax = "proto3";
+package model;
+option go_package="github.com/lmstfy/engine/model";
+
+message JobData {
+  bytes data = 1;
+  map<string, string> attributes = 2;
+}

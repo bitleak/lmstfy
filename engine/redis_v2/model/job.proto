@@ -1,8 +1,0 @@
-syntax = "proto3";
-package model;
-option go_package="github.com/lmstfy/engine/redis_v2/model";
-
-message ExtendedJob {
-  bytes body = 1;
-  map<string, string> attributes = 2;
-}

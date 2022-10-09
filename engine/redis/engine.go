@@ -2,6 +2,7 @@ package redis
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -76,7 +77,7 @@ func (e *Engine) Publish(job engine.Job) (jobID string, err error) {
 	e.meta.RecordIfNotExist(namespace, queue)
 	e.monitor.MonitorIfNotExist(namespace, queue)
 	if tries == 0 {
-		return job.ID(), nil
+		return job.ID(), errors.New("invalid job: tries cannot be zero")
 	}
 
 	err = e.pool.Add(job)

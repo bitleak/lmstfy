@@ -3,16 +3,19 @@ package redis_v2
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"time"
 
+	go_redis "github.com/go-redis/redis/v8"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/bitleak/lmstfy/config"
+	"github.com/bitleak/lmstfy/engine"
+	"github.com/bitleak/lmstfy/engine/model"
 	"github.com/bitleak/lmstfy/storage"
 	"github.com/bitleak/lmstfy/uuid"
-	go_redis "github.com/go-redis/redis/v8"
-
-	"github.com/bitleak/lmstfy/engine"
 )
 
 type RedisInstance struct {
@@ -210,7 +213,12 @@ func (e *Engine) Peek(namespace, queue, optionalJobID string) (job engine.Job, e
 		if len(res) == 0 {
 			return nil, engine.ErrNotFound
 		}
-		return res[0], nil
+		data := &model.JobData{}
+		err = proto.Unmarshal(res[0].Body(), data)
+		if err != nil {
+			return nil, err
+		}
+		return engine.NewJobWithID(namespace, queue, data.GetData(), ttl, tries, jobID), nil
 	}
 	if err != nil {
 		return nil, err
@@ -281,7 +289,7 @@ func (e *Engine) publishJob(job engine.Job) (jobID string, err error) {
 	e.meta.RecordIfNotExist(job.Namespace(), job.Queue())
 	e.monitor.MonitorIfNotExist(job.Namespace(), job.Queue())
 	if job.Tries() == 0 {
-		return job.ID(), nil
+		return job.ID(), errors.New("invalid job: tries cannot be zero")
 	}
 	delaySecond := job.Delay()
 	if e.cfg.EnableSecondaryStorage &&

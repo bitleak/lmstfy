@@ -74,7 +74,7 @@ func NewJobWithID(namespace, queue string, body []byte, ttl uint32, tries uint16
 	}
 }
 
-func NewJobWithoutMarshal(namespace, queue string, body []byte, ttl, delay uint32, tries uint16, jobID string) Job {
+func NewRawJob(namespace, queue string, body []byte, ttl, delay uint32, tries uint16, jobID string) Job {
 	if jobID == "" {
 		jobID = uuid.GenUniqueJobIDWithDelay(delay)
 	}
@@ -216,9 +216,5 @@ func marshalJobBody(body []byte) ([]byte, error) {
 	job := &model.JobData{
 		Data: body,
 	}
-	data, err := proto.Marshal(job)
-	if err != nil {
-		return nil, err
-	}
-	return data, err
+	return proto.Marshal(job)
 }

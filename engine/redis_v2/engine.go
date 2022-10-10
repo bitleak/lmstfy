@@ -80,7 +80,7 @@ func (e *Engine) Publish(job engine.Job) (jobID string, err error) {
 }
 
 func (e *Engine) sink2SecondStorage(ctx context.Context, job engine.Job) error {
-	return storage.Get().AddJob(ctx, job, e.redis.Name)
+	return storage.Get().AddJob(ctx, e.redis.Name, job)
 }
 
 // BatchConsume consume some jobs of a queue
@@ -163,7 +163,11 @@ func (e *Engine) consumeMulti(namespace string, queues []string, ttrSecond, time
 		default:
 			return nil, fmt.Errorf("pool: %s", err)
 		}
-		job = engine.NewJobWithID(namespace, queueName.Queue, body, ttl, tries, jobID)
+		res := &model.JobData{}
+		if err = proto.Unmarshal(body, res); err != nil {
+			return nil, err
+		}
+		job = engine.NewJobWithID(namespace, queueName.Queue, res.GetData(), ttl, tries, jobID)
 		metrics.jobElapsedMS.WithLabelValues(e.redis.Name, namespace, queueName.Queue).Observe(float64(job.ElapsedMS()))
 		return job, nil
 	}
@@ -212,17 +216,16 @@ func (e *Engine) Peek(namespace, queue, optionalJobID string) (job engine.Job, e
 		if len(res) == 0 {
 			return nil, engine.ErrNotFound
 		}
-		data := &model.JobData{}
-		err = proto.Unmarshal(res[0].Body(), data)
-		if err != nil {
-			return nil, err
-		}
-		return engine.NewJobWithID(namespace, queue, data.GetData(), ttl, tries, jobID), nil
+		body = res[0].Body()
 	}
 	if err != nil {
 		return nil, err
 	}
-	return engine.NewJobWithID(namespace, queue, body, ttl, tries, jobID), err
+	data := &model.JobData{}
+	if err = proto.Unmarshal(body, data); err != nil {
+		return nil, err
+	}
+	return engine.NewJobWithID(namespace, queue, data.GetData(), ttl, tries, jobID), err
 }
 
 func (e *Engine) Size(namespace, queue string) (size int64, err error) {

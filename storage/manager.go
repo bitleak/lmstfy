@@ -153,9 +153,9 @@ func (m *Manager) AddPool(name string, pool engine.Engine, threshold int64) {
 	}()
 }
 
-func (m *Manager) AddJob(ctx context.Context, job engine.Job, poolName string) error {
+func (m *Manager) AddJob(ctx context.Context, poolName string, job engine.Job) error {
 	var status string
-	err := m.storage.BatchAddJobs(ctx, []engine.Job{job}, poolName)
+	err := m.storage.BatchAddJobs(ctx, poolName, []engine.Job{job})
 	if err == nil {
 		status = addJobSuccessStatus
 	} else {

@@ -10,7 +10,7 @@ import (
 // Persistence handles requests related to secondary storage
 type Persistence interface {
 	// BatchAddJobs write jobs data into secondary storage
-	BatchAddJobs(ctx context.Context, jobs []engine.Job, poolName string) (err error)
+	BatchAddJobs(ctx context.Context, poolName string, jobs []engine.Job) (err error)
 	// BatchGetJobs pumps data that are due before certain due time
 	BatchGetJobs(ctx context.Context, req []*model.DBJobReq) (jobs []engine.Job, err error)
 	// GetQueueSize returns the size of data in storage which are due before certain due time

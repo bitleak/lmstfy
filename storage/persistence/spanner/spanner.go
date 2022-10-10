@@ -46,7 +46,7 @@ func NewSpanner(cfg *config.SpannerConfig) (*Spanner, error) {
 }
 
 // BatchAddJobs write jobs data into secondary storage
-func (s *Spanner) BatchAddJobs(ctx context.Context, jobs []engine.Job, poolName string) (err error) {
+func (s *Spanner) BatchAddJobs(ctx context.Context, poolName string, jobs []engine.Job) (err error) {
 	err = validateReq(jobs)
 	if err != nil {
 		return err
@@ -105,7 +105,7 @@ func (s *Spanner) BatchGetJobs(ctx context.Context, req []*model.DBJobReq) (jobs
 			if err = row.ToStruct(elem); err != nil {
 				return err
 			}
-			j := engine.NewJobWithoutMarshal(elem.Namespace, elem.Queue, elem.Body, uint32(elem.ExpiredTime),
+			j := engine.NewRawJob(elem.Namespace, elem.Queue, elem.Body, uint32(elem.ExpiredTime),
 				uint32(elem.ReadyTime-now), uint16(elem.Tries), elem.JobID)
 			jobs = append(jobs, j)
 			return nil
@@ -185,7 +185,7 @@ func (s *Spanner) GetReadyJobs(ctx context.Context, req *model.DBJobReq) (jobs [
 		if err = row.ToStruct(elem); err != nil {
 			return err
 		}
-		j := engine.NewJobWithoutMarshal(elem.Namespace, elem.Queue, elem.Body, uint32(elem.ExpiredTime),
+		j := engine.NewRawJob(elem.Namespace, elem.Queue, elem.Body, uint32(elem.ExpiredTime),
 			uint32(elem.ReadyTime-now), uint16(elem.Tries), elem.JobID)
 		jobs = append(jobs, j)
 		return nil
@@ -215,7 +215,7 @@ func (s *Spanner) BatchGetJobsByID(ctx context.Context, IDs []string) (jobs []en
 		if err = row.ToStruct(elem); err != nil {
 			return err
 		}
-		j := engine.NewJobWithoutMarshal(elem.Namespace, elem.Queue, elem.Body, uint32(elem.ExpiredTime),
+		j := engine.NewRawJob(elem.Namespace, elem.Queue, elem.Body, uint32(elem.ExpiredTime),
 			uint32(elem.ReadyTime-now), uint16(elem.Tries), elem.JobID)
 		jobs = append(jobs, j)
 		return nil

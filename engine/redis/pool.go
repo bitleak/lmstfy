@@ -5,10 +5,8 @@ import (
 	"time"
 
 	go_redis "github.com/go-redis/redis/v8"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/bitleak/lmstfy/engine"
-	"github.com/bitleak/lmstfy/engine/model"
 )
 
 // Pool stores all the jobs' data. this is a global singleton per engine
@@ -71,12 +69,7 @@ func (p *Pool) Get(namespace, queue, jobID string) (body []byte, ttlSecond uint3
 			ttl = 0
 		}
 		metrics.poolGetJobs.WithLabelValues(p.redis.Name).Inc()
-		res := &model.JobData{}
-		err = proto.Unmarshal([]byte(val), res)
-		if err != nil {
-			return nil, 0, err
-		}
-		return res.GetData(), uint32(ttl), nil
+		return []byte(val), uint32(ttl), nil
 	case go_redis.Nil:
 		return nil, 0, engine.ErrNotFound
 	default:

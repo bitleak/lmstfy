@@ -7,8 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bitleak/lmstfy/storage/persistence/model"
-
 	"cloud.google.com/go/spanner"
 	database "cloud.google.com/go/spanner/admin/database/apiv1"
 	instance "cloud.google.com/go/spanner/admin/instance/apiv1"
@@ -17,6 +15,8 @@ import (
 	"google.golang.org/grpc/codes"
 
 	"github.com/bitleak/lmstfy/config"
+	"github.com/bitleak/lmstfy/engine"
+	"github.com/bitleak/lmstfy/storage/persistence/model"
 )
 
 var (
@@ -90,55 +90,25 @@ func CreateDatabase(ctx context.Context, cfg *config.SpannerConfig) error {
 	return err
 }
 
-func createTestJobsData() []*model.JobData {
-	jobs := make([]*model.JobData, 0)
-	j1 := &model.JobData{
-		PoolName:    poolName,
-		JobID:       "1",
-		Namespace:   "n1",
-		Queue:       "q1",
-		Body:        []byte("hello_j1"),
-		ExpiredTime: time.Now().Unix() + 120,
-		ReadyTime:   time.Now().Unix() + 30,
-		Tries:       1,
-		CreatedTime: time.Now().Unix(),
-	}
-	j2 := &model.JobData{
-		PoolName:    poolName,
-		JobID:       "2",
-		Namespace:   "n1",
-		Queue:       "q2",
-		Body:        []byte("hello_j2"),
-		ExpiredTime: time.Now().Unix() + 120,
-		ReadyTime:   time.Now().Unix() + 60,
-		Tries:       1,
-		CreatedTime: time.Now().Unix(),
-	}
-	j3 := &model.JobData{
-		PoolName:    poolName,
-		JobID:       "3",
-		Namespace:   "n1",
-		Queue:       "q1",
-		Body:        []byte("hello_j3"),
-		ExpiredTime: time.Now().Unix() + 120,
-		ReadyTime:   time.Now().Unix() + 90,
-		Tries:       1,
-		CreatedTime: time.Now().Unix(),
-	}
+func createTestJobsData() []engine.Job {
+	jobs := make([]engine.Job, 0)
+	j1 := engine.NewJob("n1", "q1", []byte("hello_j1"), 120, 30, 1, "1")
+	j2 := engine.NewJob("n1", "q2", []byte("hello_j2"), 120, 60, 1, "2")
+	j3 := engine.NewJob("n1", "q1", []byte("hello_j3"), 120, 90, 1, "3")
 	jobs = append(jobs, j1, j2, j3)
 	return jobs
 }
 
-func createTestReqData() []*model.JobDataReq {
-	req := make([]*model.JobDataReq, 0)
-	r1 := &model.JobDataReq{
+func createTestReqData() []*model.DBJobReq {
+	req := make([]*model.DBJobReq, 0)
+	r1 := &model.DBJobReq{
 		PoolName:  poolName,
 		Namespace: "n1",
 		Queue:     "q1",
 		ReadyTime: 0,
 		Count:     10,
 	}
-	r2 := &model.JobDataReq{
+	r2 := &model.DBJobReq{
 		PoolName:  poolName,
 		Namespace: "n1",
 		Queue:     "q2",
@@ -149,8 +119,8 @@ func createTestReqData() []*model.JobDataReq {
 	return req
 }
 
-func createTestReqData2() *model.JobDataReq {
-	req := &model.JobDataReq{
+func createTestReqData2() *model.DBJobReq {
+	req := &model.DBJobReq{
 		PoolName:  poolName,
 		ReadyTime: time.Now().Unix() + 80,
 		Count:     10,

@@ -4,8 +4,9 @@ import (
 	"errors"
 	"time"
 
-	"github.com/bitleak/lmstfy/engine"
 	go_redis "github.com/go-redis/redis/v8"
+
+	"github.com/bitleak/lmstfy/engine"
 )
 
 // Pool stores all the jobs' data. this is a global singleton per engine
@@ -35,6 +36,7 @@ func PoolJobKeyPrefix(namespace, queue string) string {
 func (p *Pool) Add(j engine.Job) error {
 	body := j.Body()
 	metrics.poolAddJobs.WithLabelValues(p.redis.Name).Inc()
+
 	// SetNX return OK(true) if key didn't exist before.
 	ok, err := p.redis.Conn.SetNX(dummyCtx, PoolJobKey(j), body, time.Duration(j.TTL())*time.Second).Result()
 	if err != nil {

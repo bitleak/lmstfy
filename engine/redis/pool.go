@@ -4,8 +4,9 @@ import (
 	"errors"
 	"time"
 
-	"github.com/bitleak/lmstfy/engine"
 	go_redis "github.com/go-redis/redis/v8"
+
+	"github.com/bitleak/lmstfy/engine"
 )
 
 // Pool stores all the jobs' data. this is a global singleton per engine

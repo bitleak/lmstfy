@@ -6,6 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 
+	"google.golang.org/protobuf/proto"
+
+	"github.com/bitleak/lmstfy/engine/model"
 	"github.com/bitleak/lmstfy/uuid"
 )
 
@@ -18,6 +21,7 @@ type Job interface {
 	Delay() uint32
 	Tries() uint16
 	ElapsedMS() int64
+
 	encoding.BinaryMarshaler
 	encoding.BinaryUnmarshaler
 	encoding.TextMarshaler
@@ -42,6 +46,23 @@ func NewJob(namespace, queue string, body []byte, ttl, delay uint32, tries uint1
 	if jobID == "" {
 		jobID = uuid.GenUniqueJobIDWithDelay(delay)
 	}
+	jobData, err := marshalJobBody(body)
+	if err != nil {
+		return &jobImpl{}
+	}
+	return &jobImpl{
+		namespace: namespace,
+		queue:     queue,
+		id:        jobID,
+		body:      jobData,
+		ttl:       ttl,
+		delay:     delay,
+		tries:     tries,
+	}
+}
+
+func NewJobWithID(namespace, queue string, body []byte, ttl uint32, tries uint16, jobID string) Job {
+	delay, _ := uuid.ExtractDelaySecondFromUniqueID(jobID)
 	return &jobImpl{
 		namespace: namespace,
 		queue:     queue,
@@ -53,8 +74,10 @@ func NewJob(namespace, queue string, body []byte, ttl, delay uint32, tries uint1
 	}
 }
 
-func NewJobWithID(namespace, queue string, body []byte, ttl uint32, tries uint16, jobID string) Job {
-	delay, _ := uuid.ExtractDelaySecondFromUniqueID(jobID)
+func NewRawJob(namespace, queue string, body []byte, ttl, delay uint32, tries uint16, jobID string) Job {
+	if jobID == "" {
+		jobID = uuid.GenUniqueJobIDWithDelay(delay)
+	}
 	return &jobImpl{
 		namespace: namespace,
 		queue:     queue,
@@ -187,4 +210,11 @@ func (j *jobImpl) MarshalText() (text []byte, err error) {
 
 func (j *jobImpl) GetDelayHour() uint16 {
 	return 0
+}
+
+func marshalJobBody(body []byte) ([]byte, error) {
+	job := &model.JobData{
+		Data: body,
+	}
+	return proto.Marshal(job)
 }

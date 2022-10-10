@@ -1,6 +1,6 @@
 package model
 
-type JobData struct {
+type DBJob struct {
 	PoolName    string `spanner:"pool_name" json:"pool_name"`
 	JobID       string `spanner:"job_id" json:"job_id"`
 	Namespace   string `spanner:"namespace" json:"namespace"`
@@ -12,7 +12,7 @@ type JobData struct {
 	CreatedTime int64  `spanner:"created_time" json:"created_time"`
 }
 
-type JobDataReq struct {
+type DBJobReq struct {
 	PoolName  string
 	Namespace string
 	Queue     string

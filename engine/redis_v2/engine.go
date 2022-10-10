@@ -3,17 +3,19 @@ package redis_v2
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"time"
 
-	"github.com/bitleak/lmstfy/config"
-	"github.com/bitleak/lmstfy/storage"
-	"github.com/bitleak/lmstfy/storage/persistence/model"
-	"github.com/bitleak/lmstfy/uuid"
 	go_redis "github.com/go-redis/redis/v8"
+	"google.golang.org/protobuf/proto"
 
+	"github.com/bitleak/lmstfy/config"
 	"github.com/bitleak/lmstfy/engine"
+	"github.com/bitleak/lmstfy/engine/model"
+	"github.com/bitleak/lmstfy/storage"
+	"github.com/bitleak/lmstfy/uuid"
 )
 
 type RedisInstance struct {
@@ -78,19 +80,7 @@ func (e *Engine) Publish(job engine.Job) (jobID string, err error) {
 }
 
 func (e *Engine) sink2SecondStorage(ctx context.Context, job engine.Job) error {
-	now := time.Now().Unix()
-	dbJob := &model.JobData{
-		PoolName:    e.redis.Name,
-		JobID:       job.ID(),
-		Namespace:   job.Namespace(),
-		Queue:       job.Queue(),
-		Body:        job.Body(),
-		ExpiredTime: now + int64(job.TTL()),
-		ReadyTime:   now + int64(job.Delay()),
-		Tries:       int64(job.Tries()),
-		CreatedTime: now,
-	}
-	return storage.Get().AddJob(ctx, dbJob)
+	return storage.Get().AddJob(ctx, e.redis.Name, job)
 }
 
 // BatchConsume consume some jobs of a queue
@@ -173,7 +163,11 @@ func (e *Engine) consumeMulti(namespace string, queues []string, ttrSecond, time
 		default:
 			return nil, fmt.Errorf("pool: %s", err)
 		}
-		job = engine.NewJobWithID(namespace, queueName.Queue, body, ttl, tries, jobID)
+		res := &model.JobData{}
+		if err = proto.Unmarshal(body, res); err != nil {
+			return nil, err
+		}
+		job = engine.NewJobWithID(namespace, queueName.Queue, res.GetData(), ttl, tries, jobID)
 		metrics.jobElapsedMS.WithLabelValues(e.redis.Name, namespace, queueName.Queue).Observe(float64(job.ElapsedMS()))
 		return job, nil
 	}
@@ -222,14 +216,16 @@ func (e *Engine) Peek(namespace, queue, optionalJobID string) (job engine.Job, e
 		if len(res) == 0 {
 			return nil, engine.ErrNotFound
 		}
-		j := res[0]
-		return engine.NewJobWithID(j.Namespace, j.Queue, j.Body,
-			uint32(j.ExpiredTime-time.Now().Unix()), uint16(j.Tries), j.JobID), nil
+		body = res[0].Body()
 	}
 	if err != nil {
 		return nil, err
 	}
-	return engine.NewJobWithID(namespace, queue, body, ttl, tries, jobID), err
+	data := &model.JobData{}
+	if err = proto.Unmarshal(body, data); err != nil {
+		return nil, err
+	}
+	return engine.NewJobWithID(namespace, queue, data.GetData(), ttl, tries, jobID), err
 }
 
 func (e *Engine) Size(namespace, queue string) (size int64, err error) {
@@ -295,7 +291,7 @@ func (e *Engine) publishJob(job engine.Job) (jobID string, err error) {
 	e.meta.RecordIfNotExist(job.Namespace(), job.Queue())
 	e.monitor.MonitorIfNotExist(job.Namespace(), job.Queue())
 	if job.Tries() == 0 {
-		return job.ID(), nil
+		return job.ID(), errors.New("invalid job: tries cannot be zero")
 	}
 	delaySecond := job.Delay()
 	if e.cfg.EnableSecondaryStorage &&

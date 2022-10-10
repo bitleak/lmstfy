@@ -39,7 +39,7 @@ func TestSpanner_BatchAddDelJobs(t *testing.T) {
 		panic(fmt.Sprintf("Failed to create spanner client with error: %s", err))
 	}
 	jobs := createTestJobsData()
-	err = mgr.BatchAddJobs(ctx, jobs)
+	err = mgr.BatchAddJobs(ctx, poolName, jobs)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to add jobs with error: %s", err))
 	}
@@ -58,12 +58,13 @@ func TestSpanner_BatchGetJobs(t *testing.T) {
 		panic(fmt.Sprintf("Failed to create spanner client with error: %s", err))
 	}
 	jobs := createTestJobsData()
-	mgr.BatchAddJobs(ctx, jobs)
+	mgr.BatchAddJobs(ctx, poolName, jobs)
 	req := createTestReqData()
-	_, err = mgr.BatchGetJobs(ctx, req)
+	jobs, err = mgr.BatchGetJobs(ctx, req)
 	if err != nil {
 		panic(fmt.Sprintf("BatchGetJobs failed with error: %s", err))
 	}
+	assert.EqualValues(t, 3, len(jobs))
 	mgr.DelJobs(ctx, jobIDs)
 }
 
@@ -73,7 +74,7 @@ func TestSpanner_GetQueueSize(t *testing.T) {
 		panic(fmt.Sprintf("Failed to create spanner client with error: %s", err))
 	}
 	jobs := createTestJobsData()
-	mgr.BatchAddJobs(ctx, jobs)
+	mgr.BatchAddJobs(ctx, poolName, jobs)
 	req := createTestReqData()
 	count, err := mgr.GetQueueSize(ctx, req)
 	if err != nil || len(count) == 0 {
@@ -91,7 +92,7 @@ func TestSpanner_GetReadyJobs(t *testing.T) {
 		panic(fmt.Sprintf("Failed to create spanner client with error: %s", err))
 	}
 	jobs := createTestJobsData()
-	mgr.BatchAddJobs(ctx, jobs)
+	mgr.BatchAddJobs(ctx, poolName, jobs)
 	req := createTestReqData2()
 	jobs, err = mgr.GetReadyJobs(ctx, req)
 	if err != nil {
@@ -107,7 +108,7 @@ func TestSpanner_BatchGetJobsByID(t *testing.T) {
 		panic(fmt.Sprintf("Failed to create spanner client with error: %s", err))
 	}
 	jobs := createTestJobsData()
-	mgr.BatchAddJobs(ctx, jobs)
+	mgr.BatchAddJobs(ctx, poolName, jobs)
 	IDs := []string{"1", "2", "3"}
 	jobs, err = mgr.BatchGetJobsByID(ctx, IDs)
 	assert.Nil(t, err)

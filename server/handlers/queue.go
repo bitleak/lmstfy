@@ -84,7 +84,9 @@ func Publish(c *gin.Context) {
 		return
 	}
 
-	job := engine.NewJob(namespace, queue, body, uint32(ttlSecond), uint32(delaySecond), uint16(tries), "")
+	attributes := c.GetHeader("attributes")
+	job := engine.NewJob(namespace, queue, body, uint32(ttlSecond), uint32(delaySecond), uint16(tries), "", attributes)
+
 	jobID, err = e.Publish(job)
 	if err != nil {
 		logger.WithFields(logrus.Fields{
@@ -152,6 +154,7 @@ func PublishBulk(c *gin.Context) {
 		return
 	}
 
+	attributes := c.GetHeader("attributes")
 	body, err := c.GetRawData()
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read body"})
@@ -180,7 +183,7 @@ func PublishBulk(c *gin.Context) {
 
 	jobIDs := make([]string, 0)
 	for _, job := range jobs {
-		j := engine.NewJob(namespace, queue, job, uint32(ttlSecond), uint32(delaySecond), uint16(tries), "")
+		j := engine.NewJob(namespace, queue, job, uint32(ttlSecond), uint32(delaySecond), uint16(tries), "", attributes)
 		jobID, err := e.Publish(j)
 		if err != nil {
 			logger.WithFields(logrus.Fields{
@@ -281,6 +284,7 @@ func Consume(c *gin.Context) {
 				"ttl":          job.TTL(),
 				"elapsed_ms":   job.ElapsedMS(),
 				"remain_tries": job.Tries(),
+				"attributes":   job.Attributes(),
 			})
 		}
 		c.JSON(http.StatusOK, data)
@@ -312,6 +316,7 @@ func Consume(c *gin.Context) {
 		"ttl":          job.TTL(),
 		"elapsed_ms":   job.ElapsedMS(),
 		"remain_tries": job.Tries(),
+		"attributes":   job.Attributes(),
 	})
 }
 
@@ -367,6 +372,7 @@ func PeekQueue(c *gin.Context) {
 			"ttl":          job.TTL(),
 			"elapsed_ms":   job.ElapsedMS(),
 			"remain_tries": job.Tries(),
+			"attributes":   job.Attributes(),
 		})
 		return
 	}
@@ -402,6 +408,7 @@ func PeekJob(c *gin.Context) {
 			"ttl":          job.TTL(),
 			"elapsed_ms":   job.ElapsedMS(),
 			"remain_tries": job.Tries(),
+			"attributes":   job.Attributes(),
 		})
 		return
 	}

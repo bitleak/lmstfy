@@ -167,7 +167,7 @@ func (e *Engine) consumeMulti(namespace string, queues []string, ttrSecond, time
 		if err = proto.Unmarshal(body, res); err != nil {
 			return nil, err
 		}
-		job = engine.NewJobWithID(namespace, queueName.Queue, res.GetData(), ttl, tries, jobID)
+		job = engine.NewJobWithID(namespace, queueName.Queue, res.GetData(), ttl, tries, jobID, res.GetAttributes())
 		metrics.jobElapsedMS.WithLabelValues(e.redis.Name, namespace, queueName.Queue).Observe(float64(job.ElapsedMS()))
 		return job, nil
 	}
@@ -204,7 +204,7 @@ func (e *Engine) Peek(namespace, queue, optionalJobID string) (job engine.Job, e
 	// was assigned we should return the not fond error.
 	if optionalJobID == "" && err == engine.ErrNotFound {
 		// return jobID with nil body if the job is expired
-		return engine.NewJobWithID(namespace, queue, nil, 0, 0, jobID), nil
+		return engine.NewJobWithID(namespace, queue, nil, 0, 0, jobID, nil), nil
 	}
 
 	// look up job data in storage
@@ -225,7 +225,7 @@ func (e *Engine) Peek(namespace, queue, optionalJobID string) (job engine.Job, e
 	if err = proto.Unmarshal(body, data); err != nil {
 		return nil, err
 	}
-	return engine.NewJobWithID(namespace, queue, data.GetData(), ttl, tries, jobID), err
+	return engine.NewJobWithID(namespace, queue, data.GetData(), ttl, tries, jobID, data.GetAttributes()), err
 }
 
 func (e *Engine) Size(namespace, queue string) (size int64, err error) {

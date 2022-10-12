@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"strings"
 
 	"google.golang.org/protobuf/proto"
 
@@ -21,6 +22,7 @@ type Job interface {
 	Delay() uint32
 	Tries() uint16
 	ElapsedMS() int64
+	Attributes() map[string]string
 
 	encoding.BinaryMarshaler
 	encoding.BinaryUnmarshaler
@@ -28,13 +30,14 @@ type Job interface {
 }
 
 type jobImpl struct {
-	namespace string
-	queue     string
-	id        string
-	body      []byte
-	ttl       uint32
-	delay     uint32
-	tries     uint16
+	namespace  string
+	queue      string
+	id         string
+	body       []byte
+	ttl        uint32
+	delay      uint32
+	tries      uint16
+	attributes map[string]string
 
 	_elapsedMS int64
 }
@@ -42,11 +45,11 @@ type jobImpl struct {
 // NOTE: there is a trick in this factory, the delay is embedded in the jobID.
 // By doing this we can delete the job that's located in hourly AOF, by placing
 // a tombstone record in that AOF.
-func NewJob(namespace, queue string, body []byte, ttl, delay uint32, tries uint16, jobID string) Job {
+func NewJob(namespace, queue string, body []byte, ttl, delay uint32, tries uint16, jobID string, attr string) Job {
 	if jobID == "" {
 		jobID = uuid.GenUniqueJobIDWithDelay(delay)
 	}
-	jobData, err := marshalJobBody(body)
+	jobData, err := marshalJobBody(body, attr)
 	if err != nil {
 		return &jobImpl{}
 	}
@@ -61,16 +64,17 @@ func NewJob(namespace, queue string, body []byte, ttl, delay uint32, tries uint1
 	}
 }
 
-func NewJobWithID(namespace, queue string, body []byte, ttl uint32, tries uint16, jobID string) Job {
+func NewJobWithID(namespace, queue string, body []byte, ttl uint32, tries uint16, jobID string, attrs map[string]string) Job {
 	delay, _ := uuid.ExtractDelaySecondFromUniqueID(jobID)
 	return &jobImpl{
-		namespace: namespace,
-		queue:     queue,
-		id:        jobID,
-		body:      body,
-		ttl:       ttl,
-		delay:     delay,
-		tries:     tries,
+		namespace:  namespace,
+		queue:      queue,
+		id:         jobID,
+		body:       body,
+		ttl:        ttl,
+		delay:      delay,
+		tries:      tries,
+		attributes: attrs,
 	}
 }
 
@@ -124,6 +128,10 @@ func (j *jobImpl) ElapsedMS() int64 {
 	ms, _ := uuid.ElapsedMilliSecondFromUniqueID(j.id)
 	j._elapsedMS = ms
 	return ms
+}
+
+func (j *jobImpl) Attributes() map[string]string {
+	return j.attributes
 }
 
 // Marshal into binary of the format:
@@ -212,9 +220,26 @@ func (j *jobImpl) GetDelayHour() uint16 {
 	return 0
 }
 
-func marshalJobBody(body []byte) ([]byte, error) {
+func marshalJobBody(body []byte, attr string) ([]byte, error) {
+
 	job := &model.JobData{
 		Data: body,
 	}
+	if attr != "" {
+		job.Attributes = parseAttributes(attr)
+	}
 	return proto.Marshal(job)
+}
+
+func parseAttributes(attr string) map[string]string {
+	res := make(map[string]string)
+	attributes := strings.Split(attr, ",")
+	for _, at := range attributes {
+		entry := strings.Split(at, "=")
+		if len(entry) != 2 {
+			continue
+		}
+		res[entry[0]] = entry[1]
+	}
+	return res
 }

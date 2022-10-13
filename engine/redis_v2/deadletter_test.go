@@ -57,9 +57,9 @@ func TestDeadLetter_Delete(t *testing.T) {
 
 func TestDeadLetter_Respawn(t *testing.T) {
 	p := NewPool(R)
-	job1 := engine.NewJob("ns-dead", "q3", []byte("1"), 60, 0, 1, "", "")
-	job2 := engine.NewJob("ns-dead", "q3", []byte("2"), 60, 0, 1, "", "")
-	job3 := engine.NewJob("ns-dead", "q3", []byte("3"), 60, 0, 1, "", "")
+	job1 := engine.NewJob("ns-dead", "q3", []byte("1"), 60, 0, 1, "")
+	job2 := engine.NewJob("ns-dead", "q3", []byte("2"), 60, 0, 1, "")
+	job3 := engine.NewJob("ns-dead", "q3", []byte("3"), 60, 0, 1, "")
 	p.Add(job1)
 	p.Add(job2)
 	p.Add(job3)
@@ -120,7 +120,7 @@ func TestDeadLetter_Size(t *testing.T) {
 	dl, _ := NewDeadLetter("ns-dead", "q3", R)
 	cnt := 3
 	for i := 0; i < cnt; i++ {
-		job := engine.NewJob("ns-dead", "q3", []byte("1"), 60, 0, 1, "", "")
+		job := engine.NewJob("ns-dead", "q3", []byte("1"), 60, 0, 1, "")
 		p.Add(job)
 		dl.Add(job.ID())
 	}

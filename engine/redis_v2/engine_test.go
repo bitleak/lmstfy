@@ -25,7 +25,16 @@ func TestEngine_Publish(t *testing.T) {
 	}
 	defer e.Shutdown()
 	body := []byte("hello msg 1")
-	j := engine.NewJob("ns-engine", "q1", body, 10, 2, 1, "", "")
+	j := engine.NewJobFromReq(&engine.CreateJobReq{
+		Namespace:  "ns-engine",
+		Queue:      "q1",
+		ID:         "",
+		Body:       body,
+		TTL:        10,
+		Delay:      2,
+		Tries:      1,
+		Attributes: "",
+	})
 	jobID, err := e.Publish(j)
 	t.Log(jobID)
 	if err != nil {
@@ -33,7 +42,16 @@ func TestEngine_Publish(t *testing.T) {
 	}
 
 	// Publish no-delay job
-	j = engine.NewJob("ns-engine", "q1", body, 10, 0, 1, "", "")
+	j = engine.NewJobFromReq(&engine.CreateJobReq{
+		Namespace:  "ns-engine",
+		Queue:      "q1",
+		ID:         "",
+		Body:       body,
+		TTL:        10,
+		Delay:      0,
+		Tries:      1,
+		Attributes: "",
+	})
 	jobID, err = e.Publish(j)
 	t.Log(jobID)
 	if err != nil {
@@ -41,7 +59,16 @@ func TestEngine_Publish(t *testing.T) {
 	}
 
 	// Publish no-delay job with attributes
-	j = engine.NewJob("ns-engine", "q0", body, 10, 0, 1, "", "flag=1,label=abc")
+	j = engine.NewJobFromReq(&engine.CreateJobReq{
+		Namespace:  "ns-engine",
+		Queue:      "q1",
+		ID:         "",
+		Body:       body,
+		TTL:        10,
+		Delay:      0,
+		Tries:      1,
+		Attributes: "flag=1,label=abc",
+	})
 	jobID, err = e.Publish(j)
 	t.Log(jobID)
 	if err != nil {
@@ -69,11 +96,19 @@ func TestEngine_Publish_SecondaryStorage(t *testing.T) {
 	manager.AddPool(R.Name, e, 0)
 	// Publish long-delay job
 	body := []byte("hello msg long delay job")
-	j := engine.NewJob("ns-engine", "qs", body, 120, 1, 1, "", "flag=1,label=abc")
+	j := engine.NewJobFromReq(&engine.CreateJobReq{
+		Namespace:  "ns-engine",
+		Queue:      "qs",
+		ID:         "",
+		Body:       body,
+		TTL:        120,
+		Delay:      1,
+		Tries:      1,
+		Attributes: "flag=1,label=abc",
+	})
 	jobID, err := e.Publish(j)
 	assert.Nil(t, err)
 
-	//wait for data mgr to pump job from secondary storage to engine
 	job, err := e.Consume("ns-engine", []string{"qs"}, 3, 10)
 	assert.Nil(t, err)
 	assert.EqualValues(t, jobID, job.ID())
@@ -91,7 +126,17 @@ func TestEngine_Consume(t *testing.T) {
 	}
 	defer e.Shutdown()
 	body := []byte("hello msg 2")
-	j := engine.NewJob("ns-engine", "q2", body, 10, 2, 1, "", "")
+	//j := engine.NewJob("ns-engine", "q2", body, 10, 2, 1, "", "")
+	j := engine.NewJobFromReq(&engine.CreateJobReq{
+		Namespace:  "ns-engine",
+		Queue:      "q2",
+		ID:         "",
+		Body:       body,
+		TTL:        10,
+		Delay:      2,
+		Tries:      1,
+		Attributes: "",
+	})
 	jobID, err := e.Publish(j)
 	if err != nil {
 		t.Fatalf("Failed to publish: %s", err)
@@ -108,7 +153,16 @@ func TestEngine_Consume(t *testing.T) {
 	}
 
 	// Consume job that's published in no-delay way
-	j = engine.NewJob("ns-engine", "q2", body, 10, 0, 1, "", "")
+	j = engine.NewJobFromReq(&engine.CreateJobReq{
+		Namespace:  "ns-engine",
+		Queue:      "q2",
+		ID:         "",
+		Body:       body,
+		TTL:        10,
+		Delay:      0,
+		Tries:      1,
+		Attributes: "",
+	})
 	jobID, err = e.Publish(j)
 	t.Log(jobID)
 	if err != nil {
@@ -123,7 +177,16 @@ func TestEngine_Consume(t *testing.T) {
 	}
 
 	// Consume job with attributes
-	j = engine.NewJob("ns-engine", "q2", body, 10, 0, 1, "", "flag=1,label=abc")
+	j = engine.NewJobFromReq(&engine.CreateJobReq{
+		Namespace:  "ns-engine",
+		Queue:      "q2",
+		ID:         "",
+		Body:       body,
+		TTL:        10,
+		Delay:      0,
+		Tries:      1,
+		Attributes: "flag=1,label=abc",
+	})
 	jobID, err = e.Publish(j)
 	t.Log(jobID)
 	if err != nil {
@@ -149,9 +212,28 @@ func TestEngine_Consume2(t *testing.T) {
 	}
 	defer e.Shutdown()
 	body := []byte("hello msg 3")
-	j := engine.NewJob("ns-engine", "q3", []byte("delay msg"), 10, 5, 1, "", "")
+	j := engine.NewJobFromReq(&engine.CreateJobReq{
+		Namespace:  "ns-engine",
+		Queue:      "q3",
+		ID:         "",
+		Body:       []byte("delay msg"),
+		TTL:        10,
+		Delay:      5,
+		Tries:      1,
+		Attributes: "",
+	})
+
 	_, err = e.Publish(j)
-	j = engine.NewJob("ns-engine", "q3", body, 10, 2, 1, "", "")
+	j = engine.NewJobFromReq(&engine.CreateJobReq{
+		Namespace:  "ns-engine",
+		Queue:      "q3",
+		ID:         "",
+		Body:       body,
+		TTL:        10,
+		Delay:      2,
+		Tries:      1,
+		Attributes: "",
+	})
 	jobID, err := e.Publish(j)
 	if err != nil {
 		t.Fatalf("Failed to publish: %s", err)
@@ -175,12 +257,30 @@ func TestEngine_ConsumeMulti(t *testing.T) {
 	}
 	defer e.Shutdown()
 	body := []byte("hello msg 4")
-	j := engine.NewJob("ns-engine", "q4", body, 10, 3, 1, "", "")
+	j := engine.NewJobFromReq(&engine.CreateJobReq{
+		Namespace:  "ns-engine",
+		Queue:      "q4",
+		ID:         "",
+		Body:       body,
+		TTL:        10,
+		Delay:      3,
+		Tries:      1,
+		Attributes: "",
+	})
 	jobID, err := e.Publish(j)
 	if err != nil {
 		t.Fatalf("Failed to publish: %s", err)
 	}
-	j = engine.NewJob("ns-engine", "q5", body, 10, 1, 1, "", "")
+	j = engine.NewJobFromReq(&engine.CreateJobReq{
+		Namespace:  "ns-engine",
+		Queue:      "q5",
+		ID:         "",
+		Body:       body,
+		TTL:        10,
+		Delay:      1,
+		Tries:      1,
+		Attributes: "",
+	})
 	jobID2, err := e.Publish(j)
 	if err != nil {
 		t.Fatalf("Failed to publish: %s", err)
@@ -216,7 +316,16 @@ func TestEngine_Peek(t *testing.T) {
 	}
 	defer e.Shutdown()
 	body := []byte("hello msg 6")
-	j := engine.NewJob("ns-engine", "q6", body, 10, 0, 1, "", "")
+	j := engine.NewJobFromReq(&engine.CreateJobReq{
+		Namespace:  "ns-engine",
+		Queue:      "q6",
+		ID:         "",
+		Body:       body,
+		TTL:        10,
+		Delay:      0,
+		Tries:      1,
+		Attributes: "",
+	})
 	jobID, err := e.Publish(j)
 	if err != nil {
 		t.Fatalf("Failed to publish: %s", err)
@@ -235,7 +344,16 @@ func TestEngine_Peek(t *testing.T) {
 	}
 
 	// test peek job with attributes
-	j = engine.NewJob("ns-engine", "q6", body, 10, 0, 1, "", "flag=1,label=abc")
+	j = engine.NewJobFromReq(&engine.CreateJobReq{
+		Namespace:  "ns-engine",
+		Queue:      "q6",
+		ID:         "",
+		Body:       body,
+		TTL:        10,
+		Delay:      0,
+		Tries:      1,
+		Attributes: "flag=1,label=abc",
+	})
 	jobID, err = e.Publish(j)
 	if err != nil {
 		t.Fatalf("Failed to publish: %s", err)
@@ -269,7 +387,17 @@ func TestEngine_Peek_SecondaryStorage(t *testing.T) {
 
 	// Publish long-delay job
 	body := []byte("engine peek long delay job")
-	j := engine.NewJob("ns-engine", "qst", body, 120, 15, 1, "", "")
+	j := engine.NewJobFromReq(&engine.CreateJobReq{
+		Namespace:  "ns-engine",
+		Queue:      "qst",
+		ID:         "",
+		Body:       body,
+		TTL:        120,
+		Delay:      15,
+		Tries:      1,
+		Attributes: "flag=1,label=abc",
+	})
+
 	jobID, err := e.Publish(j)
 	t.Log(jobID)
 	assert.Nil(t, err)
@@ -280,6 +408,9 @@ func TestEngine_Peek_SecondaryStorage(t *testing.T) {
 	assert.Nil(t, err)
 	assert.EqualValues(t, jobID, job.ID())
 	assert.EqualValues(t, body, job.Body())
+	assert.NotNil(t, job.Attributes())
+	assert.EqualValues(t, job.Attributes()["flag"], "1")
+	assert.EqualValues(t, job.Attributes()["label"], "abc")
 }
 
 func TestEngine_BatchConsume(t *testing.T) {
@@ -289,7 +420,16 @@ func TestEngine_BatchConsume(t *testing.T) {
 	}
 	defer e.Shutdown()
 	body := []byte("hello msg 7")
-	j := engine.NewJob("ns-engine", "q7", body, 10, 3, 1, "", "")
+	j := engine.NewJobFromReq(&engine.CreateJobReq{
+		Namespace:  "ns-engine",
+		Queue:      "q7",
+		ID:         "",
+		Body:       body,
+		TTL:        10,
+		Delay:      3,
+		Tries:      1,
+		Attributes: "",
+	})
 	jobID, err := e.Publish(j)
 	t.Log(jobID)
 	if err != nil {
@@ -315,7 +455,16 @@ func TestEngine_BatchConsume(t *testing.T) {
 	// Consume some jobs
 	jobIDMap := map[string]bool{}
 	for i := 0; i < 4; i++ {
-		j := engine.NewJob("ns-engine", "q7", body, 10, 0, 1, "", "")
+		j := engine.NewJobFromReq(&engine.CreateJobReq{
+			Namespace:  "ns-engine",
+			Queue:      "q7",
+			ID:         "",
+			Body:       body,
+			TTL:        10,
+			Delay:      0,
+			Tries:      1,
+			Attributes: "",
+		})
 		jobID, err := e.Publish(j)
 		t.Log(jobID)
 		if err != nil {
@@ -367,7 +516,16 @@ func TestEngine_PublishWithJobID(t *testing.T) {
 	}
 	defer e.Shutdown()
 	body := []byte("hello msg 1")
-	j := engine.NewJob("ns-engine", "q8", body, 10, 0, 1, "jobID1", "")
+	j := engine.NewJobFromReq(&engine.CreateJobReq{
+		Namespace:  "ns-engine",
+		Queue:      "q8",
+		ID:         "jobID1",
+		Body:       body,
+		TTL:        10,
+		Delay:      0,
+		Tries:      1,
+		Attributes: "",
+	})
 	jobID, err := e.Publish(j)
 	t.Log(jobID)
 	assert.Nil(t, err)

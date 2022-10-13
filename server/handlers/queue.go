@@ -85,7 +85,16 @@ func Publish(c *gin.Context) {
 	}
 
 	attributes := c.GetHeader("attributes")
-	job := engine.NewJob(namespace, queue, body, uint32(ttlSecond), uint32(delaySecond), uint16(tries), "", attributes)
+	req := &engine.CreateJobReq{
+		Namespace:  namespace,
+		Queue:      queue,
+		Body:       body,
+		TTL:        uint32(ttlSecond),
+		Delay:      uint32(delaySecond),
+		Tries:      uint16(tries),
+		Attributes: attributes,
+	}
+	job := engine.NewJobFromReq(req)
 
 	jobID, err = e.Publish(job)
 	if err != nil {
@@ -183,7 +192,16 @@ func PublishBulk(c *gin.Context) {
 
 	jobIDs := make([]string, 0)
 	for _, job := range jobs {
-		j := engine.NewJob(namespace, queue, job, uint32(ttlSecond), uint32(delaySecond), uint16(tries), "", attributes)
+		req := &engine.CreateJobReq{
+			Namespace:  namespace,
+			Queue:      queue,
+			Body:       job,
+			TTL:        uint32(ttlSecond),
+			Delay:      uint32(delaySecond),
+			Tries:      uint16(tries),
+			Attributes: attributes,
+		}
+		j := engine.NewJobFromReq(req)
 		jobID, err := e.Publish(j)
 		if err != nil {
 			logger.WithFields(logrus.Fields{

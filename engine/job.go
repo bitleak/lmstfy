@@ -29,6 +29,17 @@ type Job interface {
 	encoding.TextMarshaler
 }
 
+type CreateJobReq struct {
+	Namespace  string
+	Queue      string
+	ID         string
+	Body       []byte
+	TTL        uint32
+	Delay      uint32
+	Tries      uint16
+	Attributes string
+}
+
 type jobImpl struct {
 	namespace  string
 	queue      string
@@ -40,6 +51,25 @@ type jobImpl struct {
 	attributes map[string]string
 
 	_elapsedMS int64
+}
+
+func NewJobFromReq(req *CreateJobReq) Job {
+	if req.ID == "" {
+		req.ID = uuid.GenUniqueJobIDWithDelay(req.Delay)
+	}
+	jobData, err := marshalJobBody(req.Body, req.Attributes)
+	if err != nil {
+		return &jobImpl{}
+	}
+	return &jobImpl{
+		namespace: req.Namespace,
+		queue:     req.Queue,
+		id:        req.ID,
+		body:      jobData,
+		ttl:       req.TTL,
+		delay:     req.Delay,
+		tries:     req.Tries,
+	}
 }
 
 // NOTE: there is a trick in this factory, the delay is embedded in the jobID.

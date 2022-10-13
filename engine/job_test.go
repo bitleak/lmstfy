@@ -6,7 +6,7 @@ import (
 )
 
 func TestJobImpl_Marshal(t *testing.T) {
-	j := NewJob("ns-1", "q-1", []byte("hello data"), 20, 10, 1, "", "")
+	j := NewJob("ns-1", "q-1", []byte("hello data"), 20, 10, 1, "")
 	bin, err := j.MarshalBinary()
 	if err != nil {
 		t.Fatal("Failed to marshal")

@@ -98,5 +98,4 @@ func TestMain(m *testing.M) {
 	redis_v2.SetLogger(logger)
 
 	runAllTests(m, "")
-	runAllTests(m, redis_v2.VersionV2)
 }

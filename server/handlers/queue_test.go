@@ -31,7 +31,6 @@ func TestPublish(t *testing.T) {
 	c, e, resp := ginTest(req)
 	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
 	e.PUT("/api/:namespace/:queue", handlers.Publish)
-	c.Header("attributes", "flag=1,label=abc")
 	e.HandleContext(c)
 	if resp.Code != http.StatusCreated {
 		t.Fatal("Failed to publish")
@@ -57,14 +56,13 @@ func TestConsume(t *testing.T) {
 		t.Fatal("Failed to consume")
 	}
 	var data struct {
-		Msg        string
-		Namespace  string
-		Queue      string
-		JobID      string `json:"job_id"`
-		Data       []byte
-		Tries      int               `json:"remain_tries"`
-		TTL        int               `json:"ttl"`
-		Attributes map[string]string `json:"attributes"`
+		Msg       string
+		Namespace string
+		Queue     string
+		JobID     string `json:"job_id"`
+		Data      []byte
+		Tries     int `json:"remain_tries"`
+		TTL       int `json:"ttl"`
 	}
 	err = json.Unmarshal(resp.Body.Bytes(), &data)
 	if err != nil {
@@ -74,9 +72,6 @@ func TestConsume(t *testing.T) {
 	assert.Equal(t, 0, data.Tries)
 	if !bytes.Equal(data.Data, body) {
 		t.Fatalf("Mismatched job data")
-	}
-	if data.Attributes == nil || data.Attributes["flag"] != "1" || data.Attributes["label"] != "abc" {
-		t.Fatalf("Mismatched job attributes")
 	}
 }
 
@@ -98,12 +93,11 @@ func TestNoBlockingConsumeMulti(t *testing.T) {
 		t.Fatal("Failed to consume")
 	}
 	var data struct {
-		Msg        string
-		Namespace  string
-		Queue      string
-		JobID      string `json:"job_id"`
-		Data       []byte
-		Attributes map[string]string `json:"attributes"`
+		Msg       string
+		Namespace string
+		Queue     string
+		JobID     string `json:"job_id"`
+		Data      []byte
 	}
 	err = json.Unmarshal(resp.Body.Bytes(), &data)
 	if err != nil {
@@ -111,9 +105,6 @@ func TestNoBlockingConsumeMulti(t *testing.T) {
 	}
 	if data.JobID != jobID || !bytes.Equal(data.Data, body) || data.Queue != "q4" {
 		t.Fatalf("Mismatched job data")
-	}
-	if data.Attributes == nil || data.Attributes["flag"] != "1" || data.Attributes["label"] != "abc" {
-		t.Fatalf("Mismatched job attributes")
 	}
 }
 
@@ -135,12 +126,11 @@ func TestConsumeMulti(t *testing.T) {
 		t.Fatal("Failed to consume")
 	}
 	var data struct {
-		Msg        string
-		Namespace  string
-		Queue      string
-		JobID      string `json:"job_id"`
-		Data       []byte
-		Attributes map[string]string `json:"attributes"`
+		Msg       string
+		Namespace string
+		Queue     string
+		JobID     string `json:"job_id"`
+		Data      []byte
 	}
 	err = json.Unmarshal(resp.Body.Bytes(), &data)
 	if err != nil {
@@ -148,9 +138,6 @@ func TestConsumeMulti(t *testing.T) {
 	}
 	if data.JobID != jobID || !bytes.Equal(data.Data, body) || data.Queue != "q4" {
 		t.Fatalf("Mismatched job data")
-	}
-	if data.Attributes == nil || data.Attributes["flag"] != "1" || data.Attributes["label"] != "abc" {
-		t.Fatalf("Mismatched job attributes")
 	}
 }
 
@@ -194,20 +181,16 @@ func TestPeekQueue(t *testing.T) {
 	}
 
 	var data struct {
-		Namespace  string
-		Queue      string
-		JobID      string `json:"job_id"`
-		Data       []byte
-		Attributes map[string]string `json:"attributes"`
+		Namespace string
+		Queue     string
+		JobID     string `json:"job_id"`
+		Data      []byte
 	}
 	err = json.Unmarshal(resp.Body.Bytes(), &data)
 	if err != nil {
 		t.Fatal("Failed to decode response")
 	}
 	assert.Equal(t, jobID, data.JobID)
-	if data.Attributes == nil || data.Attributes["flag"] != "1" || data.Attributes["label"] != "abc" {
-		t.Fatalf("Mismatched job attributes")
-	}
 }
 
 func TestSize(t *testing.T) {
@@ -260,11 +243,10 @@ func TestPeekJob(t *testing.T) {
 	}
 
 	var data struct {
-		Namespace  string
-		Queue      string
-		JobID      string `json:"job_id"`
-		Data       []byte
-		Attributes map[string]string `json:"attributes"`
+		Namespace string
+		Queue     string
+		JobID     string `json:"job_id"`
+		Data      []byte
 	}
 	err = json.Unmarshal(resp.Body.Bytes(), &data)
 	if err != nil {
@@ -273,9 +255,6 @@ func TestPeekJob(t *testing.T) {
 	if data.JobID != jobID {
 		t.Log(resp.Body.String())
 		t.Fatal("Mismatched job")
-	}
-	if data.Attributes == nil || data.Attributes["flag"] != "1" || data.Attributes["label"] != "abc" {
-		t.Fatalf("Mismatched job attributes")
 	}
 }
 
@@ -570,7 +549,7 @@ func publishTestJob(ns, q string, delay, ttl uint32) (body []byte, jobID string)
 	if _, err := rand.Read(body); err != nil {
 		panic(err)
 	}
-	j := engine.NewJob(ns, q, body, ttl, delay, 1, "", "flag=1,label=abc")
+	j := engine.NewJob(ns, q, body, ttl, delay, 1, "")
 	jobID, _ = e.Publish(j)
 	return body, jobID
 }

@@ -92,9 +92,9 @@ func CreateDatabase(ctx context.Context, cfg *config.SpannerConfig) error {
 
 func createTestJobsData() []engine.Job {
 	jobs := make([]engine.Job, 0)
-	j1 := engine.NewJob("n1", "q1", []byte("hello_j1"), 120, 30, 1, "1", "")
-	j2 := engine.NewJob("n1", "q2", []byte("hello_j2"), 120, 60, 1, "2", "")
-	j3 := engine.NewJob("n1", "q1", []byte("hello_j3"), 120, 90, 1, "3", "")
+	j1 := engine.NewJob("n1", "q1", []byte("hello_j1"), 120, 30, 1, "1")
+	j2 := engine.NewJob("n1", "q2", []byte("hello_j2"), 120, 60, 1, "2")
+	j3 := engine.NewJob("n1", "q1", []byte("hello_j3"), 120, 90, 1, "3")
 	jobs = append(jobs, j1, j2, j3)
 	return jobs
 }

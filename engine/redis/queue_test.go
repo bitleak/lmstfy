@@ -18,12 +18,12 @@ func TestQueue_Push(t *testing.T) {
 	}
 	defer timer.Shutdown()
 	q := NewQueue("ns-queue", "q1", R, timer)
-	job := engine.NewJob("ns-queue", "q1", []byte("hello msg 1"), 10, 0, 1, "", "")
+	job := engine.NewJob("ns-queue", "q1", []byte("hello msg 1"), 10, 0, 1, "")
 	if err := q.Push(job, 5); err != nil {
 		t.Fatalf("Failed to push job into queue: %s", err)
 	}
 
-	job2 := engine.NewJob("ns-queue", "q2", []byte("hello msg 1"), 10, 0, 1, "", "")
+	job2 := engine.NewJob("ns-queue", "q2", []byte("hello msg 1"), 10, 0, 1, "")
 	if err := q.Push(job2, 5); err != engine.ErrWrongQueue {
 		t.Fatalf("Expected to get wrong queue error, but got: %s", err)
 	}
@@ -36,7 +36,7 @@ func TestQueue_Poll(t *testing.T) {
 	}
 	defer timer.Shutdown()
 	q := NewQueue("ns-queue", "q2", R, timer)
-	job := engine.NewJob("ns-queue", "q2", []byte("hello msg 2"), 10, 0, 1, "", "")
+	job := engine.NewJob("ns-queue", "q2", []byte("hello msg 2"), 10, 0, 1, "")
 	go func() {
 		time.Sleep(time.Second)
 		q.Push(job, 2)
@@ -57,7 +57,7 @@ func TestQueue_Peek(t *testing.T) {
 	}
 	defer timer.Shutdown()
 	q := NewQueue("ns-queue", "q3", R, timer)
-	job := engine.NewJob("ns-queue", "q3", []byte("hello msg 3"), 10, 0, 1, "", "")
+	job := engine.NewJob("ns-queue", "q3", []byte("hello msg 3"), 10, 0, 1, "")
 	q.Push(job, 2)
 	jobID, tries, err := q.Peek()
 	if err != nil || jobID == "" || tries != 2 {
@@ -75,7 +75,7 @@ func TestQueue_Destroy(t *testing.T) {
 	}
 	defer timer.Shutdown()
 	q := NewQueue("ns-queue", "q4", R, timer)
-	job := engine.NewJob("ns-queue", "q4", []byte("hello msg 4"), 10, 0, 1, "", "")
+	job := engine.NewJob("ns-queue", "q4", []byte("hello msg 4"), 10, 0, 1, "")
 	q.Push(job, 2)
 	count, err := q.Destroy()
 	if err != nil {
@@ -100,7 +100,7 @@ func TestQueue_Tries(t *testing.T) {
 	queue := "q5"
 	q := NewQueue(namespace, queue, R, timer)
 	var maxTries uint16 = 2
-	job := engine.NewJob(namespace, queue, []byte("hello msg 5"), 30, 0, maxTries, "", "")
+	job := engine.NewJob(namespace, queue, []byte("hello msg 5"), 30, 0, maxTries, "")
 	q.Push(job, maxTries)
 	pool := NewPool(R)
 	pool.Add(job)
@@ -158,7 +158,7 @@ func TestPopMultiQueues(t *testing.T) {
 	queueName := "q7"
 	q := NewQueue(namespace, queueName, R, nil)
 	msg := "hello msg 7"
-	job := engine.NewJob(namespace, queueName, []byte(msg), 30, 0, 2, "", "")
+	job := engine.NewJob(namespace, queueName, []byte(msg), 30, 0, 2, "")
 	q.Push(job, 2)
 	gotQueueName, gotVal, err = popMultiQueues(R, queueNames)
 	if err != nil {
@@ -170,7 +170,7 @@ func TestPopMultiQueues(t *testing.T) {
 
 	// single queue condition
 	queueName = "q8"
-	job = engine.NewJob(namespace, queueName, []byte(msg), 30, 0, 2, "", "")
+	job = engine.NewJob(namespace, queueName, []byte(msg), 30, 0, 2, "")
 	q = NewQueue(namespace, queueName, R, nil)
 	q.Push(job, 2)
 	gotQueueName, gotVal, err = popMultiQueues(R, []string{queueNames[2]})

@@ -8,10 +8,8 @@ import (
 	"time"
 
 	go_redis "github.com/go-redis/redis/v8"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/bitleak/lmstfy/engine"
-	"github.com/bitleak/lmstfy/engine/model"
 	"github.com/bitleak/lmstfy/uuid"
 )
 
@@ -182,11 +180,7 @@ func (e *Engine) consumeMulti(namespace string, queues []string, ttrSecond, time
 		default:
 			return nil, fmt.Errorf("pool: %s", err)
 		}
-		res := &model.JobData{}
-		if err = proto.Unmarshal(body, res); err != nil {
-			return nil, err
-		}
-		job = engine.NewJobWithID(namespace, queueName.Queue, res.GetData(), ttl, tries, jobID, res.GetAttributes())
+		job = engine.NewJobWithID(namespace, queueName.Queue, body, ttl, tries, jobID, nil)
 		metrics.jobElapsedMS.WithLabelValues(e.redis.Name, namespace, queueName.Queue).Observe(float64(job.ElapsedMS()))
 		return job, nil
 	}
@@ -228,11 +222,7 @@ func (e *Engine) Peek(namespace, queue, optionalJobID string) (job engine.Job, e
 	if err != nil {
 		return nil, err
 	}
-	res := &model.JobData{}
-	if err = proto.Unmarshal(body, res); err != nil {
-		return nil, err
-	}
-	return engine.NewJobWithID(namespace, queue, res.GetData(), ttl, tries, jobID, res.GetAttributes()), err
+	return engine.NewJobWithID(namespace, queue, body, ttl, tries, jobID, nil), err
 }
 
 func (e *Engine) Size(namespace, queue string) (size int64, err error) {

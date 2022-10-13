@@ -53,6 +53,7 @@ type jobImpl struct {
 	_elapsedMS int64
 }
 
+// NewJobFromReq creates a new job with its body and attributes being marshalled
 func NewJobFromReq(req *CreateJobReq) Job {
 	if req.ID == "" {
 		req.ID = uuid.GenUniqueJobIDWithDelay(req.Delay)
@@ -75,19 +76,15 @@ func NewJobFromReq(req *CreateJobReq) Job {
 // NOTE: there is a trick in this factory, the delay is embedded in the jobID.
 // By doing this we can delete the job that's located in hourly AOF, by placing
 // a tombstone record in that AOF.
-func NewJob(namespace, queue string, body []byte, ttl, delay uint32, tries uint16, jobID string, attr string) Job {
+func NewJob(namespace, queue string, body []byte, ttl, delay uint32, tries uint16, jobID string) Job {
 	if jobID == "" {
 		jobID = uuid.GenUniqueJobIDWithDelay(delay)
-	}
-	jobData, err := marshalJobBody(body, attr)
-	if err != nil {
-		return &jobImpl{}
 	}
 	return &jobImpl{
 		namespace: namespace,
 		queue:     queue,
 		id:        jobID,
-		body:      jobData,
+		body:      body,
 		ttl:       ttl,
 		delay:     delay,
 		tries:     tries,
@@ -105,21 +102,6 @@ func NewJobWithID(namespace, queue string, body []byte, ttl uint32, tries uint16
 		delay:      delay,
 		tries:      tries,
 		attributes: attrs,
-	}
-}
-
-func NewRawJob(namespace, queue string, body []byte, ttl, delay uint32, tries uint16, jobID string) Job {
-	if jobID == "" {
-		jobID = uuid.GenUniqueJobIDWithDelay(delay)
-	}
-	return &jobImpl{
-		namespace: namespace,
-		queue:     queue,
-		id:        jobID,
-		body:      body,
-		ttl:       ttl,
-		delay:     delay,
-		tries:     tries,
 	}
 }
 

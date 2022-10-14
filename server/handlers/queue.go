@@ -311,9 +311,6 @@ func Consume(c *gin.Context) {
 				"ttl":       job.TTL(),
 				"ttr":       ttrSecond,
 			}).Debug("Job consumed")
-			for key, attr := range job.Attributes() {
-				c.Header(jobAttributeHeaderPrefix+key, attr)
-			}
 			data = append(data, gin.H{
 				"msg":          "new job",
 				"namespace":    namespace,
@@ -323,6 +320,7 @@ func Consume(c *gin.Context) {
 				"ttl":          job.TTL(),
 				"elapsed_ms":   job.ElapsedMS(),
 				"remain_tries": job.Tries(),
+				"attributes":   job.Attributes(),
 			})
 		}
 		c.JSON(http.StatusOK, data)
@@ -345,9 +343,6 @@ func Consume(c *gin.Context) {
 		"ttl":       job.TTL(),
 		"ttr":       ttrSecond,
 	}).Debug("Job consumed")
-	for key, attr := range job.Attributes() {
-		c.Header(jobAttributeHeaderPrefix+key, attr)
-	}
 	c.JSON(http.StatusOK, gin.H{
 		"msg":          "new job",
 		"namespace":    namespace,
@@ -357,6 +352,7 @@ func Consume(c *gin.Context) {
 		"ttl":          job.TTL(),
 		"elapsed_ms":   job.ElapsedMS(),
 		"remain_tries": job.Tries(),
+		"attributes":   job.Attributes(),
 	})
 }
 
@@ -404,9 +400,6 @@ func PeekQueue(c *gin.Context) {
 		}).Error("Failed to peek")
 		return
 	} else {
-		for key, attr := range job.Attributes() {
-			c.Header(jobAttributeHeaderPrefix+key, attr)
-		}
 		c.JSON(http.StatusOK, gin.H{
 			"namespace":    namespace,
 			"queue":        queue,
@@ -415,6 +408,7 @@ func PeekQueue(c *gin.Context) {
 			"ttl":          job.TTL(),
 			"elapsed_ms":   job.ElapsedMS(),
 			"remain_tries": job.Tries(),
+			"attributes":   job.Attributes(),
 		})
 		return
 	}
@@ -442,9 +436,6 @@ func PeekJob(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	} else {
-		for key, attr := range job.Attributes() {
-			c.Header(jobAttributeHeaderPrefix+key, attr)
-		}
 		c.JSON(http.StatusOK, gin.H{
 			"namespace":    namespace,
 			"queue":        queue,
@@ -453,6 +444,7 @@ func PeekJob(c *gin.Context) {
 			"ttl":          job.TTL(),
 			"elapsed_ms":   job.ElapsedMS(),
 			"remain_tries": job.Tries(),
+			"attributes":   job.Attributes(),
 		})
 		return
 	}

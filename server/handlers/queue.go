@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"encoding/json"
-	"fmt"
 	"math"
 	"net/http"
 	"strconv"
@@ -88,7 +87,6 @@ func Publish(c *gin.Context) {
 		return
 	}
 
-	fmt.Printf("get header: %+v", c.Request.Header)
 	attributes := make(map[string]string)
 	for key, vals := range c.Request.Header {
 		if !strings.HasPrefix(key, jobAttributeHeaderPrefix) || len(vals) == 0 {
@@ -97,7 +95,6 @@ func Publish(c *gin.Context) {
 		field := strings.TrimPrefix(key, jobAttributeHeaderPrefix)
 		attributes[field] = vals[0]
 	}
-	fmt.Printf("get attributes: %+v", attributes)
 
 	var job engine.Job
 	// check engine version

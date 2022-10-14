@@ -17,6 +17,8 @@ import (
 	"github.com/bitleak/lmstfy/server/handlers"
 )
 
+const jobAttributeHeaderPrefix = "lmstfy-attribute-"
+
 func TestPublish(t *testing.T) {
 	query := url.Values{}
 	query.Add("delay", "5")
@@ -50,6 +52,8 @@ func TestPublishV2(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create request")
 	}
+	req.Header[jobAttributeHeaderPrefix+"flag"] = []string{"1"}
+	req.Header[jobAttributeHeaderPrefix+"label"] = []string{"abc"}
 	c, e, resp := ginTest(req)
 	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
 	e.PUT("/api/:namespace/:queue", handlers.Publish)
@@ -99,7 +103,8 @@ func TestConsume(t *testing.T) {
 
 func TestConsumeV2(t *testing.T) {
 	body := []byte("test v2")
-	jobID := publishJobV2("ns", "qs2", 0, 0, body, []string{"flag:1", "label:abc"})
+
+	jobID := publishJobV2("ns", "qs2", 0, 0, body)
 
 	query := url.Values{}
 	query.Add("ttr", "10")
@@ -263,7 +268,7 @@ func TestPeekQueue(t *testing.T) {
 
 func TestPeekQueueV2(t *testing.T) {
 	body := []byte("test v2")
-	jobID := publishJobV2("ns", "qs3", 0, 60, body, []string{"flag:1", "label:abc"})
+	jobID := publishJobV2("ns", "qs3", 0, 60, body)
 
 	targetUrl := "http://localhost/api/ns/qs3/peek?token=test-v2:1234567"
 	req, err := http.NewRequest("GET", targetUrl, nil)
@@ -364,7 +369,7 @@ func TestPeekJob(t *testing.T) {
 
 func TestPeekJobV2(t *testing.T) {
 	body := []byte("test v2")
-	jobID := publishJobV2("ns", "qs4", 0, 60, body, []string{"flag:1", "label:abc"})
+	jobID := publishJobV2("ns", "qs4", 0, 60, body)
 
 	targetUrl := fmt.Sprintf("http://localhost/api/ns/qs4/job/%s?token=test-v2:1234567", jobID)
 	req, err := http.NewRequest("GET", targetUrl, nil)
@@ -706,7 +711,10 @@ func TestPublishBulkV2(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create request")
 	}
+	req.Header[jobAttributeHeaderPrefix+"flag"] = []string{"1"}
+	req.Header[jobAttributeHeaderPrefix+"label"] = []string{"abc"}
 	c, e, resp := ginTest(req)
+
 	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
 	e.PUT("/api/:namespace/:queue/bulk", handlers.PublishBulk)
 	e.HandleContext(c)
@@ -729,7 +737,7 @@ func TestPublishBulkV2(t *testing.T) {
 		jobIDMap[jobID] = idx
 	}
 	for i := 0; i < len(jobsData); i++ {
-		body, jobID := consumeTestJobV2("ns", "qs5", 0, 1)
+		body, jobID, attributes := consumeTestJobV2("ns", "qs5", 0, 1)
 		idx, ok := jobIDMap[jobID]
 		if !ok {
 			t.Fatalf("Job not found")
@@ -737,6 +745,9 @@ func TestPublishBulkV2(t *testing.T) {
 		jobData, _ := json.Marshal(jobsData[idx])
 		if !bytes.Equal(body, jobData) {
 			t.Fatalf("Mismatched Job data")
+		}
+		if len(attributes) == 0 || attributes["flag"] != "1" || attributes["label"] != "abc" {
+			t.Fatalf("Mismatched Job attributes")
 		}
 	}
 }
@@ -761,8 +772,12 @@ func consumeTestJob(ns, q string, ttr, timeout uint32) (body []byte, jobID strin
 	return job.Body(), job.ID()
 }
 
-func publishJobV2(ns, q string, delay, ttl uint32, body []byte, attributes []string) string {
+func publishJobV2(ns, q string, delay, ttl uint32, body []byte) string {
 	e := engine.GetEngine("test-v2")
+	attributes := make(map[string]string)
+	attributes["flag"] = "1"
+	attributes["label"] = "abc"
+
 	j := engine.NewJobFromReq(&engine.CreateJobReq{
 		Namespace:  ns,
 		Queue:      q,
@@ -777,11 +792,11 @@ func publishJobV2(ns, q string, delay, ttl uint32, body []byte, attributes []str
 	return jobID
 }
 
-func consumeTestJobV2(ns, q string, ttr, timeout uint32) (body []byte, jobID string) {
+func consumeTestJobV2(ns, q string, ttr, timeout uint32) (body []byte, jobID string, attributes map[string]string) {
 	e := engine.GetEngine("test-v2")
 	job, _ := e.Consume(ns, []string{q}, ttr, timeout)
 	if job == nil {
-		return nil, ""
+		return nil, "", nil
 	}
-	return job.Body(), job.ID()
+	return job.Body(), job.ID(), job.Attributes()
 }

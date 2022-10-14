@@ -15,8 +15,9 @@ import (
 )
 
 const (
-	maxBatchConsumeSize = 100
-	maxBulkPublishSize  = 64
+	maxBatchConsumeSize      = 100
+	maxBulkPublishSize       = 64
+	jobAttributeHeaderPrefix = "lmstfy-attribute-"
 )
 
 // PUT /:namespace/:queue
@@ -86,7 +87,15 @@ func Publish(c *gin.Context) {
 		return
 	}
 
-	attributes := c.Request.Header.Values("lmstfy-attribute")
+	attributes := make(map[string]string)
+	for key, vals := range c.Request.Header {
+		if !strings.HasPrefix(key, jobAttributeHeaderPrefix) || len(vals) == 0 {
+			continue
+		}
+		field := strings.TrimPrefix(key, jobAttributeHeaderPrefix)
+		attributes[field] = vals[0]
+	}
+
 	var job engine.Job
 	// check engine version
 	if _, ok := e.(*redis_v2.Engine); ok {
@@ -170,8 +179,14 @@ func PublishBulk(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "tries shouldn't be zero"})
 		return
 	}
-
-	attributes := c.Request.Header.Values("lmstfy-attribute")
+	attributes := make(map[string]string)
+	for key, vals := range c.Request.Header {
+		if !strings.HasPrefix(key, jobAttributeHeaderPrefix) || len(vals) == 0 {
+			continue
+		}
+		field := strings.TrimPrefix(key, jobAttributeHeaderPrefix)
+		attributes[field] = vals[0]
+	}
 	body, err := c.GetRawData()
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read body"})

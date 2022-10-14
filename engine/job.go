@@ -5,8 +5,6 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
-	"strings"
-
 	"google.golang.org/protobuf/proto"
 
 	"github.com/bitleak/lmstfy/engine/model"
@@ -37,7 +35,7 @@ type CreateJobReq struct {
 	TTL        uint32
 	Delay      uint32
 	Tries      uint16
-	Attributes []string
+	Attributes map[string]string
 }
 
 type jobImpl struct {
@@ -232,24 +230,10 @@ func (j *jobImpl) GetDelayHour() uint16 {
 	return 0
 }
 
-func marshalJobBody(body []byte, attrs []string) ([]byte, error) {
+func marshalJobBody(body []byte, attrs map[string]string) ([]byte, error) {
 	job := &model.JobData{
-		Data: body,
-	}
-	if len(attrs) > 0 {
-		job.Attributes = parseAttributes(attrs)
+		Data:       body,
+		Attributes: attrs,
 	}
 	return proto.Marshal(job)
-}
-
-func parseAttributes(attrs []string) map[string]string {
-	res := make(map[string]string)
-	for _, attr := range attrs {
-		entry := strings.Split(attr, ":")
-		if len(entry) != 2 {
-			continue
-		}
-		res[entry[0]] = entry[1]
-	}
-	return res
 }

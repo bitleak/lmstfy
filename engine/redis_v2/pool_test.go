@@ -80,7 +80,7 @@ func TestPool_Get(t *testing.T) {
 		TTL:        50,
 		Delay:      0,
 		Tries:      1,
-		Attributes: []string{"flag:1", "label:abc"},
+		Attributes: attributes,
 	})
 	p.Add(job)
 	body, ttl, err := p.Get(job.Namespace(), job.Queue(), job.ID())

@@ -16,6 +16,7 @@ import (
 var (
 	redisMaxMemory = "10000000"
 	dummyPoolConf  = &config.RedisConf{}
+	attributes     = map[string]string{"flag": "1", "label": "abc"}
 )
 
 func TestEngine_Publish(t *testing.T) {
@@ -67,7 +68,7 @@ func TestEngine_Publish(t *testing.T) {
 		TTL:        10,
 		Delay:      0,
 		Tries:      1,
-		Attributes: []string{"flag:1", "label:abc"},
+		Attributes: attributes,
 	})
 	jobID, err = e.Publish(j)
 	t.Log(jobID)
@@ -104,7 +105,7 @@ func TestEngine_Publish_SecondaryStorage(t *testing.T) {
 		TTL:        120,
 		Delay:      1,
 		Tries:      1,
-		Attributes: []string{"flag:1", "label:abc"},
+		Attributes: attributes,
 	})
 	jobID, err := e.Publish(j)
 	assert.Nil(t, err)
@@ -185,7 +186,7 @@ func TestEngine_Consume(t *testing.T) {
 		TTL:        10,
 		Delay:      0,
 		Tries:      1,
-		Attributes: []string{"flag:1", "label:abc"},
+		Attributes: attributes,
 	})
 	jobID, err = e.Publish(j)
 	t.Log(jobID)
@@ -352,7 +353,7 @@ func TestEngine_Peek(t *testing.T) {
 		TTL:        10,
 		Delay:      0,
 		Tries:      1,
-		Attributes: []string{"flag:1", "label:abc"},
+		Attributes: attributes,
 	})
 	jobID, err = e.Publish(j)
 	if err != nil {
@@ -395,7 +396,7 @@ func TestEngine_Peek_SecondaryStorage(t *testing.T) {
 		TTL:        120,
 		Delay:      15,
 		Tries:      1,
-		Attributes: []string{"flag:1", "label:abc"},
+		Attributes: attributes,
 	})
 
 	jobID, err := e.Publish(j)

@@ -37,7 +37,7 @@ type CreateJobReq struct {
 	TTL        uint32
 	Delay      uint32
 	Tries      uint16
-	Attributes string
+	Attributes []string
 }
 
 type jobImpl struct {
@@ -232,22 +232,20 @@ func (j *jobImpl) GetDelayHour() uint16 {
 	return 0
 }
 
-func marshalJobBody(body []byte, attr string) ([]byte, error) {
-
+func marshalJobBody(body []byte, attrs []string) ([]byte, error) {
 	job := &model.JobData{
 		Data: body,
 	}
-	if attr != "" {
-		job.Attributes = parseAttributes(attr)
+	if len(attrs) > 0 {
+		job.Attributes = parseAttributes(attrs)
 	}
 	return proto.Marshal(job)
 }
 
-func parseAttributes(attr string) map[string]string {
+func parseAttributes(attrs []string) map[string]string {
 	res := make(map[string]string)
-	attributes := strings.Split(attr, ",")
-	for _, at := range attributes {
-		entry := strings.Split(at, "=")
+	for _, attr := range attrs {
+		entry := strings.Split(attr, ":")
 		if len(entry) != 2 {
 			continue
 		}

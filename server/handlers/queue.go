@@ -85,8 +85,8 @@ func Publish(c *gin.Context) {
 		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "body too large"})
 		return
 	}
-	attributes := c.GetHeader("attributes")
 
+	attributes := c.Request.Header.Values("lmstfy-attribute")
 	var job engine.Job
 	// check engine version
 	if _, ok := e.(*redis_v2.Engine); ok {
@@ -171,7 +171,7 @@ func PublishBulk(c *gin.Context) {
 		return
 	}
 
-	attributes := c.GetHeader("attributes")
+	attributes := c.Request.Header.Values("lmstfy-attribute")
 	body, err := c.GetRawData()
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read body"})

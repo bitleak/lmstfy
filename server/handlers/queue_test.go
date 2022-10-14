@@ -37,6 +37,28 @@ func TestPublish(t *testing.T) {
 	}
 }
 
+func TestPublishV2(t *testing.T) {
+	query := url.Values{}
+	query.Add("delay", "5")
+	query.Add("ttl", "10")
+	query.Add("tries", "1")
+	query.Add("token", "test-v2:1234567")
+
+	targetUrl := fmt.Sprintf("http://localhost/api/ns/qs1?%s", query.Encode())
+	body := strings.NewReader("hello msg")
+	req, err := http.NewRequest("PUT", targetUrl, body)
+	if err != nil {
+		t.Fatalf("Failed to create request")
+	}
+	c, e, resp := ginTest(req)
+	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
+	e.PUT("/api/:namespace/:queue", handlers.Publish)
+	e.HandleContext(c)
+	if resp.Code != http.StatusCreated {
+		t.Fatal("Failed to publish")
+	}
+}
+
 func TestConsume(t *testing.T) {
 	body, _ := publishTestJob("ns", "q2", 0, 0)
 
@@ -72,6 +94,52 @@ func TestConsume(t *testing.T) {
 	assert.Equal(t, 0, data.Tries)
 	if !bytes.Equal(data.Data, body) {
 		t.Fatalf("Mismatched job data")
+	}
+}
+
+func TestConsumeV2(t *testing.T) {
+	body := []byte("test v2")
+	jobID := publishJobV2("ns", "qs2", 0, 0, body, []string{"flag:1", "label:abc"})
+
+	query := url.Values{}
+	query.Add("ttr", "10")
+	query.Add("timeout", "2")
+	query.Add("token", "test-v2:1234567")
+
+	targetUrl := fmt.Sprintf("http://localhost/api/ns/qs2?%s", query.Encode())
+	req, err := http.NewRequest("GET", targetUrl, nil)
+	if err != nil {
+		t.Fatalf("Failed to create request")
+	}
+	c, e, resp := ginTest(req)
+	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
+	e.GET("/api/:namespace/:queue", handlers.Consume)
+	e.HandleContext(c)
+	if resp.Code != http.StatusOK {
+		t.Fatal("Failed to consume")
+	}
+	var data struct {
+		Msg        string
+		Namespace  string
+		Queue      string
+		JobID      string `json:"job_id"`
+		Data       []byte
+		Tries      int               `json:"remain_tries"`
+		TTL        int               `json:"ttl"`
+		Attributes map[string]string `json:"attributes"`
+	}
+	err = json.Unmarshal(resp.Body.Bytes(), &data)
+	if err != nil {
+		t.Fatalf("Failed to decode response: %s", err)
+	}
+	assert.Equal(t, data.TTL, 0)
+	assert.Equal(t, 0, data.Tries)
+	assert.Equal(t, jobID, data.JobID)
+	if !bytes.Equal(data.Data, body) {
+		t.Fatalf("Mismatched job data")
+	}
+	if data.Attributes == nil || data.Attributes["flag"] != "1" || data.Attributes["label"] != "abc" {
+		t.Fatalf("Mismatched job attributes")
 	}
 }
 
@@ -193,6 +261,42 @@ func TestPeekQueue(t *testing.T) {
 	assert.Equal(t, jobID, data.JobID)
 }
 
+func TestPeekQueueV2(t *testing.T) {
+	body := []byte("test v2")
+	jobID := publishJobV2("ns", "qs3", 0, 60, body, []string{"flag:1", "label:abc"})
+
+	targetUrl := "http://localhost/api/ns/qs3/peek?token=test-v2:1234567"
+	req, err := http.NewRequest("GET", targetUrl, nil)
+	if err != nil {
+		t.Fatalf("Failed to create request")
+	}
+	c, e, resp := ginTest(req)
+	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
+	e.GET("/api/:namespace/:queue/peek", handlers.PeekQueue)
+	e.HandleContext(c)
+	if resp.Code != http.StatusOK {
+		t.Log(resp.Body.String())
+		t.Fatal("Failed to peek queue")
+	}
+
+	var data struct {
+		Namespace  string
+		Queue      string
+		JobID      string `json:"job_id"`
+		Data       []byte
+		Attributes map[string]string `json:"attributes"`
+	}
+	err = json.Unmarshal(resp.Body.Bytes(), &data)
+	if err != nil {
+		t.Fatal("Failed to decode response")
+	}
+	assert.Equal(t, jobID, data.JobID)
+	assert.Equal(t, body, data.Data)
+	if data.Attributes == nil || data.Attributes["flag"] != "1" || data.Attributes["label"] != "abc" {
+		t.Fatalf("Mismatched job attributes")
+	}
+}
+
 func TestSize(t *testing.T) {
 	publishTestJob("ns", "q8", 0, 60)
 
@@ -255,6 +359,42 @@ func TestPeekJob(t *testing.T) {
 	if data.JobID != jobID {
 		t.Log(resp.Body.String())
 		t.Fatal("Mismatched job")
+	}
+}
+
+func TestPeekJobV2(t *testing.T) {
+	body := []byte("test v2")
+	jobID := publishJobV2("ns", "qs4", 0, 60, body, []string{"flag:1", "label:abc"})
+
+	targetUrl := fmt.Sprintf("http://localhost/api/ns/qs4/job/%s?token=test-v2:1234567", jobID)
+	req, err := http.NewRequest("GET", targetUrl, nil)
+	if err != nil {
+		t.Fatalf("Failed to create request")
+	}
+	c, e, resp := ginTest(req)
+	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
+	e.GET("/api/:namespace/:queue/job/:job_id", handlers.PeekJob)
+	e.HandleContext(c)
+	if resp.Code != http.StatusOK {
+		t.Log(resp.Body.String())
+		t.Fatal("Failed to peek job")
+	}
+
+	var data struct {
+		Namespace  string
+		Queue      string
+		JobID      string `json:"job_id"`
+		Data       []byte
+		Attributes map[string]string `json:"attributes"`
+	}
+	err = json.Unmarshal(resp.Body.Bytes(), &data)
+	if err != nil {
+		t.Fatal("Failed to decode response")
+	}
+	assert.Equal(t, jobID, data.JobID)
+	assert.Equal(t, body, data.Data)
+	if data.Attributes == nil || data.Attributes["flag"] != "1" || data.Attributes["label"] != "abc" {
+		t.Fatalf("Mismatched job attributes")
 	}
 }
 
@@ -561,4 +701,20 @@ func consumeTestJob(ns, q string, ttr, timeout uint32) (body []byte, jobID strin
 		return nil, ""
 	}
 	return job.Body(), job.ID()
+}
+
+func publishJobV2(ns, q string, delay, ttl uint32, body []byte, attributes []string) string {
+	e := engine.GetEngine("test-v2")
+	j := engine.NewJobFromReq(&engine.CreateJobReq{
+		Namespace:  ns,
+		Queue:      q,
+		ID:         "",
+		Body:       body,
+		TTL:        ttl,
+		Delay:      delay,
+		Tries:      1,
+		Attributes: attributes,
+	})
+	jobID, _ := e.Publish(j)
+	return jobID
 }

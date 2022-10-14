@@ -17,7 +17,7 @@ import (
 	"github.com/bitleak/lmstfy/server/handlers"
 )
 
-const jobAttributeHeaderPrefix = "lmstfy-attribute-"
+const jobAttributeHeaderPrefix = "Lmstfy-Attribute-"
 
 func TestPublish(t *testing.T) {
 	query := url.Values{}
@@ -52,8 +52,8 @@ func TestPublishV2(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create request")
 	}
-	req.Header[jobAttributeHeaderPrefix+"flag"] = []string{"1"}
-	req.Header[jobAttributeHeaderPrefix+"label"] = []string{"abc"}
+	req.Header[jobAttributeHeaderPrefix+"Flag"] = []string{"1"}
+	req.Header[jobAttributeHeaderPrefix+"Label"] = []string{"abc"}
 	c, e, resp := ginTest(req)
 	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
 	e.PUT("/api/:namespace/:queue", handlers.Publish)
@@ -143,7 +143,7 @@ func TestConsumeV2(t *testing.T) {
 	if !bytes.Equal(data.Data, body) {
 		t.Fatalf("Mismatched job data")
 	}
-	if data.Attributes == nil || data.Attributes["flag"] != "1" || data.Attributes["label"] != "abc" {
+	if data.Attributes == nil || data.Attributes["Flag"] != "1" || data.Attributes["Label"] != "abc" {
 		t.Fatalf("Mismatched job attributes")
 	}
 }
@@ -297,7 +297,7 @@ func TestPeekQueueV2(t *testing.T) {
 	}
 	assert.Equal(t, jobID, data.JobID)
 	assert.Equal(t, body, data.Data)
-	if data.Attributes == nil || data.Attributes["flag"] != "1" || data.Attributes["label"] != "abc" {
+	if data.Attributes == nil || data.Attributes["Flag"] != "1" || data.Attributes["Label"] != "abc" {
 		t.Fatalf("Mismatched job attributes")
 	}
 }
@@ -398,7 +398,7 @@ func TestPeekJobV2(t *testing.T) {
 	}
 	assert.Equal(t, jobID, data.JobID)
 	assert.Equal(t, body, data.Data)
-	if data.Attributes == nil || data.Attributes["flag"] != "1" || data.Attributes["label"] != "abc" {
+	if data.Attributes == nil || data.Attributes["Flag"] != "1" || data.Attributes["Label"] != "abc" {
 		t.Fatalf("Mismatched job attributes")
 	}
 }
@@ -711,8 +711,8 @@ func TestPublishBulkV2(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create request")
 	}
-	req.Header[jobAttributeHeaderPrefix+"flag"] = []string{"1"}
-	req.Header[jobAttributeHeaderPrefix+"label"] = []string{"abc"}
+	req.Header[jobAttributeHeaderPrefix+"Flag"] = []string{"1"}
+	req.Header[jobAttributeHeaderPrefix+"Label"] = []string{"abc"}
 	c, e, resp := ginTest(req)
 
 	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
@@ -746,7 +746,7 @@ func TestPublishBulkV2(t *testing.T) {
 		if !bytes.Equal(body, jobData) {
 			t.Fatalf("Mismatched Job data")
 		}
-		if len(attributes) == 0 || attributes["flag"] != "1" || attributes["label"] != "abc" {
+		if len(attributes) == 0 || attributes["Flag"] != "1" || attributes["Label"] != "abc" {
 			t.Fatalf("Mismatched Job attributes")
 		}
 	}
@@ -775,8 +775,8 @@ func consumeTestJob(ns, q string, ttr, timeout uint32) (body []byte, jobID strin
 func publishJobV2(ns, q string, delay, ttl uint32, body []byte) string {
 	e := engine.GetEngine("test-v2")
 	attributes := make(map[string]string)
-	attributes["flag"] = "1"
-	attributes["label"] = "abc"
+	attributes["Flag"] = "1"
+	attributes["Label"] = "abc"
 
 	j := engine.NewJobFromReq(&engine.CreateJobReq{
 		Namespace:  ns,

@@ -27,7 +27,7 @@ func TestQueue_Push(t *testing.T) {
 		TTL:        10,
 		Delay:      0,
 		Tries:      1,
-		Attributes: "",
+		Attributes: nil,
 	})
 	if err := q.Push(job); err != nil {
 		t.Fatalf("Failed to push job into queue: %s", err)
@@ -41,7 +41,7 @@ func TestQueue_Push(t *testing.T) {
 		TTL:        10,
 		Delay:      0,
 		Tries:      1,
-		Attributes: "",
+		Attributes: nil,
 	})
 
 	if err := q.Push(job2); err != engine.ErrWrongQueue {
@@ -64,7 +64,7 @@ func TestQueue_Poll(t *testing.T) {
 		TTL:        10,
 		Delay:      0,
 		Tries:      1,
-		Attributes: "",
+		Attributes: nil,
 	})
 	go func() {
 		time.Sleep(time.Second)
@@ -94,7 +94,7 @@ func TestQueue_Peek(t *testing.T) {
 		TTL:        10,
 		Delay:      0,
 		Tries:      2,
-		Attributes: "",
+		Attributes: nil,
 	})
 	q.Push(job)
 	jobID, tries, err := q.Peek()
@@ -121,7 +121,7 @@ func TestQueue_Destroy(t *testing.T) {
 		TTL:        10,
 		Delay:      0,
 		Tries:      1,
-		Attributes: "",
+		Attributes: nil,
 	})
 	q.Push(job)
 	count, err := q.Destroy()
@@ -155,7 +155,7 @@ func TestQueue_Tries(t *testing.T) {
 		TTL:        30,
 		Delay:      0,
 		Tries:      maxTries,
-		Attributes: "",
+		Attributes: nil,
 	})
 	q.Push(job)
 	pool := NewPool(R)
@@ -228,7 +228,7 @@ func TestPopMultiQueues(t *testing.T) {
 		TTL:        30,
 		Delay:      0,
 		Tries:      2,
-		Attributes: "",
+		Attributes: nil,
 	})
 
 	q.Push(job)
@@ -250,7 +250,7 @@ func TestPopMultiQueues(t *testing.T) {
 		TTL:        30,
 		Delay:      0,
 		Tries:      2,
-		Attributes: "",
+		Attributes: nil,
 	})
 	q = NewQueue(namespace, queueName, R, timer)
 	q.Push(job)
@@ -287,7 +287,7 @@ func TestQueue_Backup(t *testing.T) {
 			TTL:        30,
 			Delay:      delay,
 			Tries:      2,
-			Attributes: "",
+			Attributes: nil,
 		})
 		q.Push(job)
 		pool := NewPool(R)

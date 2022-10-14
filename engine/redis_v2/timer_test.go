@@ -26,7 +26,7 @@ func TestTimer_Add(t *testing.T) {
 		TTL:        10,
 		Delay:      0,
 		Tries:      1,
-		Attributes: "",
+		Attributes: nil,
 	})
 	if err = timer.Add(job.Namespace(), job.Queue(), job.ID(), 10, 1); err != nil {
 		t.Errorf("Failed to add job to timer: %s", err)
@@ -47,7 +47,7 @@ func TestTimer_Tick(t *testing.T) {
 		TTL:        5,
 		Delay:      0,
 		Tries:      1,
-		Attributes: "",
+		Attributes: nil,
 	})
 	pool := NewPool(R)
 	pool.Add(job)
@@ -104,7 +104,7 @@ func TestBackupTimer_BeforeOldestScore(t *testing.T) {
 			TTL:        100,
 			Delay:      1,
 			Tries:      3,
-			Attributes: "",
+			Attributes: nil,
 		})
 		pool.Add(job)
 		if i%2 == 0 {
@@ -163,7 +163,7 @@ func TestBackupTimer_EmptyReadyQueue(t *testing.T) {
 			TTL:        100,
 			Delay:      1,
 			Tries:      3,
-			Attributes: "",
+			Attributes: nil,
 		})
 
 		pool.Add(job)
@@ -228,7 +228,7 @@ func benchmarkTimer_Add(timer *Timer) func(b *testing.B) {
 				TTL:        100,
 				Delay:      0,
 				Tries:      1,
-				Attributes: "",
+				Attributes: nil,
 			})
 			pool.Add(job)
 			timer.Add(job.Namespace(), job.Queue(), job.ID(), 1, 1)
@@ -250,7 +250,7 @@ func benchmarkTimer_Pop(timer *Timer) func(b *testing.B) {
 				TTL:        100,
 				Delay:      0,
 				Tries:      1,
-				Attributes: "",
+				Attributes: nil,
 			})
 			pool.Add(job)
 			timer.Add(job.Namespace(), job.Queue(), job.ID(), 1, 1)
@@ -285,7 +285,7 @@ func BenchmarkTimer_Pump(b *testing.B) {
 			TTL:        5,
 			Delay:      0,
 			Tries:      1,
-			Attributes: "",
+			Attributes: nil,
 		})
 		pool.Add(job)
 		timer.Add(job.Namespace(), job.Queue(), job.ID(), 1, 1)

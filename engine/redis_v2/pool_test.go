@@ -23,7 +23,7 @@ func TestPool_Add(t *testing.T) {
 		TTL:        10,
 		Delay:      0,
 		Tries:      1,
-		Attributes: "",
+		Attributes: nil,
 	})
 	if err := p.Add(job); err != nil {
 		t.Errorf("Failed to add job to pool: %s", err)
@@ -41,7 +41,7 @@ func TestPool_Add2(t *testing.T) {
 		TTL:        1,
 		Delay:      0,
 		Tries:      1,
-		Attributes: "",
+		Attributes: nil,
 	})
 	p.Add(job)
 	time.Sleep(2 * time.Second)
@@ -62,7 +62,7 @@ func TestPool_Delete(t *testing.T) {
 		TTL:        10,
 		Delay:      0,
 		Tries:      1,
-		Attributes: "",
+		Attributes: nil,
 	})
 	p.Add(job)
 	if err := p.Delete(job.Namespace(), job.Queue(), job.ID()); err != nil {
@@ -80,7 +80,7 @@ func TestPool_Get(t *testing.T) {
 		TTL:        50,
 		Delay:      0,
 		Tries:      1,
-		Attributes: "flag=1,label=abc",
+		Attributes: []string{"flag:1", "label:abc"},
 	})
 	p.Add(job)
 	body, ttl, err := p.Get(job.Namespace(), job.Queue(), job.ID())

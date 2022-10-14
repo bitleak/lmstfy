@@ -33,7 +33,7 @@ func TestEngine_Publish(t *testing.T) {
 		TTL:        10,
 		Delay:      2,
 		Tries:      1,
-		Attributes: "",
+		Attributes: nil,
 	})
 	jobID, err := e.Publish(j)
 	t.Log(jobID)
@@ -50,7 +50,7 @@ func TestEngine_Publish(t *testing.T) {
 		TTL:        10,
 		Delay:      0,
 		Tries:      1,
-		Attributes: "",
+		Attributes: nil,
 	})
 	jobID, err = e.Publish(j)
 	t.Log(jobID)
@@ -67,7 +67,7 @@ func TestEngine_Publish(t *testing.T) {
 		TTL:        10,
 		Delay:      0,
 		Tries:      1,
-		Attributes: "flag=1,label=abc",
+		Attributes: []string{"flag:1", "label:abc"},
 	})
 	jobID, err = e.Publish(j)
 	t.Log(jobID)
@@ -104,7 +104,7 @@ func TestEngine_Publish_SecondaryStorage(t *testing.T) {
 		TTL:        120,
 		Delay:      1,
 		Tries:      1,
-		Attributes: "flag=1,label=abc",
+		Attributes: []string{"flag:1", "label:abc"},
 	})
 	jobID, err := e.Publish(j)
 	assert.Nil(t, err)
@@ -115,8 +115,8 @@ func TestEngine_Publish_SecondaryStorage(t *testing.T) {
 	assert.EqualValues(t, body, job.Body())
 	assert.EqualValues(t, body, job.Body())
 	assert.NotNil(t, job.Attributes())
-	assert.EqualValues(t, job.Attributes()["flag"], "1")
-	assert.EqualValues(t, job.Attributes()["label"], "abc")
+	assert.EqualValues(t, "1", job.Attributes()["flag"])
+	assert.EqualValues(t, "abc", job.Attributes()["label"])
 }
 
 func TestEngine_Consume(t *testing.T) {
@@ -135,7 +135,7 @@ func TestEngine_Consume(t *testing.T) {
 		TTL:        10,
 		Delay:      2,
 		Tries:      1,
-		Attributes: "",
+		Attributes: nil,
 	})
 	jobID, err := e.Publish(j)
 	if err != nil {
@@ -161,7 +161,7 @@ func TestEngine_Consume(t *testing.T) {
 		TTL:        10,
 		Delay:      0,
 		Tries:      1,
-		Attributes: "",
+		Attributes: nil,
 	})
 	jobID, err = e.Publish(j)
 	t.Log(jobID)
@@ -185,7 +185,7 @@ func TestEngine_Consume(t *testing.T) {
 		TTL:        10,
 		Delay:      0,
 		Tries:      1,
-		Attributes: "flag=1,label=abc",
+		Attributes: []string{"flag:1", "label:abc"},
 	})
 	jobID, err = e.Publish(j)
 	t.Log(jobID)
@@ -200,8 +200,8 @@ func TestEngine_Consume(t *testing.T) {
 		t.Fatalf("Mistmatched job data")
 	}
 	assert.NotNil(t, job.Attributes())
-	assert.EqualValues(t, job.Attributes()["flag"], "1")
-	assert.EqualValues(t, job.Attributes()["label"], "abc")
+	assert.EqualValues(t, "1", job.Attributes()["flag"])
+	assert.EqualValues(t, "abc", job.Attributes()["label"])
 }
 
 // Consume the first one from multi publish
@@ -220,7 +220,7 @@ func TestEngine_Consume2(t *testing.T) {
 		TTL:        10,
 		Delay:      5,
 		Tries:      1,
-		Attributes: "",
+		Attributes: nil,
 	})
 
 	_, err = e.Publish(j)
@@ -232,7 +232,7 @@ func TestEngine_Consume2(t *testing.T) {
 		TTL:        10,
 		Delay:      2,
 		Tries:      1,
-		Attributes: "",
+		Attributes: nil,
 	})
 	jobID, err := e.Publish(j)
 	if err != nil {
@@ -265,7 +265,7 @@ func TestEngine_ConsumeMulti(t *testing.T) {
 		TTL:        10,
 		Delay:      3,
 		Tries:      1,
-		Attributes: "",
+		Attributes: nil,
 	})
 	jobID, err := e.Publish(j)
 	if err != nil {
@@ -279,7 +279,7 @@ func TestEngine_ConsumeMulti(t *testing.T) {
 		TTL:        10,
 		Delay:      1,
 		Tries:      1,
-		Attributes: "",
+		Attributes: nil,
 	})
 	jobID2, err := e.Publish(j)
 	if err != nil {
@@ -324,7 +324,7 @@ func TestEngine_Peek(t *testing.T) {
 		TTL:        10,
 		Delay:      0,
 		Tries:      1,
-		Attributes: "",
+		Attributes: nil,
 	})
 	jobID, err := e.Publish(j)
 	if err != nil {
@@ -352,7 +352,7 @@ func TestEngine_Peek(t *testing.T) {
 		TTL:        10,
 		Delay:      0,
 		Tries:      1,
-		Attributes: "flag=1,label=abc",
+		Attributes: []string{"flag:1", "label:abc"},
 	})
 	jobID, err = e.Publish(j)
 	if err != nil {
@@ -366,8 +366,8 @@ func TestEngine_Peek(t *testing.T) {
 		t.Fatal("Mismatched job")
 	}
 	assert.NotNil(t, job.Attributes())
-	assert.EqualValues(t, job.Attributes()["flag"], "1")
-	assert.EqualValues(t, job.Attributes()["label"], "abc")
+	assert.EqualValues(t, "1", job.Attributes()["flag"])
+	assert.EqualValues(t, "abc", job.Attributes()["label"])
 }
 
 func TestEngine_Peek_SecondaryStorage(t *testing.T) {
@@ -395,7 +395,7 @@ func TestEngine_Peek_SecondaryStorage(t *testing.T) {
 		TTL:        120,
 		Delay:      15,
 		Tries:      1,
-		Attributes: "flag=1,label=abc",
+		Attributes: []string{"flag:1", "label:abc"},
 	})
 
 	jobID, err := e.Publish(j)
@@ -409,8 +409,8 @@ func TestEngine_Peek_SecondaryStorage(t *testing.T) {
 	assert.EqualValues(t, jobID, job.ID())
 	assert.EqualValues(t, body, job.Body())
 	assert.NotNil(t, job.Attributes())
-	assert.EqualValues(t, job.Attributes()["flag"], "1")
-	assert.EqualValues(t, job.Attributes()["label"], "abc")
+	assert.EqualValues(t, "1", job.Attributes()["flag"])
+	assert.EqualValues(t, "abc", job.Attributes()["label"])
 }
 
 func TestEngine_BatchConsume(t *testing.T) {
@@ -428,7 +428,7 @@ func TestEngine_BatchConsume(t *testing.T) {
 		TTL:        10,
 		Delay:      3,
 		Tries:      1,
-		Attributes: "",
+		Attributes: nil,
 	})
 	jobID, err := e.Publish(j)
 	t.Log(jobID)
@@ -463,7 +463,7 @@ func TestEngine_BatchConsume(t *testing.T) {
 			TTL:        10,
 			Delay:      0,
 			Tries:      1,
-			Attributes: "",
+			Attributes: nil,
 		})
 		jobID, err := e.Publish(j)
 		t.Log(jobID)
@@ -524,7 +524,7 @@ func TestEngine_PublishWithJobID(t *testing.T) {
 		TTL:        10,
 		Delay:      0,
 		Tries:      1,
-		Attributes: "",
+		Attributes: nil,
 	})
 	jobID, err := e.Publish(j)
 	t.Log(jobID)

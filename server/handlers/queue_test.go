@@ -3,6 +3,7 @@ package handlers_test
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -17,7 +18,7 @@ import (
 	"github.com/bitleak/lmstfy/server/handlers"
 )
 
-const jobAttributeHeaderPrefix = "Lmstfy-Attribute-"
+const jobAttributeHeaderPrefix = "lmstfy-attribute-"
 
 func TestPublish(t *testing.T) {
 	query := url.Values{}
@@ -52,8 +53,8 @@ func TestPublishV2(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create request")
 	}
-	req.Header[jobAttributeHeaderPrefix+"Flag"] = []string{"1"}
-	req.Header[jobAttributeHeaderPrefix+"Label"] = []string{"abc"}
+	req.Header[jobAttributeHeaderPrefix+"flag"] = []string{"1"}
+	req.Header[jobAttributeHeaderPrefix+"label"] = []string{"abc"}
 	c, e, resp := ginTest(req)
 	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
 	e.PUT("/api/:namespace/:queue", handlers.Publish)
@@ -124,14 +125,13 @@ func TestConsumeV2(t *testing.T) {
 		t.Fatal("Failed to consume")
 	}
 	var data struct {
-		Msg        string
-		Namespace  string
-		Queue      string
-		JobID      string `json:"job_id"`
-		Data       []byte
-		Tries      int               `json:"remain_tries"`
-		TTL        int               `json:"ttl"`
-		Attributes map[string]string `json:"attributes"`
+		Msg       string
+		Namespace string
+		Queue     string
+		JobID     string `json:"job_id"`
+		Data      []byte
+		Tries     int `json:"remain_tries"`
+		TTL       int `json:"ttl"`
 	}
 	err = json.Unmarshal(resp.Body.Bytes(), &data)
 	if err != nil {
@@ -143,9 +143,7 @@ func TestConsumeV2(t *testing.T) {
 	if !bytes.Equal(data.Data, body) {
 		t.Fatalf("Mismatched job data")
 	}
-	if data.Attributes == nil || data.Attributes["Flag"] != "1" || data.Attributes["Label"] != "abc" {
-		t.Fatalf("Mismatched job attributes")
-	}
+	assert.Equal(t, checkRespAttributes(resp.Header()), nil)
 }
 
 func TestNoBlockingConsumeMulti(t *testing.T) {
@@ -285,11 +283,10 @@ func TestPeekQueueV2(t *testing.T) {
 	}
 
 	var data struct {
-		Namespace  string
-		Queue      string
-		JobID      string `json:"job_id"`
-		Data       []byte
-		Attributes map[string]string `json:"attributes"`
+		Namespace string
+		Queue     string
+		JobID     string `json:"job_id"`
+		Data      []byte
 	}
 	err = json.Unmarshal(resp.Body.Bytes(), &data)
 	if err != nil {
@@ -297,9 +294,7 @@ func TestPeekQueueV2(t *testing.T) {
 	}
 	assert.Equal(t, jobID, data.JobID)
 	assert.Equal(t, body, data.Data)
-	if data.Attributes == nil || data.Attributes["Flag"] != "1" || data.Attributes["Label"] != "abc" {
-		t.Fatalf("Mismatched job attributes")
-	}
+	assert.Equal(t, checkRespAttributes(resp.Header()), nil)
 }
 
 func TestSize(t *testing.T) {
@@ -386,11 +381,10 @@ func TestPeekJobV2(t *testing.T) {
 	}
 
 	var data struct {
-		Namespace  string
-		Queue      string
-		JobID      string `json:"job_id"`
-		Data       []byte
-		Attributes map[string]string `json:"attributes"`
+		Namespace string
+		Queue     string
+		JobID     string `json:"job_id"`
+		Data      []byte
 	}
 	err = json.Unmarshal(resp.Body.Bytes(), &data)
 	if err != nil {
@@ -398,9 +392,7 @@ func TestPeekJobV2(t *testing.T) {
 	}
 	assert.Equal(t, jobID, data.JobID)
 	assert.Equal(t, body, data.Data)
-	if data.Attributes == nil || data.Attributes["Flag"] != "1" || data.Attributes["Label"] != "abc" {
-		t.Fatalf("Mismatched job attributes")
-	}
+	assert.Equal(t, checkRespAttributes(resp.Header()), nil)
 }
 
 func TestPeekDeadLetter(t *testing.T) {
@@ -711,8 +703,8 @@ func TestPublishBulkV2(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create request")
 	}
-	req.Header[jobAttributeHeaderPrefix+"Flag"] = []string{"1"}
-	req.Header[jobAttributeHeaderPrefix+"Label"] = []string{"abc"}
+	req.Header[jobAttributeHeaderPrefix+"flag"] = []string{"1"}
+	req.Header[jobAttributeHeaderPrefix+"label"] = []string{"abc"}
 	c, e, resp := ginTest(req)
 
 	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
@@ -746,7 +738,7 @@ func TestPublishBulkV2(t *testing.T) {
 		if !bytes.Equal(body, jobData) {
 			t.Fatalf("Mismatched Job data")
 		}
-		if len(attributes) == 0 || attributes["Flag"] != "1" || attributes["Label"] != "abc" {
+		if len(attributes) == 0 || attributes["flag"] != "1" || attributes["label"] != "abc" {
 			t.Fatalf("Mismatched Job attributes")
 		}
 	}
@@ -775,8 +767,8 @@ func consumeTestJob(ns, q string, ttr, timeout uint32) (body []byte, jobID strin
 func publishJobV2(ns, q string, delay, ttl uint32, body []byte) string {
 	e := engine.GetEngine("test-v2")
 	attributes := make(map[string]string)
-	attributes["Flag"] = "1"
-	attributes["Label"] = "abc"
+	attributes["flag"] = "1"
+	attributes["label"] = "abc"
 
 	j := engine.NewJobFromReq(&engine.CreateJobReq{
 		Namespace:  ns,
@@ -799,4 +791,20 @@ func consumeTestJobV2(ns, q string, ttr, timeout uint32) (body []byte, jobID str
 		return nil, "", nil
 	}
 	return job.Body(), job.ID(), job.Attributes()
+}
+
+func checkRespAttributes(header http.Header) error {
+	attributes := make(map[string]string)
+	for key, values := range header {
+		lowerKey := strings.ToLower(key)
+		if !strings.HasPrefix(lowerKey, jobAttributeHeaderPrefix) {
+			continue
+		}
+		attributes[lowerKey] = values[0]
+	}
+	if len(attributes) != 2 || attributes[jobAttributeHeaderPrefix+"flag"] != "1" ||
+		attributes[jobAttributeHeaderPrefix+"label"] != "abc" {
+		return errors.New("Mismatched job attributes")
+	}
+	return nil
 }

@@ -17,7 +17,7 @@ import (
 const (
 	maxBatchConsumeSize      = 100
 	maxBulkPublishSize       = 64
-	jobAttributeHeaderPrefix = "Lmstfy-Attribute-"
+	jobAttributeHeaderPrefix = "lmstfy-attribute-"
 )
 
 // PUT /:namespace/:queue
@@ -86,16 +86,7 @@ func Publish(c *gin.Context) {
 		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "body too large"})
 		return
 	}
-
-	attributes := make(map[string]string)
-	for key, vals := range c.Request.Header {
-		if !strings.HasPrefix(key, jobAttributeHeaderPrefix) || len(vals) == 0 {
-			continue
-		}
-		field := strings.TrimPrefix(key, jobAttributeHeaderPrefix)
-		attributes[field] = vals[0]
-	}
-
+	attributes := parseAttributes(c)
 	var job engine.Job
 	// check engine version
 	if _, ok := e.(*redis_v2.Engine); ok {
@@ -179,14 +170,7 @@ func PublishBulk(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "tries shouldn't be zero"})
 		return
 	}
-	attributes := make(map[string]string)
-	for key, vals := range c.Request.Header {
-		if !strings.HasPrefix(key, jobAttributeHeaderPrefix) || len(vals) == 0 {
-			continue
-		}
-		field := strings.TrimPrefix(key, jobAttributeHeaderPrefix)
-		attributes[field] = vals[0]
-	}
+	attributes := parseAttributes(c)
 	body, err := c.GetRawData()
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read body"})
@@ -327,6 +311,9 @@ func Consume(c *gin.Context) {
 				"ttl":       job.TTL(),
 				"ttr":       ttrSecond,
 			}).Debug("Job consumed")
+			for key, attr := range job.Attributes() {
+				c.Header(jobAttributeHeaderPrefix+key, attr)
+			}
 			data = append(data, gin.H{
 				"msg":          "new job",
 				"namespace":    namespace,
@@ -336,7 +323,6 @@ func Consume(c *gin.Context) {
 				"ttl":          job.TTL(),
 				"elapsed_ms":   job.ElapsedMS(),
 				"remain_tries": job.Tries(),
-				"attributes":   job.Attributes(),
 			})
 		}
 		c.JSON(http.StatusOK, data)
@@ -359,6 +345,9 @@ func Consume(c *gin.Context) {
 		"ttl":       job.TTL(),
 		"ttr":       ttrSecond,
 	}).Debug("Job consumed")
+	for key, attr := range job.Attributes() {
+		c.Header(jobAttributeHeaderPrefix+key, attr)
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"msg":          "new job",
 		"namespace":    namespace,
@@ -368,7 +357,6 @@ func Consume(c *gin.Context) {
 		"ttl":          job.TTL(),
 		"elapsed_ms":   job.ElapsedMS(),
 		"remain_tries": job.Tries(),
-		"attributes":   job.Attributes(),
 	})
 }
 
@@ -416,6 +404,9 @@ func PeekQueue(c *gin.Context) {
 		}).Error("Failed to peek")
 		return
 	} else {
+		for key, attr := range job.Attributes() {
+			c.Header(jobAttributeHeaderPrefix+key, attr)
+		}
 		c.JSON(http.StatusOK, gin.H{
 			"namespace":    namespace,
 			"queue":        queue,
@@ -424,7 +415,6 @@ func PeekQueue(c *gin.Context) {
 			"ttl":          job.TTL(),
 			"elapsed_ms":   job.ElapsedMS(),
 			"remain_tries": job.Tries(),
-			"attributes":   job.Attributes(),
 		})
 		return
 	}
@@ -452,6 +442,9 @@ func PeekJob(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	} else {
+		for key, attr := range job.Attributes() {
+			c.Header(jobAttributeHeaderPrefix+key, attr)
+		}
 		c.JSON(http.StatusOK, gin.H{
 			"namespace":    namespace,
 			"queue":        queue,
@@ -460,7 +453,6 @@ func PeekJob(c *gin.Context) {
 			"ttl":          job.TTL(),
 			"elapsed_ms":   job.ElapsedMS(),
 			"remain_tries": job.Tries(),
-			"attributes":   job.Attributes(),
 		})
 		return
 	}
@@ -648,4 +640,17 @@ func DestroyQueue(c *gin.Context) {
 		"count":     count,
 	}).Info("queue destroyed")
 	c.Status(http.StatusNoContent)
+}
+
+func parseAttributes(c *gin.Context) map[string]string {
+	attributes := make(map[string]string)
+	for key, vals := range c.Request.Header {
+		lowerKey := strings.ToLower(key)
+		if !strings.HasPrefix(lowerKey, jobAttributeHeaderPrefix) || len(vals) == 0 {
+			continue
+		}
+		field := strings.TrimPrefix(lowerKey, jobAttributeHeaderPrefix)
+		attributes[field] = vals[0]
+	}
+	return attributes
 }

@@ -105,7 +105,7 @@ func (s *Spanner) BatchGetJobs(ctx context.Context, req []*model.DBJobReq) (jobs
 			if err = row.ToStruct(elem); err != nil {
 				return err
 			}
-			j := engine.NewRawJob(elem.Namespace, elem.Queue, elem.Body, uint32(elem.ExpiredTime),
+			j := engine.NewJob(elem.Namespace, elem.Queue, elem.Body, uint32(elem.ExpiredTime),
 				uint32(elem.ReadyTime-now), uint16(elem.Tries), elem.JobID)
 			jobs = append(jobs, j)
 			return nil
@@ -185,7 +185,7 @@ func (s *Spanner) GetReadyJobs(ctx context.Context, req *model.DBJobReq) (jobs [
 		if err = row.ToStruct(elem); err != nil {
 			return err
 		}
-		j := engine.NewRawJob(elem.Namespace, elem.Queue, elem.Body, uint32(elem.ExpiredTime),
+		j := engine.NewJob(elem.Namespace, elem.Queue, elem.Body, uint32(elem.ExpiredTime),
 			uint32(elem.ReadyTime-now), uint16(elem.Tries), elem.JobID)
 		jobs = append(jobs, j)
 		return nil
@@ -215,7 +215,7 @@ func (s *Spanner) BatchGetJobsByID(ctx context.Context, IDs []string) (jobs []en
 		if err = row.ToStruct(elem); err != nil {
 			return err
 		}
-		j := engine.NewRawJob(elem.Namespace, elem.Queue, elem.Body, uint32(elem.ExpiredTime),
+		j := engine.NewJob(elem.Namespace, elem.Queue, elem.Body, uint32(elem.ExpiredTime),
 			uint32(elem.ReadyTime-now), uint16(elem.Tries), elem.JobID)
 		jobs = append(jobs, j)
 		return nil

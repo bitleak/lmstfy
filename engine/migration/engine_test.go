@@ -2,10 +2,12 @@ package migration
 
 import (
 	"bytes"
-	"github.com/bitleak/lmstfy/engine"
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+
+	"github.com/bitleak/lmstfy/engine"
 )
 
 func TestEngine_Publish(t *testing.T) {

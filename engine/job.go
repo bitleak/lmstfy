@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
-
 	"google.golang.org/protobuf/proto"
 
 	"github.com/bitleak/lmstfy/engine/model"
@@ -21,22 +20,55 @@ type Job interface {
 	Delay() uint32
 	Tries() uint16
 	ElapsedMS() int64
+	Attributes() map[string]string
 
 	encoding.BinaryMarshaler
 	encoding.BinaryUnmarshaler
 	encoding.TextMarshaler
 }
 
+type CreateJobReq struct {
+	Namespace  string
+	Queue      string
+	ID         string
+	Body       []byte
+	TTL        uint32
+	Delay      uint32
+	Tries      uint16
+	Attributes map[string]string
+}
+
 type jobImpl struct {
-	namespace string
-	queue     string
-	id        string
-	body      []byte
-	ttl       uint32
-	delay     uint32
-	tries     uint16
+	namespace  string
+	queue      string
+	id         string
+	body       []byte
+	ttl        uint32
+	delay      uint32
+	tries      uint16
+	attributes map[string]string
 
 	_elapsedMS int64
+}
+
+// NewJobFromReq creates a new job with its body and attributes being marshalled
+func NewJobFromReq(req *CreateJobReq) Job {
+	if req.ID == "" {
+		req.ID = uuid.GenUniqueJobIDWithDelay(req.Delay)
+	}
+	jobData, err := marshalJobBody(req.Body, req.Attributes)
+	if err != nil {
+		return &jobImpl{}
+	}
+	return &jobImpl{
+		namespace: req.Namespace,
+		queue:     req.Queue,
+		id:        req.ID,
+		body:      jobData,
+		ttl:       req.TTL,
+		delay:     req.Delay,
+		tries:     req.Tries,
+	}
 }
 
 // NOTE: there is a trick in this factory, the delay is embedded in the jobID.
@@ -46,46 +78,28 @@ func NewJob(namespace, queue string, body []byte, ttl, delay uint32, tries uint1
 	if jobID == "" {
 		jobID = uuid.GenUniqueJobIDWithDelay(delay)
 	}
-	jobData, err := marshalJobBody(body)
-	if err != nil {
-		return &jobImpl{}
-	}
 	return &jobImpl{
 		namespace: namespace,
 		queue:     queue,
 		id:        jobID,
-		body:      jobData,
+		body:      body,
 		ttl:       ttl,
 		delay:     delay,
 		tries:     tries,
 	}
 }
 
-func NewJobWithID(namespace, queue string, body []byte, ttl uint32, tries uint16, jobID string) Job {
+func NewJobWithID(namespace, queue string, body []byte, ttl uint32, tries uint16, jobID string, attrs map[string]string) Job {
 	delay, _ := uuid.ExtractDelaySecondFromUniqueID(jobID)
 	return &jobImpl{
-		namespace: namespace,
-		queue:     queue,
-		id:        jobID,
-		body:      body,
-		ttl:       ttl,
-		delay:     delay,
-		tries:     tries,
-	}
-}
-
-func NewRawJob(namespace, queue string, body []byte, ttl, delay uint32, tries uint16, jobID string) Job {
-	if jobID == "" {
-		jobID = uuid.GenUniqueJobIDWithDelay(delay)
-	}
-	return &jobImpl{
-		namespace: namespace,
-		queue:     queue,
-		id:        jobID,
-		body:      body,
-		ttl:       ttl,
-		delay:     delay,
-		tries:     tries,
+		namespace:  namespace,
+		queue:      queue,
+		id:         jobID,
+		body:       body,
+		ttl:        ttl,
+		delay:      delay,
+		tries:      tries,
+		attributes: attrs,
 	}
 }
 
@@ -124,6 +138,10 @@ func (j *jobImpl) ElapsedMS() int64 {
 	ms, _ := uuid.ElapsedMilliSecondFromUniqueID(j.id)
 	j._elapsedMS = ms
 	return ms
+}
+
+func (j *jobImpl) Attributes() map[string]string {
+	return j.attributes
 }
 
 // Marshal into binary of the format:
@@ -212,9 +230,10 @@ func (j *jobImpl) GetDelayHour() uint16 {
 	return 0
 }
 
-func marshalJobBody(body []byte) ([]byte, error) {
+func marshalJobBody(body []byte, attrs map[string]string) ([]byte, error) {
 	job := &model.JobData{
-		Data: body,
+		Data:       body,
+		Attributes: attrs,
 	}
 	return proto.Marshal(job)
 }

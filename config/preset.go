@@ -38,6 +38,7 @@ func CreatePresetForTest(version string, pools ...string) (*PresetConfigForTest,
 	addr := defaultContainer.DefaultAddress()
 	cfg.AdminRedis.Addr = addr
 	cfg.Pool[DefaultPoolName] = RedisConf{Addr: addr, Version: version}
+	cfg.Pool["test-v2"] = RedisConf{Addr: addr, Version: "v2"}
 
 	containers := []*gnomock.Container{defaultContainer}
 	for _, extraPool := range pools {

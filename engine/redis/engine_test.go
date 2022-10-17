@@ -3,10 +3,11 @@ package redis
 import (
 	"bytes"
 	"fmt"
-	"github.com/bitleak/lmstfy/engine"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/bitleak/lmstfy/engine"
 )
 
 func TestEngine_Publish(t *testing.T) {
@@ -68,7 +69,7 @@ func TestEngine_Consume(t *testing.T) {
 		t.Fatalf("Failed to consume: %s", err)
 	}
 	if !bytes.Equal(body, job.Body()) || jobID != job.ID() {
-		t.Fatalf("Mistmatched job data")
+		t.Fatal("Mistmatched job data")
 	}
 }
 
@@ -95,7 +96,7 @@ func TestEngine_Consume2(t *testing.T) {
 		t.Fatalf("job tries = 0 was expected, but got %d", job.Tries())
 	}
 	if !bytes.Equal(body, job.Body()) || jobID != job.ID() {
-		t.Fatalf("Mistmatched job data")
+		t.Fatal("Mistmatched job data")
 	}
 }
 
@@ -158,6 +159,10 @@ func TestEngine_Peek(t *testing.T) {
 	}
 	if job.ID() != jobID || !bytes.Equal(job.Body(), body) {
 		t.Fatal("Mismatched job")
+	}
+	_, err = e.Consume("ns-engine", []string{"q6"}, 5, 0)
+	if err != nil {
+		t.Fatalf("Failed to consume previous queue job: %s", err)
 	}
 }
 

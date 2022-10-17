@@ -7,14 +7,17 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/bitleak/lmstfy/engine"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+
+	"github.com/bitleak/lmstfy/engine"
+	"github.com/bitleak/lmstfy/engine/redis_v2"
 )
 
 const (
-	maxBatchConsumeSize = 100
-	maxBulkPublishSize  = 64
+	maxBatchConsumeSize      = 100
+	maxBulkPublishSize       = 64
+	jobAttributeHeaderPrefix = "lmstfy-attribute-"
 )
 
 // PUT /:namespace/:queue
@@ -83,8 +86,24 @@ func Publish(c *gin.Context) {
 		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "body too large"})
 		return
 	}
+	attributes := parseAttributes(c)
+	var job engine.Job
+	// check engine version
+	if _, ok := e.(*redis_v2.Engine); ok {
+		req := &engine.CreateJobReq{
+			Namespace:  namespace,
+			Queue:      queue,
+			Body:       body,
+			TTL:        uint32(ttlSecond),
+			Delay:      uint32(delaySecond),
+			Tries:      uint16(tries),
+			Attributes: attributes,
+		}
+		job = engine.NewJobFromReq(req)
+	} else {
+		job = engine.NewJob(namespace, queue, body, uint32(ttlSecond), uint32(delaySecond), uint16(tries), "")
+	}
 
-	job := engine.NewJob(namespace, queue, body, uint32(ttlSecond), uint32(delaySecond), uint16(tries), "")
 	jobID, err = e.Publish(job)
 	if err != nil {
 		logger.WithFields(logrus.Fields{
@@ -151,7 +170,7 @@ func PublishBulk(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "tries shouldn't be zero"})
 		return
 	}
-
+	attributes := parseAttributes(c)
 	body, err := c.GetRawData()
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read body"})
@@ -178,9 +197,29 @@ func PublishBulk(c *gin.Context) {
 		}
 	}
 
+	var isV2Engine bool
+	if _, ok := e.(*redis_v2.Engine); ok {
+		isV2Engine = true
+	}
+
 	jobIDs := make([]string, 0)
 	for _, job := range jobs {
-		j := engine.NewJob(namespace, queue, job, uint32(ttlSecond), uint32(delaySecond), uint16(tries), "")
+		var j engine.Job
+		if isV2Engine {
+			req := &engine.CreateJobReq{
+				Namespace:  namespace,
+				Queue:      queue,
+				Body:       job,
+				TTL:        uint32(ttlSecond),
+				Delay:      uint32(delaySecond),
+				Tries:      uint16(tries),
+				Attributes: attributes,
+			}
+			j = engine.NewJobFromReq(req)
+		} else {
+			j = engine.NewJob(namespace, queue, job, uint32(ttlSecond), uint32(delaySecond), uint16(tries), "")
+		}
+
 		jobID, err := e.Publish(j)
 		if err != nil {
 			logger.WithFields(logrus.Fields{
@@ -281,6 +320,7 @@ func Consume(c *gin.Context) {
 				"ttl":          job.TTL(),
 				"elapsed_ms":   job.ElapsedMS(),
 				"remain_tries": job.Tries(),
+				"attributes":   job.Attributes(),
 			})
 		}
 		c.JSON(http.StatusOK, data)
@@ -312,6 +352,7 @@ func Consume(c *gin.Context) {
 		"ttl":          job.TTL(),
 		"elapsed_ms":   job.ElapsedMS(),
 		"remain_tries": job.Tries(),
+		"attributes":   job.Attributes(),
 	})
 }
 
@@ -367,6 +408,7 @@ func PeekQueue(c *gin.Context) {
 			"ttl":          job.TTL(),
 			"elapsed_ms":   job.ElapsedMS(),
 			"remain_tries": job.Tries(),
+			"attributes":   job.Attributes(),
 		})
 		return
 	}
@@ -402,6 +444,7 @@ func PeekJob(c *gin.Context) {
 			"ttl":          job.TTL(),
 			"elapsed_ms":   job.ElapsedMS(),
 			"remain_tries": job.Tries(),
+			"attributes":   job.Attributes(),
 		})
 		return
 	}
@@ -589,4 +632,17 @@ func DestroyQueue(c *gin.Context) {
 		"count":     count,
 	}).Info("queue destroyed")
 	c.Status(http.StatusNoContent)
+}
+
+func parseAttributes(c *gin.Context) map[string]string {
+	attributes := make(map[string]string)
+	for key, vals := range c.Request.Header {
+		lowerKey := strings.ToLower(key)
+		if !strings.HasPrefix(lowerKey, jobAttributeHeaderPrefix) || len(vals) == 0 {
+			continue
+		}
+		field := strings.TrimPrefix(lowerKey, jobAttributeHeaderPrefix)
+		attributes[field] = vals[0]
+	}
+	return attributes
 }

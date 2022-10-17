@@ -6,9 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bitleak/lmstfy/engine"
 	"github.com/go-redis/redis/v8"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/bitleak/lmstfy/engine"
 )
 
 func TestQueue_Push(t *testing.T) {
@@ -18,12 +19,31 @@ func TestQueue_Push(t *testing.T) {
 	}
 	defer timer.Shutdown()
 	q := NewQueue("ns-queue", "q1", R, timer)
-	job := engine.NewJob("ns-queue", "q1", []byte("hello msg 1"), 10, 0, 1, "")
+	job := engine.NewJobFromReq(&engine.CreateJobReq{
+		Namespace:  "ns-queue",
+		Queue:      "q1",
+		ID:         "",
+		Body:       []byte("hello msg 1"),
+		TTL:        10,
+		Delay:      0,
+		Tries:      1,
+		Attributes: nil,
+	})
 	if err := q.Push(job); err != nil {
 		t.Fatalf("Failed to push job into queue: %s", err)
 	}
 
-	job2 := engine.NewJob("ns-queue", "q2", []byte("hello msg 1"), 10, 0, 1, "")
+	job2 := engine.NewJobFromReq(&engine.CreateJobReq{
+		Namespace:  "ns-queue",
+		Queue:      "q2",
+		ID:         "",
+		Body:       []byte("hello msg 1"),
+		TTL:        10,
+		Delay:      0,
+		Tries:      1,
+		Attributes: nil,
+	})
+
 	if err := q.Push(job2); err != engine.ErrWrongQueue {
 		t.Fatalf("Expected to get wrong queue error, but got: %s", err)
 	}
@@ -36,7 +56,16 @@ func TestQueue_Poll(t *testing.T) {
 	}
 	defer timer.Shutdown()
 	q := NewQueue("ns-queue", "q2", R, timer)
-	job := engine.NewJob("ns-queue", "q2", []byte("hello msg 2"), 10, 0, 1, "")
+	job := engine.NewJobFromReq(&engine.CreateJobReq{
+		Namespace:  "ns-queue",
+		Queue:      "q2",
+		ID:         "",
+		Body:       []byte("hello msg 2"),
+		TTL:        10,
+		Delay:      0,
+		Tries:      1,
+		Attributes: nil,
+	})
 	go func() {
 		time.Sleep(time.Second)
 		q.Push(job)
@@ -57,7 +86,16 @@ func TestQueue_Peek(t *testing.T) {
 	}
 	defer timer.Shutdown()
 	q := NewQueue("ns-queue", "q3", R, timer)
-	job := engine.NewJob("ns-queue", "q3", []byte("hello msg 3"), 10, 0, 2, "")
+	job := engine.NewJobFromReq(&engine.CreateJobReq{
+		Namespace:  "ns-queue",
+		Queue:      "q3",
+		ID:         "",
+		Body:       []byte("hello msg 3"),
+		TTL:        10,
+		Delay:      0,
+		Tries:      2,
+		Attributes: nil,
+	})
 	q.Push(job)
 	jobID, tries, err := q.Peek()
 	if err != nil || jobID == "" || tries != 2 {
@@ -75,7 +113,16 @@ func TestQueue_Destroy(t *testing.T) {
 	}
 	defer timer.Shutdown()
 	q := NewQueue("ns-queue", "q4", R, timer)
-	job := engine.NewJob("ns-queue", "q4", []byte("hello msg 4"), 10, 0, 1, "")
+	job := engine.NewJobFromReq(&engine.CreateJobReq{
+		Namespace:  "ns-queue",
+		Queue:      "q4",
+		ID:         "",
+		Body:       []byte("hello msg 4"),
+		TTL:        10,
+		Delay:      0,
+		Tries:      1,
+		Attributes: nil,
+	})
 	q.Push(job)
 	count, err := q.Destroy()
 	if err != nil {
@@ -100,7 +147,16 @@ func TestQueue_Tries(t *testing.T) {
 	queue := "q5"
 	q := NewQueue(namespace, queue, R, timer)
 	var maxTries uint16 = 2
-	job := engine.NewJob(namespace, queue, []byte("hello msg 5"), 30, 0, maxTries, "")
+	job := engine.NewJobFromReq(&engine.CreateJobReq{
+		Namespace:  namespace,
+		Queue:      queue,
+		ID:         "",
+		Body:       []byte("hello msg 5"),
+		TTL:        30,
+		Delay:      0,
+		Tries:      maxTries,
+		Attributes: nil,
+	})
 	q.Push(job)
 	pool := NewPool(R)
 	pool.Add(job)
@@ -164,7 +220,17 @@ func TestPopMultiQueues(t *testing.T) {
 	queueName := "q7"
 	q := NewQueue(namespace, queueName, R, timer)
 	msg := "hello msg 7"
-	job := engine.NewJob(namespace, queueName, []byte(msg), 30, 0, 2, "")
+	job := engine.NewJobFromReq(&engine.CreateJobReq{
+		Namespace:  namespace,
+		Queue:      queueName,
+		ID:         "",
+		Body:       []byte(msg),
+		TTL:        30,
+		Delay:      0,
+		Tries:      2,
+		Attributes: nil,
+	})
+
 	q.Push(job)
 	gotQueueName, gotVal, err = popMultiQueues(R, queueNames)
 	if err != nil {
@@ -176,7 +242,16 @@ func TestPopMultiQueues(t *testing.T) {
 
 	// single queue condition
 	queueName = "q8"
-	job = engine.NewJob(namespace, queueName, []byte(msg), 30, 0, 2, "")
+	job = engine.NewJobFromReq(&engine.CreateJobReq{
+		Namespace:  namespace,
+		Queue:      queueName,
+		ID:         "",
+		Body:       []byte(msg),
+		TTL:        30,
+		Delay:      0,
+		Tries:      2,
+		Attributes: nil,
+	})
 	q = NewQueue(namespace, queueName, R, timer)
 	q.Push(job)
 	gotQueueName, gotVal, err = popMultiQueues(R, []string{queueNames[2]})
@@ -204,7 +279,16 @@ func TestQueue_Backup(t *testing.T) {
 		if i%2 == 0 {
 			delay = 1
 		}
-		job := engine.NewJob(namespace, queue, []byte("hello msg"), 30, delay, 2, "")
+		job := engine.NewJobFromReq(&engine.CreateJobReq{
+			Namespace:  namespace,
+			Queue:      queue,
+			ID:         "",
+			Body:       []byte("hello msg"),
+			TTL:        30,
+			Delay:      delay,
+			Tries:      2,
+			Attributes: nil,
+		})
 		q.Push(job)
 		pool := NewPool(R)
 		pool.Add(job)

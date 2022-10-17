@@ -5,11 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bitleak/lmstfy/engine"
-	"github.com/bitleak/lmstfy/engine/model"
-
 	go_redis "github.com/go-redis/redis/v8"
-	"google.golang.org/protobuf/proto"
+
+	"github.com/bitleak/lmstfy/engine"
 )
 
 func TestPool_Add(t *testing.T) {
@@ -50,11 +48,7 @@ func TestPool_Get(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get job: %s", err)
 	}
-	res := &model.JobData{}
-	if err = proto.Unmarshal(body, res); err != nil {
-		t.Fatalf("Failed to unmarshal job: %s", err)
-	}
-	if !bytes.Equal(res.GetData(), []byte("hello msg 4")) {
+	if !bytes.Equal(body, []byte("hello msg 4")) {
 		t.Fatal("Mismatched job data")
 	}
 	if ttl > 50 || 50-ttl > 2 {

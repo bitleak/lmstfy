@@ -5,8 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bitleak/lmstfy/engine"
 	"github.com/sirupsen/logrus"
+
+	"github.com/bitleak/lmstfy/engine"
 )
 
 func TestTimer_Add(t *testing.T) {

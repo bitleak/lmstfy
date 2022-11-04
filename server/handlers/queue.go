@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"encoding/json"
-	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -17,6 +16,7 @@ import (
 const (
 	maxBatchConsumeSize      = 100
 	maxBulkPublishSize       = 64
+	maxJobSize               = 1024 * 1024
 	jobAttributeHeaderPrefix = "lmstfy-attribute-"
 )
 
@@ -82,7 +82,7 @@ func Publish(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read body"})
 		return
 	}
-	if len(body) > math.MaxUint16 { // Larger than 64 KB
+	if len(body) > maxJobSize { // Larger than 1 MiB
 		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "body too large"})
 		return
 	}
@@ -191,7 +191,7 @@ func PublishBulk(c *gin.Context) {
 		return
 	}
 	for _, job := range jobs {
-		if len(job) > math.MaxUint16 { // Larger than 64 KB
+		if len(job) > maxJobSize { // Larger than 1 MiB
 			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "job too large"})
 			return
 		}

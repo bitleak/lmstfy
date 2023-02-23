@@ -1,0 +1,51 @@
+name: release docker image
+
+on:
+  push:
+    tags:
+      - v*
+
+jobs:
+  release-docker-image:
+    name: Release Docker Image
+    strategy:
+      fail-fast: false
+      matrix:
+        go-version: [1.17.x]
+
+    runs-on: ubuntu-18.04
+    steps:
+
+      - name: Install Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{matrix.go-version}}
+
+      - name: Checkout Code Base
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 64
+
+      - name: Set ENV
+        run: |
+          echo "RELEASE_TAG=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
+
+      - name: Login Docker Hub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v1
+
+      - name: Available platforms
+        run: echo ${{ steps.buildx.outputs.platforms }}
+
+      - name: Build And Push Docker Image
+        run: |
+          docker buildx build --push --platform linux/amd64,linux/arm64 --tag bitleak/lmstfy:$RELEASE_TAG --tag bitleak/lmstfy:latest .

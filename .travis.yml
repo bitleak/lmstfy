@@ -47,7 +47,7 @@ jobs:
           docker manifest create $IMAGE_NAME:$IMAGE_TAG --amend $IMAGE_NAME:$IMAGE_TAG-amd64 --amend $IMAGE_NAME:$IMAGE_TAG-arm64
           docker manifest inspect $IMAGE_NAME:$IMAGE_TAG
           docker manifest push $IMAGE_NAME:$IMAGE_TAG
-          docker manifest create $IMAGE_NAME:latest --amend $IMAGE_NAME:$IMAGE_TAG-amd64 --amend $IMAGE_NAME:$IMAGE_TAG-arm64
+          docker manifest create $IMAGE_NAME:latest --amend $IMAGE_NAME:$IMAGE_TAG-arm64 --amend $IMAGE_NAME:$IMAGE_TAG-arm64
           docker manifest inspect $IMAGE_NAME:latest
           docker manifest push $IMAGE_NAME:latest
           docker logout

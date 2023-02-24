@@ -1,6 +1,7 @@
-FROM golang:1.15.6
+FROM golang:1.17
 
 WORKDIR /lmstfy
+
 ADD ./ /lmstfy
 RUN apt update -y && apt install -y netcat
 RUN cd /lmstfy && make

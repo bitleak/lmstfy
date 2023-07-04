@@ -394,7 +394,7 @@ func TestEngine_Peek_SecondaryStorage(t *testing.T) {
 		ID:         "",
 		Body:       body,
 		TTL:        120,
-		Delay:      15,
+		Delay:      45,
 		Tries:      1,
 		Attributes: attributes,
 	})

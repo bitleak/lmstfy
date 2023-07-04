@@ -218,9 +218,6 @@ func (e *Engine) Peek(namespace, queue, optionalJobID string) (job engine.Job, e
 		}
 		body = res[0].Body()
 	}
-	if err != nil {
-		return nil, err
-	}
 	data := &model.JobData{}
 	if err = proto.Unmarshal(body, data); err != nil {
 		return nil, err

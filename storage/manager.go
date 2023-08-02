@@ -31,7 +31,7 @@ const (
 	addJobSuccessStatus = "success"
 	addJobFailedStatus  = "failed"
 
-	redisMemoryUsageWatermark = 0.6 //  used_memory / max_memory
+	redisMemoryUsageWatermark = 0.8 //  used_memory / max_memory
 )
 
 type Manager struct {

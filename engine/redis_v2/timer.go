@@ -101,6 +101,7 @@ for i = 1, #expiredMembers, 2 do
 			local val = struct.pack("HHc0", 1, #job_id, job_id)
 			redis.call("PERSIST", table.concat({pool_prefix, ns, q, job_id}, "/"))  -- remove ttl
 			redis.call("LPUSH", table.concat({output_deadletter_prefix, ns, q}, "/"), val)
+			redis.call("ZREM", backup_key, v)
 		else
 			-- move to ready queue
 			local val = struct.pack("HHc0", tonumber(tries), #job_id, job_id)
@@ -176,7 +177,9 @@ func decodeScore(score float64) (int64, uint16) {
 }
 
 // structPackTimerData will struct-pack the data in the format `Hc0Hc0Hc0`:
-//   {namespace len}{namespace}{queue len}{queue}{jobID len}{jobID}
+//
+//	{namespace len}{namespace}{queue len}{queue}{jobID len}{jobID}
+//
 // length are 2-byte uint16 in little-endian
 func structPackTimerData(namespace, queue, jobID string) []byte {
 	namespaceLen := len(namespace)

@@ -3,9 +3,9 @@ package spanner
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
-	"time"
+	"testing"
 
 	"cloud.google.com/go/spanner"
 	database "cloud.google.com/go/spanner/admin/database/apiv1"
@@ -15,14 +15,6 @@ import (
 	"google.golang.org/grpc/codes"
 
 	"github.com/bitleak/lmstfy/config"
-	"github.com/bitleak/lmstfy/engine"
-	"github.com/bitleak/lmstfy/storage/persistence/model"
-)
-
-var (
-	poolName = "default"
-	jobIDs   = []string{"1", "2", "3"}
-	ctx      = context.Background()
 )
 
 func CreateInstance(ctx context.Context, cfg *config.SpannerConfig) error {
@@ -67,7 +59,7 @@ func CreateDatabase(ctx context.Context, cfg *config.SpannerConfig) error {
 		return nil
 	}
 
-	ddlBytes, err := ioutil.ReadFile("../../../scripts/schemas/spanner/ddls.sql")
+	ddlBytes, err := os.ReadFile("../../../scripts/schemas/spanner/ddls.sql")
 	if err != nil {
 		return fmt.Errorf("read ddls file: %w", err)
 	}
@@ -90,40 +82,15 @@ func CreateDatabase(ctx context.Context, cfg *config.SpannerConfig) error {
 	return err
 }
 
-func createTestJobsData() []engine.Job {
-	jobs := make([]engine.Job, 0)
-	j1 := engine.NewJob("n1", "q1", []byte("hello_j1"), 120, 30, 1, "1")
-	j2 := engine.NewJob("n1", "q2", []byte("hello_j2"), 120, 60, 1, "2")
-	j3 := engine.NewJob("n1", "q1", []byte("hello_j3"), 120, 90, 1, "3")
-	jobs = append(jobs, j1, j2, j3)
-	return jobs
-}
-
-func createTestReqData() []*model.DBJobReq {
-	req := make([]*model.DBJobReq, 0)
-	r1 := &model.DBJobReq{
-		PoolName:  poolName,
-		Namespace: "n1",
-		Queue:     "q1",
-		ReadyTime: 0,
-		Count:     10,
+func TestMain(m *testing.M) {
+	if os.Getenv("SPANNER_EMULATOR_HOST") == "" {
+		panic("SPANNER_EMULATOR_HOST is not set")
 	}
-	r2 := &model.DBJobReq{
-		PoolName:  poolName,
-		Namespace: "n1",
-		Queue:     "q2",
-		ReadyTime: 0,
-		Count:     10,
+	if err := CreateInstance(context.Background(), config.SpannerEmulator); err != nil {
+		panic("Create instance: " + err.Error())
 	}
-	req = append(req, r1, r2)
-	return req
-}
-
-func createTestReqData2() *model.DBJobReq {
-	req := &model.DBJobReq{
-		PoolName:  poolName,
-		ReadyTime: time.Now().Unix() + 80,
-		Count:     10,
+	if err := CreateDatabase(context.Background(), config.SpannerEmulator); err != nil {
+		panic("Create database: " + err.Error())
 	}
-	return req
+	os.Exit(m.Run())
 }

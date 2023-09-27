@@ -116,7 +116,7 @@ func (m *Manager) PumpFn(name string, pool engine.Engine, threshold int64) func(
 		jobsID := make([]string, 0)
 		for _, job := range jobs {
 			_, err = pool.Publish(job)
-			if err != nil {
+			if err != nil && !errors.Is(err, engine.ErrJobExisted) {
 				logger.WithFields(logrus.Fields{
 					"job": job,
 					"err": err,

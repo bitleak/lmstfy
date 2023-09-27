@@ -1,7 +1,6 @@
 package redis_v2
 
 import (
-	"errors"
 	"time"
 
 	go_redis "github.com/go-redis/redis/v8"
@@ -47,7 +46,7 @@ func (p *Pool) Add(j engine.Job) error {
 		return err
 	}
 	if !ok {
-		return errors.New("key existed") // Key existed before, avoid overwriting it, so return error
+		return engine.ErrJobExisted // Key existed before, avoid overwriting it, so return error
 	}
 	return err
 }

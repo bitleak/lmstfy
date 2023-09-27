@@ -12,6 +12,13 @@ type DBJob struct {
 	CreatedTime int64  `spanner:"created_time" json:"created_time"`
 }
 
+func (j *DBJob) TTL(now int64) int64 {
+	if j.ExpiredTime == 0 {
+		return 0
+	}
+	return j.ExpiredTime - now
+}
+
 type DBJobReq struct {
 	PoolName  string
 	Namespace string

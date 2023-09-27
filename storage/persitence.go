@@ -11,8 +11,6 @@ import (
 type Persistence interface {
 	// BatchAddJobs write jobs data into secondary storage
 	BatchAddJobs(ctx context.Context, poolName string, jobs []engine.Job) (err error)
-	// BatchGetJobs pumps data that are due before certain due time
-	BatchGetJobs(ctx context.Context, req []*model.DBJobReq) (jobs []engine.Job, err error)
 	// GetQueueSize returns the size of data in storage which are due before certain due time
 	GetQueueSize(ctx context.Context, req []*model.DBJobReq) (count map[string]int64, err error)
 	// DelJobs remove job data from storage based on job id

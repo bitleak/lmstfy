@@ -54,13 +54,17 @@ func (s *Spanner) BatchAddJobs(ctx context.Context, poolName string, jobs []engi
 	now := time.Now().Unix()
 	dbJobs := make([]*model.DBJob, 0)
 	for _, job := range jobs {
+		expiredTime := int64(0)
+		if job.TTL() > 0 {
+			expiredTime = now + int64(job.TTL())
+		}
 		j := &model.DBJob{
 			PoolName:    poolName,
 			JobID:       job.ID(),
 			Namespace:   job.Namespace(),
 			Queue:       job.Queue(),
 			Body:        job.Body(),
-			ExpiredTime: now + int64(job.TTL()),
+			ExpiredTime: expiredTime,
 			ReadyTime:   now + int64(job.Delay()),
 			Tries:       int64(job.Tries()),
 			CreatedTime: now,
@@ -80,42 +84,6 @@ func (s *Spanner) BatchAddJobs(ctx context.Context, poolName string, jobs []engi
 		return txn.BufferWrite(mutations)
 	})
 	return err
-}
-
-// BatchGetJobs pumps data that are due before certain due time
-func (s *Spanner) BatchGetJobs(ctx context.Context, req []*model.DBJobReq) (jobs []engine.Job, err error) {
-	txn := s.cli.ReadOnlyTransaction()
-	now := time.Now().Unix()
-	defer txn.Close()
-
-	for _, r := range req {
-		iter := txn.Query(ctx, spanner.Statement{
-			SQL: "SELECT pool_name, job_id, namespace, queue, body, ready_time, expired_time, created_time, tries " +
-				"FROM lmstfy_jobs WHERE pool_name = @poolname and namespace = @namespace and queue = @queue and ready_time >= @readytime LIMIT @limit",
-			Params: map[string]interface{}{
-				"poolname":  r.PoolName,
-				"namespace": r.Namespace,
-				"queue":     r.Queue,
-				"readytime": r.ReadyTime,
-				"limit":     r.Count,
-			},
-		})
-		err = iter.Do(func(row *spanner.Row) error {
-			elem := &model.DBJob{}
-			if err = row.ToStruct(elem); err != nil {
-				return err
-			}
-			j := engine.NewJob(elem.Namespace, elem.Queue, elem.Body, uint32(elem.ExpiredTime),
-				uint32(elem.ReadyTime-now), uint16(elem.Tries), elem.JobID)
-			jobs = append(jobs, j)
-			return nil
-		})
-
-		if err != nil {
-			return nil, err
-		}
-	}
-	return jobs, nil
 }
 
 // GetQueueSize returns the size of data in storage which are due before certain due time
@@ -180,13 +148,14 @@ func (s *Spanner) GetReadyJobs(ctx context.Context, req *model.DBJobReq) (jobs [
 			"limit":     req.Count,
 		},
 	})
+
 	err = iter.Do(func(row *spanner.Row) error {
-		elem := &model.DBJob{}
-		if err = row.ToStruct(elem); err != nil {
+		dbJob := &model.DBJob{}
+		if err = row.ToStruct(dbJob); err != nil {
 			return err
 		}
-		j := engine.NewJob(elem.Namespace, elem.Queue, elem.Body, uint32(elem.ExpiredTime),
-			uint32(elem.ReadyTime-now), uint16(elem.Tries), elem.JobID)
+		j := engine.NewJob(dbJob.Namespace, dbJob.Queue, dbJob.Body, uint32(dbJob.TTL(now)),
+			uint32(dbJob.ReadyTime-now), uint16(dbJob.Tries), dbJob.JobID)
 		jobs = append(jobs, j)
 		return nil
 	})
@@ -211,12 +180,12 @@ func (s *Spanner) BatchGetJobsByID(ctx context.Context, IDs []string) (jobs []en
 		},
 	})
 	err = iter.Do(func(row *spanner.Row) error {
-		elem := &model.DBJob{}
-		if err = row.ToStruct(elem); err != nil {
+		dbJob := &model.DBJob{}
+		if err = row.ToStruct(dbJob); err != nil {
 			return err
 		}
-		j := engine.NewJob(elem.Namespace, elem.Queue, elem.Body, uint32(elem.ExpiredTime),
-			uint32(elem.ReadyTime-now), uint16(elem.Tries), elem.JobID)
+		j := engine.NewJob(dbJob.Namespace, dbJob.Queue, dbJob.Body, uint32(dbJob.TTL(now)),
+			uint32(dbJob.ReadyTime-now), uint16(dbJob.Tries), dbJob.JobID)
 		jobs = append(jobs, j)
 		return nil
 	})

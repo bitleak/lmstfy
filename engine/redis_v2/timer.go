@@ -108,6 +108,9 @@ for i = 1, #expiredMembers, 2 do
 			redis.call("LPUSH", table.concat({output_queue_prefix, ns, q}, "/"), val)
 			redis.call("ZADD", backup_key, score, v)
 		end
+	else
+		-- the job was expired or acked, just discard it
+		redis.call("ZREM", backup_key, v)
 	end
 end
 redis.call("ZREM", zset_key, unpack(toBeRemovedMembers))

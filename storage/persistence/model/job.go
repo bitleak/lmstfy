@@ -12,11 +12,23 @@ type DBJob struct {
 	CreatedTime int64  `spanner:"created_time" json:"created_time"`
 }
 
-func (j *DBJob) TTL(now int64) int64 {
+func (j *DBJob) TTL(now int64) uint32 {
 	if j.ExpiredTime == 0 {
 		return 0
 	}
-	return j.ExpiredTime - now
+	if j.ExpiredTime <= now {
+		return 1
+	} else {
+		return uint32(j.ExpiredTime - now)
+	}
+}
+
+func (j *DBJob) Delay(now int64) uint32 {
+	if j.ReadyTime <= now {
+		return 0
+	} else {
+		return uint32(j.ReadyTime - now)
+	}
 }
 
 type DBJobReq struct {

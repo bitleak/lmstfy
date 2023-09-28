@@ -31,11 +31,11 @@ func TestNewDefault_FailOver(t *testing.T) {
 	p2 := NewDefault(lock, interval/2)
 
 	var counter atomic.Int32
-	go p1.Loop(func() bool {
+	go p1.Run(func() bool {
 		counter.Add(1)
 		return false
 	})
-	go p2.Loop(func() bool {
+	go p2.Run(func() bool {
 		counter.Add(1)
 		return false
 	})

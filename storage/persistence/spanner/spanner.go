@@ -154,8 +154,8 @@ func (s *Spanner) GetReadyJobs(ctx context.Context, req *model.DBJobReq) (jobs [
 		if err = row.ToStruct(dbJob); err != nil {
 			return err
 		}
-		j := engine.NewJob(dbJob.Namespace, dbJob.Queue, dbJob.Body, uint32(dbJob.TTL(now)),
-			uint32(dbJob.ReadyTime-now), uint16(dbJob.Tries), dbJob.JobID)
+		j := engine.NewJob(dbJob.Namespace, dbJob.Queue, dbJob.Body, dbJob.TTL(now),
+			dbJob.Delay(now), uint16(dbJob.Tries), dbJob.JobID)
 		jobs = append(jobs, j)
 		return nil
 	})
@@ -184,8 +184,8 @@ func (s *Spanner) BatchGetJobsByID(ctx context.Context, IDs []string) (jobs []en
 		if err = row.ToStruct(dbJob); err != nil {
 			return err
 		}
-		j := engine.NewJob(dbJob.Namespace, dbJob.Queue, dbJob.Body, uint32(dbJob.TTL(now)),
-			uint32(dbJob.ReadyTime-now), uint16(dbJob.Tries), dbJob.JobID)
+		j := engine.NewJob(dbJob.Namespace, dbJob.Queue, dbJob.Body, dbJob.TTL(now),
+			dbJob.Delay(now), uint16(dbJob.Tries), dbJob.JobID)
 		jobs = append(jobs, j)
 		return nil
 	})

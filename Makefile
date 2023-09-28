@@ -17,7 +17,7 @@ $(PROGRAM):
 	@echo ""
 
 test:
-	- cd scripts/spanner && docker-compose up -d && cd ../..
+	- cd scripts/spanner && docker-compose up --force-recreate -d && cd ../..
 	@sh scripts/run-test.sh
 	- cd scripts/spanner && docker-compose down && cd ../..
 

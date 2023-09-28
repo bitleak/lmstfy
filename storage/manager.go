@@ -149,7 +149,7 @@ func (m *Manager) AddPool(name string, pool engine.Engine, threshold int64) {
 	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()
-		pumper.Loop(m.PumpFn(name, pool, threshold))
+		pumper.Run(m.PumpFn(name, pool, threshold))
 	}()
 }
 

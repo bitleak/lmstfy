@@ -29,6 +29,7 @@ func NewRedisLock(redisCli *redis.Client, name string, expiry time.Duration) *Re
 	rs := redsync.New(pool)
 	mu := rs.NewMutex(fmt.Sprintf("pumper-%s.lock", name), redsync.WithExpiry(expiry))
 	return &RedisLock{
+		name:     name,
 		redisCli: redisCli,
 		expiry:   expiry,
 		mu:       mu,

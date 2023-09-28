@@ -300,7 +300,7 @@ func (e *Engine) publishJob(job engine.Job) (jobID string, err error) {
 	}
 	err = e.pool.Add(job)
 	if err != nil {
-		return job.ID(), fmt.Errorf("pool: %s", err)
+		return job.ID(), fmt.Errorf("pool: %w", err)
 	}
 
 	if delaySecond == 0 {

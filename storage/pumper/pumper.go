@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/bitleak/lmstfy/log"
-	lock2 "github.com/bitleak/lmstfy/storage/lock"
+	redislock "github.com/bitleak/lmstfy/storage/lock"
 )
 
 type Pumper interface {
@@ -13,12 +13,12 @@ type Pumper interface {
 }
 
 type Default struct {
-	lock     lock2.Lock
+	lock     redislock.Lock
 	interval time.Duration
 	shutdown chan struct{}
 }
 
-func NewDefault(lock lock2.Lock, interval time.Duration) *Default {
+func NewDefault(lock redislock.Lock, interval time.Duration) *Default {
 	return &Default{
 		lock:     lock,
 		interval: interval,
@@ -29,7 +29,7 @@ func NewDefault(lock lock2.Lock, interval time.Duration) *Default {
 func (p *Default) Loop(fn func() bool) {
 	isLeader := false
 
-	logger := log.Get()
+	logger := log.Get().WithField("lock_name", p.lock.Name())
 	if err := p.lock.Acquire(); err == nil {
 		isLeader = true
 		logger.Info("Acquired the pumper lock, I'm leader now")

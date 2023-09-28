@@ -10,6 +10,7 @@ import (
 )
 
 type Lock interface {
+	Name() string
 	Acquire() error
 	Expiry() time.Duration
 	ExtendLease() (bool, error)
@@ -17,6 +18,7 @@ type Lock interface {
 }
 
 type RedisLock struct {
+	name     string
 	redisCli *redis.Client
 	mu       *redsync.Mutex
 	expiry   time.Duration
@@ -31,6 +33,10 @@ func NewRedisLock(redisCli *redis.Client, name string, expiry time.Duration) *Re
 		expiry:   expiry,
 		mu:       mu,
 	}
+}
+
+func (l *RedisLock) Name() string {
+	return l.name
 }
 
 func (l *RedisLock) Acquire() error {

@@ -58,7 +58,7 @@ func Setup(logFormat, logDir, logLevel, backtrackLevel string) error {
 	globalLogger.Hooks.Add(NewBackTrackHook(btLevel))
 	if logDir == "" {
 		accessLogger.Out = os.Stdout
-		globalLogger.Out = os.Stderr
+		globalLogger.Out = os.Stdout
 		return nil
 	}
 	accessLog, err := os.OpenFile(path.Join(logDir, "access.log"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)

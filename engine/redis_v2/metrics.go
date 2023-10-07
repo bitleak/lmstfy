@@ -29,9 +29,10 @@ type Metrics struct {
 	jobElapsedMS          *prometheus.HistogramVec
 	jobAckElapsedMS       *prometheus.HistogramVec
 
-	timerSizes      *prometheus.GaugeVec
-	queueSizes      *prometheus.GaugeVec
-	deadletterSizes *prometheus.GaugeVec
+	timerSizes       *prometheus.GaugeVec
+	timerBackupSizes *prometheus.GaugeVec
+	queueSizes       *prometheus.GaugeVec
+	deadletterSizes  *prometheus.GaugeVec
 
 	// redis instance related metrics
 	redisMaxMem    *prometheus.GaugeVec
@@ -74,9 +75,10 @@ func setupMetrics() {
 		jobElapsedMS:          hv("job_elapsed_ms", "namespace", "queue"),
 		jobAckElapsedMS:       hv("job_ack_elapsed_ms", "namespace", "queue"),
 
-		timerSizes:      gv("timer_sizes"),
-		queueSizes:      gv("queue_sizes", "namespace", "queue"),
-		deadletterSizes: gv("deadletter_sizes", "namespace", "queue"),
+		timerSizes:       gv("timer_sizes"),
+		timerBackupSizes: gv("timer_backup_sizes"),
+		queueSizes:       gv("queue_sizes", "namespace", "queue"),
+		deadletterSizes:  gv("deadletter_sizes", "namespace", "queue"),
 
 		redisMaxMem:    gv("max_mem_bytes"),
 		redisMemUsed:   gv("used_mem_bytes"),
@@ -200,6 +202,10 @@ func (m *SizeMonitor) collect() {
 	s, err := m.timer.Size()
 	if err == nil {
 		metrics.timerSizes.WithLabelValues(m.redis.Name).Set(float64(s))
+	}
+	backupSize, err := m.timer.BackupSize()
+	if err == nil {
+		metrics.timerBackupSizes.WithLabelValues(m.redis.Name).Set(float64(backupSize))
 	}
 	m.rwmu.RLock()
 	for k, p := range m.providers {

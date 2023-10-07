@@ -338,3 +338,7 @@ func (t *Timer) Shutdown() {
 func (t *Timer) Size() (size int64, err error) {
 	return t.redis.Conn.ZCard(dummyCtx, t.name).Result()
 }
+
+func (t *Timer) BackupSize() (int64, error) {
+	return t.redis.Conn.ZCard(dummyCtx, t.BackupName()).Result()
+}

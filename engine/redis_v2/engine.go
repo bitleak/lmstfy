@@ -174,6 +174,7 @@ func (e *Engine) consumeMulti(namespace string, queues []string, ttrSecond, time
 }
 
 func (e *Engine) Delete(namespace, queue, jobID string) error {
+	_ = e.timer.removeFromBackup(namespace, queue, jobID)
 	err := e.pool.Delete(namespace, queue, jobID)
 	if err == nil {
 		elapsedMS, _ := uuid.ElapsedMilliSecondFromUniqueID(jobID)

@@ -167,7 +167,7 @@ func NewSizeMonitor(redis *RedisInstance, timer *Timer, preloadData map[string][
 
 func (m *SizeMonitor) Loop() {
 	for {
-		time.Sleep(5 * time.Second)
+		time.Sleep(30 * time.Second)
 		m.collect()
 	}
 }

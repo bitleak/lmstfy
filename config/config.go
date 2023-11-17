@@ -37,9 +37,17 @@ type SecondaryStorage struct {
 	Spanner *SpannerConfig
 	// max number of jobs that storage pumps per batch
 	MaxJobPumpBatchSize int64
+	// range from 0 to 1, when the redis memory usage is greater than this value,
+	// the storage won't pump jobs to redis anymore until the memory usage is lower than this value.
+	//
+	// Default is 1, means no limit
+	HighRedisMemoryWatermark float64
 }
 
 func (storage *SecondaryStorage) validate() error {
+	if storage.HighRedisMemoryWatermark < 0 || storage.HighRedisMemoryWatermark > 1 {
+		return fmt.Errorf("invalid HighRedisMemoryWatermark: %f, should be between 0 and 1", storage.HighRedisMemoryWatermark)
+	}
 	return storage.Spanner.validate()
 }
 
@@ -155,6 +163,10 @@ func MustLoad(path string) (*Config, error) {
 	if conf.SecondaryStorage != nil {
 		if err := conf.SecondaryStorage.validate(); err != nil {
 			return nil, err
+		}
+		if conf.SecondaryStorage.HighRedisMemoryWatermark == 0 {
+			// default to 1
+			conf.SecondaryStorage.HighRedisMemoryWatermark = 1
 		}
 	}
 	return conf, nil

@@ -30,11 +30,10 @@ const (
 
 	addJobSuccessStatus = "success"
 	addJobFailedStatus  = "failed"
-
-	redisMemoryUsageWatermark = 0.8 //  used_memory / max_memory
 )
 
 type Manager struct {
+	cfg     *config.Config
 	wg      sync.WaitGroup
 	mu      sync.Mutex
 	pools   map[string]engine.Engine
@@ -76,6 +75,7 @@ func NewManger(cfg *config.Config) (*Manager, error) {
 		return nil, fmt.Errorf("create redis client err: %w", err)
 	}
 	return &Manager{
+		cfg:              cfg,
 		redisCli:         redisCli,
 		storage:          storage,
 		pools:            make(map[string]engine.Engine),
@@ -87,7 +87,7 @@ func NewManger(cfg *config.Config) (*Manager, error) {
 func (m *Manager) PumpFn(name string, pool engine.Engine, threshold int64) func() bool {
 	return func() bool {
 		logger := log.Get().WithField("pool", name)
-		if isHighRedisMemUsage(m.redisCli) {
+		if isHighRedisMemUsage(m.redisCli, m.cfg.SecondaryStorage.HighRedisMemoryWatermark) {
 			logger.Error("High redis usage, storage stops pumping data")
 			return false
 		}
@@ -183,7 +183,10 @@ func (m *Manager) Shutdown() {
 	m.storage.Close()
 }
 
-func isHighRedisMemUsage(cli *redis.Client) bool {
+func isHighRedisMemUsage(cli *redis.Client, redisMemoryUsageWatermark float64) bool {
+	if redisMemoryUsageWatermark == 0 || redisMemoryUsageWatermark >= 1 {
+		return false
+	}
 	memoryInfo, err := cli.Info(context.TODO(), "memory").Result()
 	if err != nil {
 		return false

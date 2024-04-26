@@ -26,7 +26,9 @@ type Job struct {
 }
 
 type LmstfyClient struct {
-	scheme    string
+	scheme   string
+	endpoint string
+
 	Namespace string
 	Token     string
 	Host      string
@@ -72,8 +74,9 @@ func NewLmstfyWithClient(cli *http.Client, host string, port int, namespace, tok
 		Host:      host,
 		Port:      port,
 
-		scheme:  scheme,
-		httpCli: cli,
+		scheme:   scheme,
+		endpoint: fmt.Sprintf("%s:%d", host, port),
+		httpCli:  cli,
 	}
 }
 

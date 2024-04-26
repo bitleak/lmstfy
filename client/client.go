@@ -130,11 +130,11 @@ func (c *LmstfyClient) ConsumeWithFreezeTries(queue string, ttrSecond, timeoutSe
 
 // BatchConsume consume some jobs. Consuming will decrease these jobs tries by 1 first.
 //   - ttrSecond is the time-to-run of these jobs. If these jobs are not finished before the TTR expires,
-//     these job will be released for consuming again if the `(tries - 1) > 0`.
+//     these jobs will be released for consuming again if the `(tries - 1) > 0`.
 //   - count is the job count of this consume. If it's zero or over 100, this method will return an error.
 //     If it's positive, this method would return some jobs, and it's count is between 0 and count.
 func (c *LmstfyClient) BatchConsume(queues []string, count, ttrSecond, timeoutSecond uint32) (jobs []*Job, e error) {
-	return c.batchConsume(queues, count, ttrSecond, timeoutSecond, false)
+	return c.batchConsume(nil, queues, count, ttrSecond, timeoutSecond, false)
 }
 
 // BatchConsume consume some jobs. Consuming with freeze tries will not decrease these jobs tries.
@@ -143,105 +143,7 @@ func (c *LmstfyClient) BatchConsume(queues []string, count, ttrSecond, timeoutSe
 //   - count is the job count of this consume. If it's zero or over 100, this method will return an error.
 //     If it's positive, this method would return some jobs, and it's count is between 0 and count.
 func (c *LmstfyClient) BatchConsumeWithFreezeTries(queues []string, count, ttrSecond, timeoutSecond uint32) (jobs []*Job, e error) {
-	return c.batchConsume(queues, count, ttrSecond, timeoutSecond, true)
-}
-
-// batchConsume consume some jobs. Consuming will decrease these jobs tries by 1 first.
-//   - ttrSecond is the time-to-run of these jobs. If these jobs are not finished before the TTR expires,
-//     these job will be released for consuming again if the `(tries - 1) > 0`.
-//   - count is the job count of this consume. If it's zero or over 100, this method will return an error.
-//     If it's positive, this method would return some jobs, and it's count is between 0 and count.
-//   - free_tries was used to determine whether to decrease the tries or not when consuming, if the tries
-//     decreases to 0, the job would move into dead letter. Default was false.
-func (c *LmstfyClient) batchConsume(queues []string, count, ttrSecond, timeoutSecond uint32, freezeTries bool) (jobs []*Job, e error) {
-	if len(queues) == 0 {
-		return nil, &APIError{
-			Type:   RequestErr,
-			Reason: "At least one queue was required",
-		}
-	}
-	if ttrSecond <= 0 {
-		return nil, &APIError{
-			Type:   RequestErr,
-			Reason: "TTR should be > 0",
-		}
-	}
-	if count <= 0 || count > maxBatchConsumeSize {
-		return nil, &APIError{
-			Type:   RequestErr,
-			Reason: "COUNT should be > 0",
-		}
-	}
-	if timeoutSecond >= maxReadTimeout {
-		return nil, &APIError{
-			Type:   RequestErr,
-			Reason: fmt.Sprintf("timeout should be < %d", maxReadTimeout),
-		}
-	}
-
-	query := url.Values{}
-	query.Add("ttr", strconv.FormatUint(uint64(ttrSecond), 10))
-	query.Add("count", strconv.FormatUint(uint64(count), 10))
-	query.Add("timeout", strconv.FormatUint(uint64(timeoutSecond), 10))
-	query.Add("freeze_tries", strconv.FormatBool(freezeTries))
-	req, err := c.getReq(http.MethodGet, strings.Join(queues, ","), query, nil)
-	if err != nil {
-		return nil, &APIError{
-			Type:   RequestErr,
-			Reason: err.Error(),
-		}
-	}
-	resp, err := c.httpCli.Do(req)
-	if err != nil {
-		return nil, &APIError{
-			Type:   RequestErr,
-			Reason: err.Error(),
-		}
-	}
-	defer resp.Body.Close()
-	switch resp.StatusCode {
-	case http.StatusNotFound:
-		discardResponseBody(resp.Body)
-		return nil, nil
-	case http.StatusOK:
-		// continue
-	default:
-		return nil, &APIError{
-			Type:      ResponseErr,
-			Reason:    parseResponseError(resp),
-			RequestID: resp.Header.Get("X-Request-ID"),
-		}
-	}
-	respBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, &APIError{
-			Type:      ResponseErr,
-			Reason:    err.Error(),
-			RequestID: resp.Header.Get("X-Request-ID"),
-		}
-	}
-	if count == 1 {
-		job := &Job{}
-		err = json.Unmarshal(respBytes, job)
-		if err != nil {
-			return nil, &APIError{
-				Type:      ResponseErr,
-				Reason:    err.Error(),
-				RequestID: resp.Header.Get("X-Request-ID"),
-			}
-		}
-		return []*Job{job}, nil
-	}
-	jobs = []*Job{}
-	err = json.Unmarshal(respBytes, &jobs)
-	if err != nil {
-		return nil, &APIError{
-			Type:      ResponseErr,
-			Reason:    err.Error(),
-			RequestID: resp.Header.Get("X-Request-ID"),
-		}
-	}
-	return jobs, nil
+	return c.batchConsume(nil, queues, count, ttrSecond, timeoutSecond, true)
 }
 
 // Consume from multiple queues with priority.

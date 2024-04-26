@@ -91,7 +91,7 @@ func (c *LmstfyClient) ConfigRetry(retryCount int, backOffMillisecond int) {
 //   - tries is the maximum times the job can be fetched.
 //   - delaySecond is the duration before the job is released for consuming. When it's zero, no delay is applied.
 func (c *LmstfyClient) Publish(queue string, data []byte, ttlSecond uint32, tries uint16, delaySecond uint32) (jobID string, e error) {
-	return c.publish(queue, "", data, ttlSecond, tries, delaySecond)
+	return c.publish(nil, queue, "", data, ttlSecond, tries, delaySecond)
 }
 
 // RePublish delete(ack) the job of the queue and publish the job again.
@@ -99,80 +99,7 @@ func (c *LmstfyClient) Publish(queue string, data []byte, ttlSecond uint32, trie
 //   - tries is the maximum times the job can be fetched.
 //   - delaySecond is the duration before the job is released for consuming. When it's zero, no delay is applied.
 func (c *LmstfyClient) RePublish(job *Job, ttlSecond uint32, tries uint16, delaySecond uint32) (jobID string, e error) {
-	return c.publish(job.Queue, job.ID, job.Data, ttlSecond, tries, delaySecond)
-}
-
-func (c *LmstfyClient) publish(queue, ackJobID string, data []byte, ttlSecond uint32, tries uint16, delaySecond uint32) (jobID string, e error) {
-	query := url.Values{}
-	query.Add("ttl", strconv.FormatUint(uint64(ttlSecond), 10))
-	query.Add("tries", strconv.FormatUint(uint64(tries), 10))
-	query.Add("delay", strconv.FormatUint(uint64(delaySecond), 10))
-	retryCount := 0
-	relativePath := queue
-	if ackJobID != "" {
-		relativePath = path.Join(relativePath, "job", ackJobID)
-	}
-RETRY:
-	req, err := c.getReq(http.MethodPut, relativePath, query, data)
-	if err != nil {
-		return "", &APIError{
-			Type:   RequestErr,
-			Reason: err.Error(),
-		}
-	}
-
-	resp, err := c.httpCli.Do(req)
-	if err != nil {
-		if retryCount < c.retry {
-			time.Sleep(time.Duration(c.backOff) * time.Millisecond)
-			retryCount++
-			goto RETRY
-		}
-		return "", &APIError{
-			Type:   RequestErr,
-			Reason: err.Error(),
-		}
-	}
-	if resp.StatusCode != http.StatusCreated {
-		if resp.StatusCode >= 500 && retryCount < c.retry {
-			time.Sleep(time.Duration(c.backOff) * time.Millisecond)
-			retryCount++
-			resp.Body.Close()
-			goto RETRY
-		}
-		defer resp.Body.Close()
-		return "", &APIError{
-			Type:      ResponseErr,
-			Reason:    parseResponseError(resp),
-			RequestID: resp.Header.Get("X-Request-ID"),
-		}
-	}
-	respBytes, err := ioutil.ReadAll(resp.Body)
-	resp.Body.Close()
-	if err != nil {
-		if retryCount < c.retry {
-			time.Sleep(time.Duration(c.backOff) * time.Millisecond)
-			retryCount++
-			goto RETRY
-		}
-		return "", &APIError{
-			Type:      ResponseErr,
-			Reason:    err.Error(),
-			RequestID: resp.Header.Get("X-Request-ID"),
-		}
-	}
-	var respData struct {
-		JobID string `json:"job_id"`
-	}
-	err = json.Unmarshal(respBytes, &respData)
-	if err != nil {
-		return "", &APIError{
-			Type:      ResponseErr,
-			Reason:    err.Error(),
-			RequestID: resp.Header.Get("X-Request-ID"),
-		}
-	}
-	return respData.JobID, nil
+	return c.publish(nil, job.Queue, job.ID, job.Data, ttlSecond, tries, delaySecond)
 }
 
 // BatchPublish publish lots of jobs at one time

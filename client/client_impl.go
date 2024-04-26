@@ -692,6 +692,67 @@ func (c *LmstfyClient) peekDeadLetter(ctx context.Context, queue string) (
 	return respData.DeadLetterSize, respData.DeadLetterHead, nil
 }
 
+func (c *LmstfyClient) respawnDeadLetter(ctx context.Context, queue string, limit, ttlSecond int64) (
+	count int, e *APIError) {
+	if limit <= 0 {
+		return 0, &APIError{
+			Type:   RequestErr,
+			Reason: "limit should be > 0",
+		}
+	}
+	if ttlSecond < 0 {
+		return 0, &APIError{
+			Type:   RequestErr,
+			Reason: "TTL should be >= 0",
+		}
+	}
+	query := url.Values{}
+	query.Add("limit", strconv.FormatInt(limit, 10))
+	query.Add("ttl", strconv.FormatInt(ttlSecond, 10))
+	req, err := c.getReq(ctx, http.MethodPut, path.Join(queue, "deadletter"), query, nil)
+	if err != nil {
+		return 0, &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+	resp, err := c.httpCli.Do(req)
+	if err != nil {
+		return 0, &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return 0, &APIError{
+			Type:      ResponseErr,
+			Reason:    parseResponseError(resp),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return 0, &APIError{
+			Type:      ResponseErr,
+			Reason:    err.Error(),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	var respData struct {
+		Count int `json:"count"`
+	}
+	err = json.Unmarshal(respBytes, &respData)
+	if err != nil {
+		return 0, &APIError{
+			Type:      ResponseErr,
+			Reason:    err.Error(),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	return respData.Count, nil
+}
+
 func discardResponseBody(resp io.ReadCloser) {
 	// discard response body, to make this connection reusable in the http connection pool
 	_, _ = ioutil.ReadAll(resp)

@@ -184,64 +184,9 @@ func (c *LmstfyClient) PeekDeadLetter(queue string) (deadLetterSize int, deadLet
 	return c.peekDeadLetter(nil, queue)
 }
 
+// RespawnDeadLetter respawns the jobs of the given queue's dead letter
 func (c *LmstfyClient) RespawnDeadLetter(queue string, limit, ttlSecond int64) (count int, e *APIError) {
-	if limit <= 0 {
-		return 0, &APIError{
-			Type:   RequestErr,
-			Reason: "limit should be > 0",
-		}
-	}
-	if ttlSecond < 0 {
-		return 0, &APIError{
-			Type:   RequestErr,
-			Reason: "TTL should be >= 0",
-		}
-	}
-	query := url.Values{}
-	query.Add("limit", strconv.FormatInt(limit, 10))
-	query.Add("ttl", strconv.FormatInt(ttlSecond, 10))
-	req, err := c.getReq(http.MethodPut, path.Join(queue, "deadletter"), query, nil)
-	if err != nil {
-		return 0, &APIError{
-			Type:   RequestErr,
-			Reason: err.Error(),
-		}
-	}
-	resp, err := c.httpCli.Do(req)
-	if err != nil {
-		return 0, &APIError{
-			Type:   RequestErr,
-			Reason: err.Error(),
-		}
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return 0, &APIError{
-			Type:      ResponseErr,
-			Reason:    parseResponseError(resp),
-			RequestID: resp.Header.Get("X-Request-ID"),
-		}
-	}
-	respBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return 0, &APIError{
-			Type:      ResponseErr,
-			Reason:    err.Error(),
-			RequestID: resp.Header.Get("X-Request-ID"),
-		}
-	}
-	var respData struct {
-		Count int `json:"count"`
-	}
-	err = json.Unmarshal(respBytes, &respData)
-	if err != nil {
-		return 0, &APIError{
-			Type:      ResponseErr,
-			Reason:    err.Error(),
-			RequestID: resp.Header.Get("X-Request-ID"),
-		}
-	}
-	return respData.Count, nil
+	return c.respawnDeadLetter(nil, queue, limit, ttlSecond)
 }
 
 func (c *LmstfyClient) DeleteDeadLetter(queue string, limit int64) *APIError {

@@ -40,11 +40,6 @@ type LmstfyClient struct {
 	errorOnNilJob bool // return error when job is nil
 }
 
-const (
-	maxReadTimeout      = 600 // second
-	maxBatchConsumeSize = 100
-)
-
 func NewLmstfyClient(host string, port int, namespace, token string) *LmstfyClient {
 	cli := &http.Client{
 		Transport: &http.Transport{
@@ -89,29 +84,6 @@ func (c *LmstfyClient) EnableErrorOnNilJob() {
 func (c *LmstfyClient) ConfigRetry(retryCount int, backOffMillisecond int) {
 	c.retry = retryCount
 	c.backOff = backOffMillisecond
-}
-
-func (c *LmstfyClient) getReq(method, relativePath string, query url.Values, body []byte) (req *http.Request, err error) {
-	targetUrl := url.URL{
-		Scheme:   c.scheme,
-		Host:     fmt.Sprintf("%s:%d", c.Host, c.Port),
-		Path:     path.Join("/api", c.Namespace, relativePath),
-		RawQuery: query.Encode(),
-	}
-	if body == nil {
-		req, err = http.NewRequest(method, targetUrl.String(), nil)
-		if err != nil {
-			return
-		}
-		req.Header.Add("X-Token", c.Token)
-		return
-	}
-	req, err = http.NewRequest(method, targetUrl.String(), bytes.NewReader(body))
-	if err != nil {
-		return
-	}
-	req.Header.Add("X-Token", c.Token)
-	return
 }
 
 // Publish a new job to the queue.

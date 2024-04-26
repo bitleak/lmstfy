@@ -159,31 +159,9 @@ func (c *LmstfyClient) ConsumeFromQueuesWithFreezeTries(ttrSecond, timeoutSecond
 	return c.consumeFromQueues(nil, ttrSecond, timeoutSecond, true, queues...)
 }
 
-// Mark a job as finished, so it won't be retried by others.
+// Ack Marks a job as finished, so it won't be retried by others.
 func (c *LmstfyClient) Ack(queue, jobID string) *APIError {
-	req, err := c.getReq(http.MethodDelete, path.Join(queue, "job", jobID), nil, nil)
-	if err != nil {
-		return &APIError{
-			Type:   RequestErr,
-			Reason: err.Error(),
-		}
-	}
-	resp, err := c.httpCli.Do(req)
-	if err != nil {
-		return &APIError{
-			Type:   RequestErr,
-			Reason: err.Error(),
-		}
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusNoContent {
-		return &APIError{
-			Type:      ResponseErr,
-			Reason:    parseResponseError(resp),
-			RequestID: resp.Header.Get("X-Request-ID"),
-		}
-	}
-	return nil
+	return c.ack(nil, queue, jobID)
 }
 
 // Get queue size. how many jobs are ready for consuming

@@ -467,6 +467,33 @@ func (c *LmstfyClient) consumeFromQueues(ctx context.Context, ttrSecond, timeout
 	return job, nil
 }
 
+// ack Marks a job as finished, so it won't be retried by others.
+func (c *LmstfyClient) ack(ctx context.Context, queue, jobID string) *APIError {
+	req, err := c.getReq(ctx, http.MethodDelete, path.Join(queue, "job", jobID), nil, nil)
+	if err != nil {
+		return &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+	resp, err := c.httpCli.Do(req)
+	if err != nil {
+		return &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return &APIError{
+			Type:      ResponseErr,
+			Reason:    parseResponseError(resp),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	return nil
+}
+
 func discardResponseBody(resp io.ReadCloser) {
 	// discard response body, to make this connection reusable in the http connection pool
 	_, _ = ioutil.ReadAll(resp)

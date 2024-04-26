@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -185,4 +186,92 @@ func (c *LmstfyClient) RespawnDeadLetter(queue string, limit, ttlSecond int64) (
 // DeleteDeadLetter deletes the given queue's dead letter
 func (c *LmstfyClient) DeleteDeadLetter(queue string, limit int64) *APIError {
 	return c.deleteDeadLetter(nil, queue, limit)
+}
+
+// <---------------------------------- THE CONTEXT VERSIONS OF THE METHODS ARE BELOW ---------------------------------->
+
+// PublishWithContext a context version of Publish
+func (c *LmstfyClient) PublishWithContext(ctx context.Context, queue string, data []byte, ttlSecond uint32, tries uint16,
+	delaySecond uint32) (jobID string, err error) {
+	return c.publish(nil, queue, "", data, ttlSecond, tries, delaySecond)
+}
+
+// RePublishWithContext a context version of RePublish
+func (c *LmstfyClient) RePublishWithContext(ctx context.Context, job *Job, ttlSecond uint32, tries uint16,
+	delaySecond uint32) (jobID string, err error) {
+	return c.publish(ctx, job.Queue, job.ID, job.Data, ttlSecond, tries, delaySecond)
+}
+
+// BatchPublishWithContext a context version of BatchPublish
+func (c *LmstfyClient) BatchPublishWithContext(ctx context.Context, queue string, jobDataSet []interface{},
+	ttlSecond uint32, tries uint16, delaySecond uint32) (jobIDs []string, err error) {
+	return c.batchPublish(ctx, queue, jobDataSet, ttlSecond, tries, delaySecond)
+}
+
+// ConsumeWithContext a context version of Consume
+func (c *LmstfyClient) ConsumeWithContext(ctx context.Context, queue string, ttrSecond, timeoutSecond uint32) (*Job, error) {
+	return c.consume(ctx, queue, ttrSecond, timeoutSecond, false)
+}
+
+// ConsumeWithFreezeTriesWithContext a context version of ConsumeWithFreezeTries
+func (c *LmstfyClient) ConsumeWithFreezeTriesWithContext(ctx context.Context, queue string, ttrSecond, timeoutSecond uint32) (*Job, error) {
+	return c.consume(ctx, queue, ttrSecond, timeoutSecond, true)
+}
+
+// BatchConsumeWithContext a context version of BatchConsume
+func (c *LmstfyClient) BatchConsumeWithContext(ctx context.Context, queues []string, count, ttrSecond, timeoutSecond uint32) ([]*Job, error) {
+	return c.batchConsume(ctx, queues, count, ttrSecond, timeoutSecond, false)
+}
+
+// BatchConsumeWithFreezeTriesWithContext a context version of BatchConsumeWithFreezeTries
+func (c *LmstfyClient) BatchConsumeWithFreezeTriesWithContext(ctx context.Context, queues []string,
+	count, ttrSecond, timeoutSecond uint32) ([]*Job, error) {
+	return c.batchConsume(ctx, queues, count, ttrSecond, timeoutSecond, true)
+}
+
+// ConsumeFromQueuesWithContext a context version of ConsumeFromQueues
+func (c *LmstfyClient) ConsumeFromQueuesWithContext(ctx context.Context, ttrSecond, timeoutSecond uint32,
+	queues ...string) (*Job, error) {
+	return c.consumeFromQueues(ctx, ttrSecond, timeoutSecond, false, queues...)
+}
+
+// ConsumeFromQueuesWithFreezeTriesWithContext a context version of ConsumeFromQueuesWithFreezeTries
+func (c *LmstfyClient) ConsumeFromQueuesWithFreezeTriesWithContext(ctx context.Context, ttrSecond, timeoutSecond uint32,
+	queues ...string) (*Job, error) {
+	return c.consumeFromQueues(ctx, ttrSecond, timeoutSecond, true, queues...)
+}
+
+// AckWithContext a context version of Ack
+func (c *LmstfyClient) AckWithContext(ctx context.Context, queue, jobID string) *APIError {
+	return c.ack(ctx, queue, jobID)
+}
+
+// QueueSizeWithContext a context version of QueueSize
+func (c *LmstfyClient) QueueSizeWithContext(ctx context.Context, queue string) (int, *APIError) {
+	return c.queueSize(ctx, queue)
+}
+
+// PeekQueueWithContext a context version of PeekQueue
+func (c *LmstfyClient) PeekQueueWithContext(ctx context.Context, queue string) (*Job, *APIError) {
+	return c.peekQueue(ctx, queue)
+}
+
+// PeekJobWithContext a context version of PeekJob
+func (c *LmstfyClient) PeekJobWithContext(ctx context.Context, queue, jobID string) (*Job, *APIError) {
+	return c.peekJob(ctx, queue, jobID)
+}
+
+// PeekDeadLetterWithContext a context version of PeekDeadLetter
+func (c *LmstfyClient) PeekDeadLetterWithContext(ctx context.Context, queue string) (int, string, *APIError) {
+	return c.peekDeadLetter(ctx, queue)
+}
+
+// RespawnDeadLetterWithContext a context version of RespawnDeadLetter
+func (c *LmstfyClient) RespawnDeadLetterWithContext(ctx context.Context, queue string, limit, ttlSecond int64) (int, *APIError) {
+	return c.respawnDeadLetter(ctx, queue, limit, ttlSecond)
+}
+
+// DeleteDeadLetterWithContext a context version of DeleteDeadLetter
+func (c *LmstfyClient) DeleteDeadLetterWithContext(ctx context.Context, queue string, limit int64) *APIError {
+	return c.deleteDeadLetter(ctx, queue, limit)
 }

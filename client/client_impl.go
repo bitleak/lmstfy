@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -124,4 +125,101 @@ RETRY:
 		}
 	}
 	return respData.JobID, nil
+}
+
+// batchPublish publish lots of jobs at one time
+//   - ttlSecond is the time-to-live of the job. If it's zero, the job won't be expired; if it's positive, the value is the TTL.
+//   - tries is the maximum retries that the job can be reached
+//   - delaySecond is the duration before the job is released for consuming. When it's zero, no delay is applied.
+func (c *LmstfyClient) batchPublish(ctx context.Context, queue string, jobs []interface{}, ttlSecond uint32, tries uint16,
+	delaySecond uint32) (jobIDs []string, e error) {
+	query := url.Values{}
+	query.Add("ttl", strconv.FormatUint(uint64(ttlSecond), 10))
+	query.Add("tries", strconv.FormatUint(uint64(tries), 10))
+	query.Add("delay", strconv.FormatUint(uint64(delaySecond), 10))
+	retryCount := 0
+	relativePath := path.Join(queue, "bulk")
+	data, err := json.Marshal(jobs)
+	if err != nil {
+		return nil, &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+RETRY:
+	req, err := c.getReq(ctx, http.MethodPut, relativePath, query, data)
+	if err != nil {
+		return nil, &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+
+	resp, err := c.httpCli.Do(req)
+	if err != nil {
+		if retryCount < c.retry {
+			time.Sleep(time.Duration(c.backOff) * time.Millisecond)
+			retryCount++
+			goto RETRY
+		}
+		return nil, &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+	if resp.StatusCode != http.StatusCreated {
+		if resp.StatusCode >= 500 && retryCount < c.retry {
+			time.Sleep(time.Duration(c.backOff) * time.Millisecond)
+			retryCount++
+			resp.Body.Close()
+			goto RETRY
+		}
+		defer resp.Body.Close()
+		return nil, &APIError{
+			Type:      ResponseErr,
+			Reason:    parseResponseError(resp),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		if retryCount < c.retry {
+			time.Sleep(time.Duration(c.backOff) * time.Millisecond)
+			retryCount++
+			goto RETRY
+		}
+		return nil, &APIError{
+			Type:      ResponseErr,
+			Reason:    err.Error(),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	var respData struct {
+		JobIDs []string `json:"job_ids"`
+	}
+	err = json.Unmarshal(respBytes, &respData)
+	if err != nil {
+		return nil, &APIError{
+			Type:      ResponseErr,
+			Reason:    err.Error(),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	return respData.JobIDs, nil
+}
+
+func parseResponseError(resp *http.Response) string {
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Sprintf("Invalid response: %s", err)
+	}
+	var errData struct {
+		Error string `json:"error"`
+	}
+	err = json.Unmarshal(respBytes, &errData)
+	if err != nil {
+		return fmt.Sprintf("Invalid JSON: %s", err)
+	}
+	return fmt.Sprintf("[%d]%s", resp.StatusCode, errData.Error)
 }

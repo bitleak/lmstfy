@@ -494,6 +494,54 @@ func (c *LmstfyClient) ack(ctx context.Context, queue, jobID string) *APIError {
 	return nil
 }
 
+// queueSize Gets the queue size. it means how many jobs are ready to consume
+func (c *LmstfyClient) queueSize(ctx context.Context, queue string) (int, *APIError) {
+	req, err := c.getReq(ctx, http.MethodGet, path.Join(queue, "size"), nil, nil)
+	if err != nil {
+		return 0, &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+	resp, err := c.httpCli.Do(req)
+	if err != nil {
+		return 0, &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return 0, &APIError{
+			Type:      ResponseErr,
+			Reason:    parseResponseError(resp),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return 0, &APIError{
+			Type:      ResponseErr,
+			Reason:    err.Error(),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	var respData struct {
+		Namespace string `json:"namespace"`
+		Queue     string `json:"queue"`
+		Size      int    `json:"size"`
+	}
+	err = json.Unmarshal(respBytes, &respData)
+	if err != nil {
+		return 0, &APIError{
+			Type:      ResponseErr,
+			Reason:    err.Error(),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	return respData.Size, nil
+}
+
 func discardResponseBody(resp io.ReadCloser) {
 	// discard response body, to make this connection reusable in the http connection pool
 	_, _ = ioutil.ReadAll(resp)

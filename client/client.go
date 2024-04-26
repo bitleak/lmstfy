@@ -164,52 +164,9 @@ func (c *LmstfyClient) Ack(queue, jobID string) *APIError {
 	return c.ack(nil, queue, jobID)
 }
 
-// Get queue size. how many jobs are ready for consuming
+// QueueSize Get queue size. It means how many jobs are waiting in the queue for consuming.
 func (c *LmstfyClient) QueueSize(queue string) (int, *APIError) {
-	req, err := c.getReq(http.MethodGet, path.Join(queue, "size"), nil, nil)
-	if err != nil {
-		return 0, &APIError{
-			Type:   RequestErr,
-			Reason: err.Error(),
-		}
-	}
-	resp, err := c.httpCli.Do(req)
-	if err != nil {
-		return 0, &APIError{
-			Type:   RequestErr,
-			Reason: err.Error(),
-		}
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return 0, &APIError{
-			Type:      ResponseErr,
-			Reason:    parseResponseError(resp),
-			RequestID: resp.Header.Get("X-Request-ID"),
-		}
-	}
-	respBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return 0, &APIError{
-			Type:      ResponseErr,
-			Reason:    err.Error(),
-			RequestID: resp.Header.Get("X-Request-ID"),
-		}
-	}
-	var respData struct {
-		Namespace string `json:"namespace"`
-		Queue     string `json:"queue"`
-		Size      int    `json:"size"`
-	}
-	err = json.Unmarshal(respBytes, &respData)
-	if err != nil {
-		return 0, &APIError{
-			Type:      ResponseErr,
-			Reason:    err.Error(),
-			RequestID: resp.Header.Get("X-Request-ID"),
-		}
-	}
-	return respData.Size, nil
+	return c.queueSize(nil, queue)
 }
 
 // Peek the job in the head of the queue

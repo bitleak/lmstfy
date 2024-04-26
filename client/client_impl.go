@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"path"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -207,6 +208,97 @@ RETRY:
 		}
 	}
 	return respData.JobIDs, nil
+}
+
+// consume a job. Consuming will decrease the job's tries by 1 first.
+//   - ttrSecond is the time-to-run of the job. If the job is not finished before the TTR expires,
+//     the job will be released for consuming again if the `(tries - 1) > 0`.
+//   - timeoutSecond is the long-polling wait time. If it's zero, this method will return immediately
+//     with or without a job; if it's positive, this method would poll for a new job until timeout.
+//   - free_tries was used to determine whether to decrease the tries or not when consuming, if the tries
+//     decrease to 0, the job would move into a dead letter. Default was false.
+func (c *LmstfyClient) consume(ctx context.Context, queue string, ttrSecond, timeoutSecond uint32, freezeTries bool) (
+	job *Job, e error) {
+	if strings.TrimSpace(queue) == "" {
+		return nil, &APIError{
+			Type:   RequestErr,
+			Reason: "Queue name shouldn't be empty",
+		}
+	}
+	if ttrSecond <= 0 {
+		return nil, &APIError{
+			Type:   RequestErr,
+			Reason: "TTR should be > 0",
+		}
+	}
+	if timeoutSecond >= maxReadTimeout {
+		return nil, &APIError{
+			Type:   RequestErr,
+			Reason: fmt.Sprintf("timeout should be < %d", maxReadTimeout),
+		}
+	}
+	query := url.Values{}
+	query.Add("ttr", strconv.FormatUint(uint64(ttrSecond), 10))
+	query.Add("timeout", strconv.FormatUint(uint64(timeoutSecond), 10))
+	query.Add("freeze_tries", strconv.FormatBool(freezeTries))
+	req, err := c.getReq(ctx, http.MethodGet, queue, query, nil)
+	if err != nil {
+		return nil, &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+	resp, err := c.httpCli.Do(req)
+	if err != nil {
+		return nil, &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+	defer resp.Body.Close()
+	switch resp.StatusCode {
+	case http.StatusNotFound:
+		discardResponseBody(resp.Body)
+		if c.errorOnNilJob {
+			return nil, &APIError{
+				Type:      ResponseErr,
+				Reason:    "no job or queue was not found",
+				RequestID: resp.Header.Get("X-Request-ID"),
+			}
+		}
+		return nil, nil
+	case http.StatusOK:
+		// continue
+	default:
+		return nil, &APIError{
+			Type:      ResponseErr,
+			Reason:    parseResponseError(resp),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, &APIError{
+			Type:      ResponseErr,
+			Reason:    err.Error(),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	job = &Job{}
+	err = json.Unmarshal(respBytes, job)
+	if err != nil {
+		return nil, &APIError{
+			Type:      ResponseErr,
+			Reason:    err.Error(),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	return job, nil
+}
+
+func discardResponseBody(resp io.ReadCloser) {
+	// discard response body, to make this connection reusable in the http connection pool
+	_, _ = ioutil.ReadAll(resp)
 }
 
 func parseResponseError(resp *http.Response) string {

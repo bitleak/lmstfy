@@ -116,7 +116,7 @@ func (c *LmstfyClient) BatchPublish(queue string, jobs []interface{}, ttlSecond 
 //   - timeoutSecond is the long-polling wait time. If it's zero, this method will return immediately
 //     with or without a job; if it's positive, this method would polling for new job until timeout.
 func (c *LmstfyClient) Consume(queue string, ttrSecond, timeoutSecond uint32) (job *Job, e error) {
-	return c.consume(queue, ttrSecond, timeoutSecond, false)
+	return c.consume(nil, queue, ttrSecond, timeoutSecond, false)
 }
 
 // ConsumeWithFreezeTries a job. Consuming with retries will not decrease the job's tries.
@@ -125,92 +125,7 @@ func (c *LmstfyClient) Consume(queue string, ttrSecond, timeoutSecond uint32) (j
 //   - timeoutSecond is the long-polling wait time. If it's zero, this method will return immediately
 //     with or without a job; if it's positive, this method would polling for new job until timeout.
 func (c *LmstfyClient) ConsumeWithFreezeTries(queue string, ttrSecond, timeoutSecond uint32) (job *Job, e error) {
-	return c.consume(queue, ttrSecond, timeoutSecond, true)
-}
-
-// consume a job. Consuming will decrease the job's tries by 1 first.
-//   - ttrSecond is the time-to-run of the job. If the job is not finished before the TTR expires,
-//     the job will be released for consuming again if the `(tries - 1) > 0`.
-//   - timeoutSecond is the long-polling wait time. If it's zero, this method will return immediately
-//     with or without a job; if it's positive, this method would polling for new job until timeout.
-//   - free_tries was used to determine whether to decrease the tries or not when consuming, if the tries
-//     decreases to 0, the job would move into dead letter. Default was false.
-func (c *LmstfyClient) consume(queue string, ttrSecond, timeoutSecond uint32, freezeTries bool) (job *Job, e error) {
-	if strings.TrimSpace(queue) == "" {
-		return nil, &APIError{
-			Type:   RequestErr,
-			Reason: "Queue name shouldn't be empty",
-		}
-	}
-	if ttrSecond <= 0 {
-		return nil, &APIError{
-			Type:   RequestErr,
-			Reason: "TTR should be > 0",
-		}
-	}
-	if timeoutSecond >= maxReadTimeout {
-		return nil, &APIError{
-			Type:   RequestErr,
-			Reason: fmt.Sprintf("timeout should be < %d", maxReadTimeout),
-		}
-	}
-	query := url.Values{}
-	query.Add("ttr", strconv.FormatUint(uint64(ttrSecond), 10))
-	query.Add("timeout", strconv.FormatUint(uint64(timeoutSecond), 10))
-	query.Add("freeze_tries", strconv.FormatBool(freezeTries))
-	req, err := c.getReq(http.MethodGet, queue, query, nil)
-	if err != nil {
-		return nil, &APIError{
-			Type:   RequestErr,
-			Reason: err.Error(),
-		}
-	}
-	resp, err := c.httpCli.Do(req)
-	if err != nil {
-		return nil, &APIError{
-			Type:   RequestErr,
-			Reason: err.Error(),
-		}
-	}
-	defer resp.Body.Close()
-	switch resp.StatusCode {
-	case http.StatusNotFound:
-		discardResponseBody(resp.Body)
-		if c.errorOnNilJob {
-			return nil, &APIError{
-				Type:      ResponseErr,
-				Reason:    "no job or queue was not found",
-				RequestID: resp.Header.Get("X-Request-ID"),
-			}
-		}
-		return nil, nil
-	case http.StatusOK:
-		// continue
-	default:
-		return nil, &APIError{
-			Type:      ResponseErr,
-			Reason:    parseResponseError(resp),
-			RequestID: resp.Header.Get("X-Request-ID"),
-		}
-	}
-	respBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, &APIError{
-			Type:      ResponseErr,
-			Reason:    err.Error(),
-			RequestID: resp.Header.Get("X-Request-ID"),
-		}
-	}
-	job = &Job{}
-	err = json.Unmarshal(respBytes, job)
-	if err != nil {
-		return nil, &APIError{
-			Type:      ResponseErr,
-			Reason:    err.Error(),
-			RequestID: resp.Header.Get("X-Request-ID"),
-		}
-	}
-	return job, nil
+	return c.consume(nil, queue, ttrSecond, timeoutSecond, true)
 }
 
 // BatchConsume consume some jobs. Consuming will decrease these jobs tries by 1 first.

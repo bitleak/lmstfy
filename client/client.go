@@ -179,53 +179,9 @@ func (c *LmstfyClient) PeekJob(queue, jobID string) (job *Job, e *APIError) {
 	return c.peekJob(nil, queue, jobID)
 }
 
-// Peek the deadletter of the queue
+// PeekDeadLetter Peeks the dead letter of the queue
 func (c *LmstfyClient) PeekDeadLetter(queue string) (deadLetterSize int, deadLetterHead string, e *APIError) {
-	req, err := c.getReq(http.MethodGet, path.Join(queue, "deadletter"), nil, nil)
-	if err != nil {
-		return 0, "", &APIError{
-			Type:   RequestErr,
-			Reason: err.Error(),
-		}
-	}
-	resp, err := c.httpCli.Do(req)
-	if err != nil {
-		return 0, "", &APIError{
-			Type:   RequestErr,
-			Reason: err.Error(),
-		}
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return 0, "", &APIError{
-			Type:      ResponseErr,
-			Reason:    parseResponseError(resp),
-			RequestID: resp.Header.Get("X-Request-ID"),
-		}
-	}
-	respBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return 0, "", &APIError{
-			Type:      ResponseErr,
-			Reason:    err.Error(),
-			RequestID: resp.Header.Get("X-Request-ID"),
-		}
-	}
-	var respData struct {
-		Namespace      string `json:"namespace"`
-		Queue          string `json:"queue"`
-		DeadLetterSize int    `json:"deadletter_size"`
-		DeadLetterHead string `json:"deadletter_head"`
-	}
-	err = json.Unmarshal(respBytes, &respData)
-	if err != nil {
-		return 0, "", &APIError{
-			Type:      ResponseErr,
-			Reason:    err.Error(),
-			RequestID: resp.Header.Get("X-Request-ID"),
-		}
-	}
-	return respData.DeadLetterSize, respData.DeadLetterHead, nil
+	return c.peekDeadLetter(nil, queue)
 }
 
 func (c *LmstfyClient) RespawnDeadLetter(queue string, limit, ttlSecond int64) (count int, e *APIError) {

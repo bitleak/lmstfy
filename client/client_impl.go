@@ -642,6 +642,56 @@ func (c *LmstfyClient) peekJob(ctx context.Context, queue, jobID string) (job *J
 	return job, nil
 }
 
+// peekDeadLetter Peek the dead letter of the queue
+func (c *LmstfyClient) peekDeadLetter(ctx context.Context, queue string) (
+	deadLetterSize int, deadLetterHead string, e *APIError) {
+	req, err := c.getReq(ctx, http.MethodGet, path.Join(queue, "deadletter"), nil, nil)
+	if err != nil {
+		return 0, "", &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+	resp, err := c.httpCli.Do(req)
+	if err != nil {
+		return 0, "", &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return 0, "", &APIError{
+			Type:      ResponseErr,
+			Reason:    parseResponseError(resp),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return 0, "", &APIError{
+			Type:      ResponseErr,
+			Reason:    err.Error(),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	var respData struct {
+		Namespace      string `json:"namespace"`
+		Queue          string `json:"queue"`
+		DeadLetterSize int    `json:"deadletter_size"`
+		DeadLetterHead string `json:"deadletter_head"`
+	}
+	err = json.Unmarshal(respBytes, &respData)
+	if err != nil {
+		return 0, "", &APIError{
+			Type:      ResponseErr,
+			Reason:    err.Error(),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	return respData.DeadLetterSize, respData.DeadLetterHead, nil
+}
+
 func discardResponseBody(resp io.ReadCloser) {
 	// discard response body, to make this connection reusable in the http connection pool
 	_, _ = ioutil.ReadAll(resp)

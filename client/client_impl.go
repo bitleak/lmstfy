@@ -542,6 +542,56 @@ func (c *LmstfyClient) queueSize(ctx context.Context, queue string) (int, *APIEr
 	return respData.Size, nil
 }
 
+// peekQueue Peek the job in the head of the queue
+func (c *LmstfyClient) peekQueue(ctx context.Context, queue string) (job *Job, e *APIError) {
+	req, err := c.getReq(ctx, http.MethodGet, path.Join(queue, "peek"), nil, nil)
+	if err != nil {
+		return nil, &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+	resp, err := c.httpCli.Do(req)
+	if err != nil {
+		return nil, &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+	defer resp.Body.Close()
+	switch resp.StatusCode {
+	case http.StatusNotFound:
+		discardResponseBody(resp.Body)
+		return nil, nil
+	case http.StatusOK:
+		// continue
+	default:
+		return nil, &APIError{
+			Type:      ResponseErr,
+			Reason:    parseResponseError(resp),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, &APIError{
+			Type:      ResponseErr,
+			Reason:    err.Error(),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	job = &Job{}
+	err = json.Unmarshal(respBytes, job)
+	if err != nil {
+		return nil, &APIError{
+			Type:      ResponseErr,
+			Reason:    err.Error(),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	return job, nil
+}
+
 func discardResponseBody(resp io.ReadCloser) {
 	// discard response body, to make this connection reusable in the http connection pool
 	_, _ = ioutil.ReadAll(resp)

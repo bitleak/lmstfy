@@ -146,87 +146,17 @@ func (c *LmstfyClient) BatchConsumeWithFreezeTries(queues []string, count, ttrSe
 	return c.batchConsume(nil, queues, count, ttrSecond, timeoutSecond, true)
 }
 
-// Consume from multiple queues with priority.
+// ConsumeFromQueues consumes from multiple queues with priority.
 // The order of the queues in the params implies the priority. eg.
 //   ConsumeFromQueues(120, 5, "queue-a", "queue-b", "queue-c")
 // if all the queues have jobs to be fetched, the job in `queue-a` will be return.
 func (c *LmstfyClient) ConsumeFromQueues(ttrSecond, timeoutSecond uint32, queues ...string) (job *Job, e error) {
-	return c.consumeFromQueues(ttrSecond, timeoutSecond, false, queues...)
+	return c.consumeFromQueues(nil, ttrSecond, timeoutSecond, false, queues...)
 }
 
+// ConsumeFromQueuesWithFreezeTries consumes from multiple queues with priority.
 func (c *LmstfyClient) ConsumeFromQueuesWithFreezeTries(ttrSecond, timeoutSecond uint32, queues ...string) (job *Job, e error) {
-	return c.consumeFromQueues(ttrSecond, timeoutSecond, true, queues...)
-}
-
-func (c *LmstfyClient) consumeFromQueues(ttrSecond, timeoutSecond uint32, freezeTries bool, queues ...string) (job *Job, e error) {
-	if len(queues) == 0 {
-		return nil, &APIError{
-			Type:   RequestErr,
-			Reason: "At least one queue was required",
-		}
-	}
-	if ttrSecond <= 0 {
-		return nil, &APIError{
-			Type:   RequestErr,
-			Reason: "TTR should be > 0",
-		}
-	}
-	if timeoutSecond >= maxReadTimeout {
-		return nil, &APIError{
-			Type:   RequestErr,
-			Reason: fmt.Sprintf("timeout must be < %d when fetch from multiple queues", maxReadTimeout),
-		}
-	}
-	query := url.Values{}
-	query.Add("ttr", strconv.FormatUint(uint64(ttrSecond), 10))
-	query.Add("timeout", strconv.FormatUint(uint64(timeoutSecond), 10))
-	query.Add("freeze_tries", strconv.FormatBool(freezeTries))
-	req, err := c.getReq(http.MethodGet, strings.Join(queues, ","), query, nil)
-	if err != nil {
-		return nil, &APIError{
-			Type:   RequestErr,
-			Reason: err.Error(),
-		}
-	}
-	resp, err := c.httpCli.Do(req)
-	if err != nil {
-		return nil, &APIError{
-			Type:   RequestErr,
-			Reason: err.Error(),
-		}
-	}
-	defer resp.Body.Close()
-	switch resp.StatusCode {
-	case http.StatusNotFound:
-		discardResponseBody(resp.Body)
-		return nil, nil
-	case http.StatusOK:
-		// continue
-	default:
-		return nil, &APIError{
-			Type:      ResponseErr,
-			Reason:    parseResponseError(resp),
-			RequestID: resp.Header.Get("X-Request-ID"),
-		}
-	}
-	respBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, &APIError{
-			Type:      ResponseErr,
-			Reason:    err.Error(),
-			RequestID: resp.Header.Get("X-Request-ID"),
-		}
-	}
-	job = &Job{}
-	err = json.Unmarshal(respBytes, job)
-	if err != nil {
-		return nil, &APIError{
-			Type:      ResponseErr,
-			Reason:    err.Error(),
-			RequestID: resp.Header.Get("X-Request-ID"),
-		}
-	}
-	return job, nil
+	return c.consumeFromQueues(nil, ttrSecond, timeoutSecond, true, queues...)
 }
 
 // Mark a job as finished, so it won't be retried by others.

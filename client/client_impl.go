@@ -395,6 +395,78 @@ func (c *LmstfyClient) batchConsume(ctx context.Context, queues []string, count,
 	return jobs, nil
 }
 
+func (c *LmstfyClient) consumeFromQueues(ctx context.Context, ttrSecond, timeoutSecond uint32, freezeTries bool,
+	queues ...string) (job *Job, e error) {
+	if len(queues) == 0 {
+		return nil, &APIError{
+			Type:   RequestErr,
+			Reason: "At least one queue was required",
+		}
+	}
+	if ttrSecond <= 0 {
+		return nil, &APIError{
+			Type:   RequestErr,
+			Reason: "TTR should be > 0",
+		}
+	}
+	if timeoutSecond >= maxReadTimeout {
+		return nil, &APIError{
+			Type:   RequestErr,
+			Reason: fmt.Sprintf("timeout must be < %d when fetch from multiple queues", maxReadTimeout),
+		}
+	}
+	query := url.Values{}
+	query.Add("ttr", strconv.FormatUint(uint64(ttrSecond), 10))
+	query.Add("timeout", strconv.FormatUint(uint64(timeoutSecond), 10))
+	query.Add("freeze_tries", strconv.FormatBool(freezeTries))
+	req, err := c.getReq(ctx, http.MethodGet, strings.Join(queues, ","), query, nil)
+	if err != nil {
+		return nil, &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+	resp, err := c.httpCli.Do(req)
+	if err != nil {
+		return nil, &APIError{
+			Type:   RequestErr,
+			Reason: err.Error(),
+		}
+	}
+	defer resp.Body.Close()
+	switch resp.StatusCode {
+	case http.StatusNotFound:
+		discardResponseBody(resp.Body)
+		return nil, nil
+	case http.StatusOK:
+		// continue
+	default:
+		return nil, &APIError{
+			Type:      ResponseErr,
+			Reason:    parseResponseError(resp),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, &APIError{
+			Type:      ResponseErr,
+			Reason:    err.Error(),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	job = &Job{}
+	err = json.Unmarshal(respBytes, job)
+	if err != nil {
+		return nil, &APIError{
+			Type:      ResponseErr,
+			Reason:    err.Error(),
+			RequestID: resp.Header.Get("X-Request-ID"),
+		}
+	}
+	return job, nil
+}
+
 func discardResponseBody(resp io.ReadCloser) {
 	// discard response body, to make this connection reusable in the http connection pool
 	_, _ = ioutil.ReadAll(resp)

@@ -174,54 +174,9 @@ func (c *LmstfyClient) PeekQueue(queue string) (job *Job, e *APIError) {
 	return c.peekQueue(nil, queue)
 }
 
-// Peek a specific job data
+// PeekJob Peeks a specific job data
 func (c *LmstfyClient) PeekJob(queue, jobID string) (job *Job, e *APIError) {
-	req, err := c.getReq(http.MethodGet, path.Join(queue, "job", jobID), nil, nil)
-	if err != nil {
-		return nil, &APIError{
-			Type:   RequestErr,
-			Reason: err.Error(),
-		}
-	}
-	resp, err := c.httpCli.Do(req)
-	if err != nil {
-		return nil, &APIError{
-			Type:   RequestErr,
-			Reason: err.Error(),
-		}
-	}
-	defer resp.Body.Close()
-	switch resp.StatusCode {
-	case http.StatusNotFound:
-		discardResponseBody(resp.Body)
-		return nil, nil
-	case http.StatusOK:
-		// continue
-	default:
-		return nil, &APIError{
-			Type:      ResponseErr,
-			Reason:    parseResponseError(resp),
-			RequestID: resp.Header.Get("X-Request-ID"),
-		}
-	}
-	respBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, &APIError{
-			Type:      ResponseErr,
-			Reason:    err.Error(),
-			RequestID: resp.Header.Get("X-Request-ID"),
-		}
-	}
-	job = &Job{}
-	err = json.Unmarshal(respBytes, job)
-	if err != nil {
-		return nil, &APIError{
-			Type:      ResponseErr,
-			Reason:    err.Error(),
-			RequestID: resp.Header.Get("X-Request-ID"),
-		}
-	}
-	return job, nil
+	return c.peekJob(nil, queue, jobID)
 }
 
 // Peek the deadletter of the queue

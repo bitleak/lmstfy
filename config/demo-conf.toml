@@ -20,18 +20,19 @@ test_user = "change.me"
 
 [AdminRedis]  # redis used to store admin data, eg. tokens
 Addr = "localhost:6379"
-# Password = foobared
+Password = "foobared"
 
 [Pool]
 [Pool.default]
 Addr = "localhost:6379"
-# Password = foobared
+Password = "foobared"
 # DB = 0
 #MigrateTo = "migrate" # When migration is enabled, all PUBLISH will go to `migrate` pool. and `default` will be drained
 #[Pool.migrate]
 #Addr = "localhost:6389"
 
-#[Pool.mysentinel]
-# Addr = "localhost:16379,localhost:6380,localhost:6381"
-# MasterName = "mymaster"
-# Password = foobared
+[Pool.mysentinel]
+Addr = "localhost:26379,localhost:26380,localhost:26381"
+MasterName = "mymaster"
+Password = "foobared"
+SentinelPassword = "foobared1"

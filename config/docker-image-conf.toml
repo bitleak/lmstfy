@@ -35,3 +35,4 @@ Addr = "redis:6379"
 # Addr = "localhost:16379,localhost:6380,localhost:6381"
 # MasterName = "mymaster"
 # Password = foobared
+# SentinelPassword = "foobared1"

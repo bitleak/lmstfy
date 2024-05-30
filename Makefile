@@ -16,6 +16,12 @@ $(PROGRAM):
 	@printf $(MAKECOLOR)"Hint: It's a good idea to run 'make test' ;)"$(ENDCOLOR)
 	@echo ""
 
+setup:
+	@bash scripts/setup.sh
+
+teardown:
+	@bash scripts/teardown.sh
+
 test:
 	- cd scripts/spanner && docker-compose up --force-recreate -d && cd ../..
 	@sh scripts/run-test.sh

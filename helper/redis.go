@@ -22,14 +22,15 @@ func NewRedisClient(conf *config.RedisConf, opt *redis.Options) (client *redis.C
 	opt.DB = conf.DB
 	if conf.IsSentinel() {
 		client = redis.NewFailoverClient(&redis.FailoverOptions{
-			MasterName:    conf.MasterName,
-			SentinelAddrs: strings.Split(opt.Addr, ","),
-			Password:      opt.Password,
-			PoolSize:      opt.PoolSize,
-			ReadTimeout:   opt.ReadTimeout,
-			WriteTimeout:  opt.WriteTimeout,
-			MinIdleConns:  opt.MinIdleConns,
-			DB:            opt.DB,
+			MasterName:       conf.MasterName,
+			SentinelAddrs:    strings.Split(opt.Addr, ","),
+			SentinelPassword: conf.SentinelPassword,
+			Password:         opt.Password,
+			PoolSize:         opt.PoolSize,
+			ReadTimeout:      opt.ReadTimeout,
+			WriteTimeout:     opt.WriteTimeout,
+			MinIdleConns:     opt.MinIdleConns,
+			DB:               opt.DB,
 		})
 		client.AddHook(hooks.NewMetricsHook(client))
 		return client
@@ -45,7 +46,7 @@ func validateRedisPersistConfig(ctx context.Context, cli *redis.Client, conf *co
 	if err != nil {
 		return err
 	}
-	isNoEvctionPolicy, isAppendOnlyEnabled := false, false
+	isNoEvictionPolicy, isAppendOnlyEnabled := false, false
 	var maxMem int64
 	lines := strings.Split(infoStr, "\r\n")
 	for _, line := range lines {
@@ -55,14 +56,14 @@ func validateRedisPersistConfig(ctx context.Context, cli *redis.Client, conf *co
 		}
 		switch fields[0] {
 		case "maxmemory_policy":
-			isNoEvctionPolicy = fields[1] == "noeviction"
+			isNoEvictionPolicy = fields[1] == "noeviction"
 		case "aof_enabled":
 			isAppendOnlyEnabled = fields[1] == "1"
 		case "maxmemory":
 			maxMem, _ = strconv.ParseInt(fields[1], 10, 64)
 		}
 	}
-	if !isNoEvctionPolicy {
+	if !isNoEvictionPolicy {
 		return errors.New("redis memory_policy MUST be 'noeviction' to prevent data loss")
 	}
 	if !isAppendOnlyEnabled {

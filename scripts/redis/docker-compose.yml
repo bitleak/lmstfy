@@ -4,24 +4,60 @@ services:
   redis-sentinel:
     image: bitnami/redis-sentinel:5.0
     environment:
-      - REDIS_MASTER_HOST=127.0.0.1
+      - REDIS_MASTER_HOST=redis
+      - REDIS_MASTER_PORT_NUMBER=6379
+      - REDIS_SENTINEL_PORT=26379
+      - REDIS_MASTER_PASSWORD=foobared
+      - REDIS_SENTINEL_PASSWORD=foobared1
     ports:
       - "26379:26379"
+    depends_on:
+      - redis
+  
+  redis-sentinel-1:
+    image: bitnami/redis-sentinel:5.0
+    environment:
+      - REDIS_MASTER_HOST=redis
+      - REDIS_MASTER_PORT_NUMBER=6379
+      - REDIS_SENTINEL_PORT=26379
+      - REDIS_MASTER_PASSWORD=foobared
+      - REDIS_SENTINEL_PASSWORD=foobared1
+    ports:
+      - "26380:26379"
+    depends_on:
+      - redis
+  
+  redis-sentinel-2:
+    image: bitnami/redis-sentinel:5.0
+    environment:
+      - REDIS_MASTER_HOST=redis
+      - REDIS_MASTER_PORT_NUMBER=6379
+      - REDIS_SENTINEL_PORT=26379
+      - REDIS_MASTER_PASSWORD=foobared
+      - REDIS_SENTINEL_PASSWORD=foobared1
+    ports:
+      - "26381:26379"
+    depends_on:
+      - redis
 
   redis:
     image: redis:4
-    command: redis-server --appendonly yes
+    command: redis-server --requirepass foobared --appendonly yes
     ports:
       - "6379:6379"
 
   redis_1:
     image: redis:4
-    command: redis-server --appendonly yes
+    command: redis-server --slaveof redis 6379 --requirepass foobared --masterauth foobared --appendonly yes
     ports:
       - "6380:6379"
+    depends_on:
+      - redis
 
   redis_2:
     image: redis:4
-    command: redis-server --appendonly yes
+    command: redis-server --slaveof redis 6379 --requirepass foobared --masterauth foobared --appendonly yes
     ports:
       - "6381:6379"
+    depends_on:
+      - redis

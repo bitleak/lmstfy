@@ -77,18 +77,19 @@ type Config struct {
 type RedisPool map[string]RedisConf
 
 type RedisConf struct {
-	Addr       string
-	Password   string
-	DB         int
-	PoolSize   int
-	MigrateTo  string // If this is not empty, all the PUBLISH will go to that pool
-	MasterName string
-	Version    string
+	Addr             string
+	Password         string
+	DB               int
+	PoolSize         int
+	MigrateTo        string // If this is not empty, all the PUBLISH will go to that pool
+	MasterName       string
+	Version          string
+	SentinelPassword string
 
 	EnableSecondaryStorage bool
 
 	// number of seconds. when job's delay second is greater than pumpStorageThresh,
-	//it will be written to storage if enabled
+	// it will be written to storage if enabled
 	SecondaryStorageThresholdSeconds int64
 }
 

@@ -5,9 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
-	"google.golang.org/protobuf/proto"
 
-	"github.com/bitleak/lmstfy/engine/model"
 	"github.com/bitleak/lmstfy/uuid"
 )
 
@@ -49,26 +47,6 @@ type jobImpl struct {
 	attributes map[string]string
 
 	_elapsedMS int64
-}
-
-// NewJobFromReq creates a new job with its body and attributes being marshalled
-func NewJobFromReq(req *CreateJobReq) Job {
-	if req.ID == "" {
-		req.ID = uuid.GenUniqueJobIDWithDelay(req.Delay)
-	}
-	jobData, err := marshalJobBody(req.Body, req.Attributes)
-	if err != nil {
-		return &jobImpl{}
-	}
-	return &jobImpl{
-		namespace: req.Namespace,
-		queue:     req.Queue,
-		id:        req.ID,
-		body:      jobData,
-		ttl:       req.TTL,
-		delay:     req.Delay,
-		tries:     req.Tries,
-	}
 }
 
 // NOTE: there is a trick in this factory, the delay is embedded in the jobID.
@@ -228,12 +206,4 @@ func (j *jobImpl) MarshalText() (text []byte, err error) {
 
 func (j *jobImpl) GetDelayHour() uint16 {
 	return 0
-}
-
-func marshalJobBody(body []byte, attrs map[string]string) ([]byte, error) {
-	job := &model.JobData{
-		Data:       body,
-		Attributes: attrs,
-	}
-	return proto.Marshal(job)
 }

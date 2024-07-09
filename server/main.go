@@ -20,12 +20,10 @@ import (
 	"github.com/bitleak/lmstfy/engine"
 	"github.com/bitleak/lmstfy/engine/migration"
 	redis_engine "github.com/bitleak/lmstfy/engine/redis"
-	"github.com/bitleak/lmstfy/engine/redis_v2"
 	"github.com/bitleak/lmstfy/helper"
 	"github.com/bitleak/lmstfy/log"
 	"github.com/bitleak/lmstfy/server/handlers"
 	"github.com/bitleak/lmstfy/server/middleware"
-	"github.com/bitleak/lmstfy/storage"
 	"github.com/bitleak/lmstfy/throttler"
 	"github.com/bitleak/lmstfy/version"
 )
@@ -167,10 +165,6 @@ func setupEngines(conf *config.Config, l *logrus.Logger) error {
 	if err := redis_engine.Setup(conf); err != nil {
 		return fmt.Errorf("%w in redis engine", err)
 	}
-	redis_v2.SetLogger(l)
-	if err := redis_v2.Setup(conf); err != nil {
-		return fmt.Errorf("%w in redis v2 engine", err)
-	}
 	migration.SetLogger(l)
 	if err := migration.Setup(conf); err != nil {
 		return fmt.Errorf("%w in migration engine", err)
@@ -207,12 +201,6 @@ func main() {
 	registerSignal(shutdown, func() {
 		log.ReopenLogs(conf.LogDir)
 	})
-	// set up data manager
-	if conf.HasSecondaryStorage() {
-		if err := storage.Init(conf); err != nil {
-			panic(fmt.Sprintf("Failed to init data manager for secondary storage: %s", err))
-		}
-	}
 	if err := setupEngines(conf, logger); err != nil {
 		panic(fmt.Sprintf("Failed to setup engines, err: %s", err.Error()))
 	}
@@ -233,7 +221,6 @@ func main() {
 	adminSrv.Close() // Admin server does not need to be stopped gracefully
 	apiSrv.Shutdown(context.Background())
 
-	storage.Get().Shutdown()
 	throttler.GetThrottler().Shutdown()
 	logger.Infof("[%d] Bye bye", os.Getpid())
 }

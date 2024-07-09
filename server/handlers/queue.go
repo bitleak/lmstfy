@@ -595,16 +595,3 @@ func DestroyQueue(c *gin.Context) {
 	}).Info("queue destroyed")
 	c.Status(http.StatusNoContent)
 }
-
-func parseAttributes(c *gin.Context) map[string]string {
-	attributes := make(map[string]string)
-	for key, vals := range c.Request.Header {
-		lowerKey := strings.ToLower(key)
-		if !strings.HasPrefix(lowerKey, jobAttributeHeaderPrefix) || len(vals) == 0 {
-			continue
-		}
-		field := strings.TrimPrefix(lowerKey, jobAttributeHeaderPrefix)
-		attributes[field] = vals[0]
-	}
-	return attributes
-}

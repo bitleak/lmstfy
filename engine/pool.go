@@ -4,7 +4,6 @@ import "github.com/bitleak/lmstfy/config"
 
 const (
 	KindRedis     = "redis"
-	KindRedisV2   = "redis_v2"
 	KindMigration = "migration"
 )
 
@@ -48,7 +47,7 @@ func GetEngine(pool string) Engine {
 	if pool == "" {
 		pool = config.DefaultPoolName
 	}
-	kinds := []string{KindRedis, KindRedisV2, KindMigration}
+	kinds := []string{KindRedis, KindMigration}
 	for _, kind := range kinds {
 		if e := GetEngineByKind(kind, pool); e != nil {
 			return e

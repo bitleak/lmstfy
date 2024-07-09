@@ -25,17 +25,6 @@ type Job interface {
 	encoding.TextMarshaler
 }
 
-type CreateJobReq struct {
-	Namespace  string
-	Queue      string
-	ID         string
-	Body       []byte
-	TTL        uint32
-	Delay      uint32
-	Tries      uint16
-	Attributes map[string]string
-}
-
 type jobImpl struct {
 	namespace  string
 	queue      string
@@ -67,17 +56,16 @@ func NewJob(namespace, queue string, body []byte, ttl, delay uint32, tries uint1
 	}
 }
 
-func NewJobWithID(namespace, queue string, body []byte, ttl uint32, tries uint16, jobID string, attrs map[string]string) Job {
+func NewJobWithID(namespace, queue string, body []byte, ttl uint32, tries uint16, jobID string) Job {
 	delay, _ := uuid.ExtractDelaySecondFromUniqueID(jobID)
 	return &jobImpl{
-		namespace:  namespace,
-		queue:      queue,
-		id:         jobID,
-		body:       body,
-		ttl:        ttl,
-		delay:      delay,
-		tries:      tries,
-		attributes: attrs,
+		namespace: namespace,
+		queue:     queue,
+		id:        jobID,
+		body:      body,
+		ttl:       ttl,
+		delay:     delay,
+		tries:     tries,
 	}
 }
 

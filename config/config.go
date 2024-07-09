@@ -9,61 +9,20 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const (
-	DefaultPoolName = "default"
-
-	minSecondaryStorageThresholdSeconds = 60 * 60
-)
-
-type SpannerConfig struct {
-	Project         string
-	Instance        string
-	Database        string
-	CredentialsFile string
-	TableName       string
-}
-
-func (spanner *SpannerConfig) validate() error {
-	if spanner == nil {
-		return nil
-	}
-	if spanner.Instance == "" || spanner.Project == "" || spanner.Database == "" || spanner.TableName == "" {
-		return errors.New("'Instance'/'Project'/'Database'/'TableName' should NOT be empty")
-	}
-	return nil
-}
-
-type SecondaryStorage struct {
-	Spanner *SpannerConfig
-	// max number of jobs that storage pumps per batch
-	MaxJobPumpBatchSize int64
-	// range from 0 to 1, when the redis memory usage is greater than this value,
-	// the storage won't pump jobs to redis anymore until the memory usage is lower than this value.
-	//
-	// Default is 1, means no limit
-	HighRedisMemoryWatermark float64
-}
-
-func (storage *SecondaryStorage) validate() error {
-	if storage.HighRedisMemoryWatermark < 0 || storage.HighRedisMemoryWatermark > 1 {
-		return fmt.Errorf("invalid HighRedisMemoryWatermark: %f, should be between 0 and 1", storage.HighRedisMemoryWatermark)
-	}
-	return storage.Spanner.validate()
-}
+const DefaultPoolName = "default"
 
 type Config struct {
-	Host             string
-	Port             int
-	AdminHost        string
-	AdminPort        int
-	LogLevel         string
-	LogDir           string
-	LogFormat        string
-	Accounts         map[string]string
-	EnableAccessLog  bool
-	AdminRedis       RedisConf
-	Pool             RedisPool
-	SecondaryStorage *SecondaryStorage
+	Host            string
+	Port            int
+	AdminHost       string
+	AdminPort       int
+	LogLevel        string
+	LogDir          string
+	LogFormat       string
+	Accounts        map[string]string
+	EnableAccessLog bool
+	AdminRedis      RedisConf
+	Pool            RedisPool
 
 	// Default publish params
 	TTLSecond   int
@@ -146,16 +105,6 @@ func MustLoad(path string) (*Config, error) {
 	_, err = logrus.ParseLevel(conf.LogLevel)
 	if err != nil {
 		return nil, errors.New("invalid log level")
-	}
-
-	if conf.SecondaryStorage != nil {
-		if err := conf.SecondaryStorage.validate(); err != nil {
-			return nil, err
-		}
-		if conf.SecondaryStorage.HighRedisMemoryWatermark == 0 {
-			// default to 1
-			conf.SecondaryStorage.HighRedisMemoryWatermark = 1
-		}
 	}
 	return conf, nil
 }

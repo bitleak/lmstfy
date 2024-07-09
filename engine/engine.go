@@ -1,11 +1,8 @@
 package engine
 
 import (
-	"errors"
 	"io"
 )
-
-var ErrJobExisted = errors.New("job existed")
 
 type Engine interface {
 	Publish(job Job) (jobID string, err error)

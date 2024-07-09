@@ -2,18 +2,7 @@ package config
 
 import (
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
-
-func TestSecondaryStorageConfig_Validate(t *testing.T) {
-	secondaryStorageConfig := SecondaryStorage{}
-	assert.Nil(t, secondaryStorageConfig.validate())
-	secondaryStorageConfig.Spanner = &SpannerConfig{}
-	assert.NotNil(t, secondaryStorageConfig.validate())
-	secondaryStorageConfig.Spanner = SpannerEmulator
-	assert.Nil(t, secondaryStorageConfig.validate())
-}
 
 func TestRedisConfig_Validate(t *testing.T) {
 	conf := &RedisConf{}

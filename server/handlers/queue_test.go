@@ -3,7 +3,6 @@ package handlers_test
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -18,8 +17,6 @@ import (
 	"github.com/bitleak/lmstfy/server/handlers"
 )
 
-const jobAttributeHeaderPrefix = "lmstfy-attribute-"
-
 func TestPublish(t *testing.T) {
 	query := url.Values{}
 	query.Add("delay", "5")
@@ -31,30 +28,6 @@ func TestPublish(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create request")
 	}
-	c, e, resp := ginTest(req)
-	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
-	e.PUT("/api/:namespace/:queue", handlers.Publish)
-	e.HandleContext(c)
-	if resp.Code != http.StatusCreated {
-		t.Fatal("Failed to publish")
-	}
-}
-
-func TestPublishV2(t *testing.T) {
-	query := url.Values{}
-	query.Add("delay", "5")
-	query.Add("ttl", "10")
-	query.Add("tries", "1")
-	query.Add("token", "test-v2:1234567")
-
-	targetUrl := fmt.Sprintf("http://localhost/api/ns/qs1?%s", query.Encode())
-	body := strings.NewReader("hello msg")
-	req, err := http.NewRequest("PUT", targetUrl, body)
-	if err != nil {
-		t.Fatalf("Failed to create request")
-	}
-	req.Header[jobAttributeHeaderPrefix+"flag"] = []string{"1"}
-	req.Header[jobAttributeHeaderPrefix+"label"] = []string{"abc"}
 	c, e, resp := ginTest(req)
 	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
 	e.PUT("/api/:namespace/:queue", handlers.Publish)
@@ -100,51 +73,6 @@ func TestConsume(t *testing.T) {
 	if !bytes.Equal(data.Data, body) {
 		t.Fatalf("Mismatched job data")
 	}
-}
-
-func TestConsumeV2(t *testing.T) {
-	body := []byte("test v2")
-
-	jobID := publishJobV2("ns", "qs2", 0, 0, body)
-
-	query := url.Values{}
-	query.Add("ttr", "10")
-	query.Add("timeout", "2")
-	query.Add("token", "test-v2:1234567")
-
-	targetUrl := fmt.Sprintf("http://localhost/api/ns/qs2?%s", query.Encode())
-	req, err := http.NewRequest("GET", targetUrl, nil)
-	if err != nil {
-		t.Fatalf("Failed to create request")
-	}
-	c, e, resp := ginTest(req)
-	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
-	e.GET("/api/:namespace/:queue", handlers.Consume)
-	e.HandleContext(c)
-	if resp.Code != http.StatusOK {
-		t.Fatal("Failed to consume")
-	}
-	var data struct {
-		Msg        string
-		Namespace  string
-		Queue      string
-		JobID      string `json:"job_id"`
-		Data       []byte
-		Tries      int               `json:"remain_tries"`
-		TTL        int               `json:"ttl"`
-		Attributes map[string]string `json:"attributes"`
-	}
-	err = json.Unmarshal(resp.Body.Bytes(), &data)
-	if err != nil {
-		t.Fatalf("Failed to decode response: %s", err)
-	}
-	assert.Equal(t, data.TTL, 0)
-	assert.Equal(t, 0, data.Tries)
-	assert.Equal(t, jobID, data.JobID)
-	if !bytes.Equal(data.Data, body) {
-		t.Fatalf("Mismatched job data")
-	}
-	assert.Equal(t, checkRespAttributes(data.Attributes), nil)
 }
 
 func TestNoBlockingConsumeMulti(t *testing.T) {
@@ -265,40 +193,6 @@ func TestPeekQueue(t *testing.T) {
 	assert.Equal(t, jobID, data.JobID)
 }
 
-func TestPeekQueueV2(t *testing.T) {
-	body := []byte("test v2")
-	jobID := publishJobV2("ns", "qs3", 0, 60, body)
-
-	targetUrl := "http://localhost/api/ns/qs3/peek?token=test-v2:1234567"
-	req, err := http.NewRequest("GET", targetUrl, nil)
-	if err != nil {
-		t.Fatalf("Failed to create request")
-	}
-	c, e, resp := ginTest(req)
-	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
-	e.GET("/api/:namespace/:queue/peek", handlers.PeekQueue)
-	e.HandleContext(c)
-	if resp.Code != http.StatusOK {
-		t.Log(resp.Body.String())
-		t.Fatal("Failed to peek queue")
-	}
-
-	var data struct {
-		Namespace  string
-		Queue      string
-		JobID      string `json:"job_id"`
-		Data       []byte
-		Attributes map[string]string `json:"attributes"`
-	}
-	err = json.Unmarshal(resp.Body.Bytes(), &data)
-	if err != nil {
-		t.Fatal("Failed to decode response")
-	}
-	assert.Equal(t, jobID, data.JobID)
-	assert.Equal(t, body, data.Data)
-	assert.Equal(t, checkRespAttributes(data.Attributes), nil)
-}
-
 func TestSize(t *testing.T) {
 	publishTestJob("ns", "q8", 0, 60)
 
@@ -362,40 +256,6 @@ func TestPeekJob(t *testing.T) {
 		t.Log(resp.Body.String())
 		t.Fatal("Mismatched job")
 	}
-}
-
-func TestPeekJobV2(t *testing.T) {
-	body := []byte("test v2")
-	jobID := publishJobV2("ns", "qs4", 0, 60, body)
-
-	targetUrl := fmt.Sprintf("http://localhost/api/ns/qs4/job/%s?token=test-v2:1234567", jobID)
-	req, err := http.NewRequest("GET", targetUrl, nil)
-	if err != nil {
-		t.Fatalf("Failed to create request")
-	}
-	c, e, resp := ginTest(req)
-	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
-	e.GET("/api/:namespace/:queue/job/:job_id", handlers.PeekJob)
-	e.HandleContext(c)
-	if resp.Code != http.StatusOK {
-		t.Log(resp.Body.String())
-		t.Fatal("Failed to peek job")
-	}
-
-	var data struct {
-		Namespace  string
-		Queue      string
-		JobID      string `json:"job_id"`
-		Data       []byte
-		Attributes map[string]string `json:"attributes"`
-	}
-	err = json.Unmarshal(resp.Body.Bytes(), &data)
-	if err != nil {
-		t.Fatal("Failed to decode response")
-	}
-	assert.Equal(t, jobID, data.JobID)
-	assert.Equal(t, body, data.Data)
-	assert.Equal(t, checkRespAttributes(data.Attributes), nil)
 }
 
 func TestPeekDeadLetter(t *testing.T) {
@@ -683,70 +543,6 @@ func TestPublishBulk(t *testing.T) {
 	}
 }
 
-func TestPublishBulkV2(t *testing.T) {
-	query := url.Values{}
-	query.Add("delay", "0")
-	query.Add("ttl", "10")
-	query.Add("tries", "1")
-	query.Add("token", "test-v2:1234567")
-
-	targetUrl := fmt.Sprintf("http://localhost/api/ns/qs5/bulk?%s", query.Encode())
-	jobsData := []interface{}{
-		"hello msg",
-		123456,
-		struct {
-			Msg string `json:"msg"`
-		}{Msg: "success"},
-		[]string{"foo", "bar"},
-		true,
-	}
-	bodyData, _ := json.Marshal(jobsData)
-	body := bytes.NewReader(bodyData)
-	req, err := http.NewRequest("PUT", targetUrl, body)
-	if err != nil {
-		t.Fatalf("Failed to create request")
-	}
-	req.Header[jobAttributeHeaderPrefix+"flag"] = []string{"1"}
-	req.Header[jobAttributeHeaderPrefix+"label"] = []string{"abc"}
-	c, e, resp := ginTest(req)
-
-	e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
-	e.PUT("/api/:namespace/:queue/bulk", handlers.PublishBulk)
-	e.HandleContext(c)
-	if resp.Code != http.StatusCreated {
-		t.Fatal("Failed to publish")
-	}
-	var data struct {
-		Msg    string
-		JobIDs []string `json:"job_ids"`
-	}
-	err = json.Unmarshal(resp.Body.Bytes(), &data)
-	if err != nil {
-		t.Fatalf("Failed to decode response: %s", err)
-	}
-	if len(data.JobIDs) != len(jobsData) {
-		t.Fatalf("Mismatched job count")
-	}
-	jobIDMap := map[string]int{}
-	for idx, jobID := range data.JobIDs {
-		jobIDMap[jobID] = idx
-	}
-	for i := 0; i < len(jobsData); i++ {
-		body, jobID, attributes := consumeTestJobV2("ns", "qs5", 0, 1)
-		idx, ok := jobIDMap[jobID]
-		if !ok {
-			t.Fatalf("Job not found")
-		}
-		jobData, _ := json.Marshal(jobsData[idx])
-		if !bytes.Equal(body, jobData) {
-			t.Fatalf("Mismatched Job data")
-		}
-		if len(attributes) == 0 || attributes["flag"] != "1" || attributes["label"] != "abc" {
-			t.Fatalf("Mismatched Job attributes")
-		}
-	}
-}
-
 func publishTestJob(ns, q string, delay, ttl uint32) (body []byte, jobID string) {
 	e := engine.GetEngine("")
 	body = make([]byte, 10)
@@ -765,40 +561,4 @@ func consumeTestJob(ns, q string, ttr, timeout uint32) (body []byte, jobID strin
 		return nil, ""
 	}
 	return job.Body(), job.ID()
-}
-
-func publishJobV2(ns, q string, delay, ttl uint32, body []byte) string {
-	e := engine.GetEngine("test-v2")
-	attributes := make(map[string]string)
-	attributes["flag"] = "1"
-	attributes["label"] = "abc"
-
-	j := engine.NewJobFromReq(&engine.CreateJobReq{
-		Namespace:  ns,
-		Queue:      q,
-		ID:         "",
-		Body:       body,
-		TTL:        ttl,
-		Delay:      delay,
-		Tries:      1,
-		Attributes: attributes,
-	})
-	jobID, _ := e.Publish(j)
-	return jobID
-}
-
-func consumeTestJobV2(ns, q string, ttr, timeout uint32) (body []byte, jobID string, attributes map[string]string) {
-	e := engine.GetEngine("test-v2")
-	job, _ := e.Consume(ns, []string{q}, ttr, timeout)
-	if job == nil {
-		return nil, "", nil
-	}
-	return job.Body(), job.ID(), job.Attributes()
-}
-
-func checkRespAttributes(attributes map[string]string) error {
-	if len(attributes) == 0 || attributes["flag"] != "1" || attributes["label"] != "abc" {
-		return errors.New("Mismatched job attributes")
-	}
-	return nil
 }

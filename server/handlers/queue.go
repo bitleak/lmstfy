@@ -10,7 +10,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/bitleak/lmstfy/engine"
-	"github.com/bitleak/lmstfy/engine/redis_v2"
 )
 
 const (
@@ -22,9 +21,9 @@ const (
 
 // PUT /:namespace/:queue
 // @query:
-//  - delay: uint32
-//  - ttl:   uint32
-//  - tries: uint16
+//   - delay: uint32
+//   - ttl:   uint32
+//   - tries: uint16
 func Publish(c *gin.Context) {
 	logger := GetHTTPLogger(c)
 	e := c.MustGet("engine").(engine.Engine)
@@ -86,24 +85,7 @@ func Publish(c *gin.Context) {
 		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "body too large"})
 		return
 	}
-	attributes := parseAttributes(c)
-	var job engine.Job
-	// check engine version
-	if _, ok := e.(*redis_v2.Engine); ok {
-		req := &engine.CreateJobReq{
-			Namespace:  namespace,
-			Queue:      queue,
-			Body:       body,
-			TTL:        uint32(ttlSecond),
-			Delay:      uint32(delaySecond),
-			Tries:      uint16(tries),
-			Attributes: attributes,
-		}
-		job = engine.NewJobFromReq(req)
-	} else {
-		job = engine.NewJob(namespace, queue, body, uint32(ttlSecond), uint32(delaySecond), uint16(tries), "")
-	}
-
+	job := engine.NewJob(namespace, queue, body, uint32(ttlSecond), uint32(delaySecond), uint16(tries), "")
 	jobID, err = e.Publish(job)
 	if err != nil {
 		logger.WithFields(logrus.Fields{
@@ -131,9 +113,9 @@ func Publish(c *gin.Context) {
 
 // PUT /:namespace/:queue/bulk
 // @query:
-//  - delay: uint32
-//  - ttl:   uint32
-//  - tries: uint16
+//   - delay: uint32
+//   - ttl:   uint32
+//   - tries: uint16
 func PublishBulk(c *gin.Context) {
 	logger := GetHTTPLogger(c)
 	e := c.MustGet("engine").(engine.Engine)
@@ -170,7 +152,6 @@ func PublishBulk(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "tries shouldn't be zero"})
 		return
 	}
-	attributes := parseAttributes(c)
 	body, err := c.GetRawData()
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read body"})
@@ -197,29 +178,9 @@ func PublishBulk(c *gin.Context) {
 		}
 	}
 
-	var isV2Engine bool
-	if _, ok := e.(*redis_v2.Engine); ok {
-		isV2Engine = true
-	}
-
 	jobIDs := make([]string, 0)
 	for _, job := range jobs {
-		var j engine.Job
-		if isV2Engine {
-			req := &engine.CreateJobReq{
-				Namespace:  namespace,
-				Queue:      queue,
-				Body:       job,
-				TTL:        uint32(ttlSecond),
-				Delay:      uint32(delaySecond),
-				Tries:      uint16(tries),
-				Attributes: attributes,
-			}
-			j = engine.NewJobFromReq(req)
-		} else {
-			j = engine.NewJob(namespace, queue, job, uint32(ttlSecond), uint32(delaySecond), uint16(tries), "")
-		}
-
+		j := engine.NewJob(namespace, queue, job, uint32(ttlSecond), uint32(delaySecond), uint16(tries), "")
 		jobID, err := e.Publish(j)
 		if err != nil {
 			logger.WithFields(logrus.Fields{
@@ -249,9 +210,10 @@ func PublishBulk(c *gin.Context) {
 
 // GET /:namespace/:queue[,:queue]*
 // @query:
-//  - ttr:     uint32
-//  - timeout: uint32
-//  - count:   uint32
+//   - ttr:     uint32
+//   - timeout: uint32
+//   - count:   uint32
+//
 // NOTE: according to RFC3986, the URL path part can contain comma(",") ,
 // so I decide to use "," as the separator of queue names
 func Consume(c *gin.Context) {

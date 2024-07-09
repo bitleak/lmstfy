@@ -33,10 +33,4 @@ func TestRedisConfig_Validate(t *testing.T) {
 	if err := conf.validate(); err != nil {
 		t.Fatalf("no error was expected, but got %v", err)
 	}
-
-	conf.EnableSecondaryStorage = true
-	conf.SecondaryStorageThresholdSeconds = 10
-	if err := conf.validate(); err == nil {
-		t.Fatalf("validate addr error was expected, but got nil")
-	}
 }

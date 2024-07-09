@@ -21,7 +21,6 @@ func TestValidateRedisConfig(t *testing.T) {
 	require.Nil(t, err)
 	assert.NotNil(t, ValidateRedisConfig(ctx, &defaultPool))
 	_, err = redisCli.ConfigSet(ctx, "maxmemory-policy", "noeviction").Result()
-	defaultPool.EnableSecondaryStorage = true
 	assert.NotNil(t, ValidateRedisConfig(ctx, &defaultPool))
 	_, err = redisCli.ConfigSet(ctx, "maxmemory", "10000000").Result()
 	require.Nil(t, err)

@@ -23,9 +23,7 @@ teardown:
 	@bash scripts/teardown.sh
 
 test:
-	- cd scripts/spanner && docker-compose up --force-recreate -d && cd ../..
 	@sh scripts/run-test.sh
-	- cd scripts/spanner && docker-compose down && cd ../..
 
 lint:
 	@rm -rf lint.log

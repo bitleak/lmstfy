@@ -85,16 +85,6 @@ type RedisConf struct {
 	MasterName       string
 	Version          string
 	SentinelPassword string
-
-	EnableSecondaryStorage bool
-
-	// number of seconds. when job's delay second is greater than pumpStorageThresh,
-	// it will be written to storage if enabled
-	SecondaryStorageThresholdSeconds int64
-}
-
-func (c *Config) HasSecondaryStorage() bool {
-	return c.SecondaryStorage != nil
 }
 
 func (rc *RedisConf) validate() error {
@@ -103,9 +93,6 @@ func (rc *RedisConf) validate() error {
 	}
 	if rc.DB < 0 {
 		return errors.New("the pool db must be greater than 0 or equal to 0")
-	}
-	if rc.EnableSecondaryStorage && rc.SecondaryStorageThresholdSeconds < minSecondaryStorageThresholdSeconds {
-		return errors.New("write to secondary storage threshold required at least 1 hour")
 	}
 	return nil
 }

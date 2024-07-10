@@ -156,7 +156,7 @@ func (e *Engine) consumeMulti(namespace string, queues []string, ttrSecond, time
 			return nil, nil
 		}
 		endTime := time.Now().Unix()
-		body, ttl, err := e.pool.Get(namespace, queueName.Queue, jobID)
+		payload, ttl, err := e.pool.Get(namespace, queueName.Queue, jobID)
 		switch err {
 		case nil:
 			// no-op
@@ -177,7 +177,7 @@ func (e *Engine) consumeMulti(namespace string, queues []string, ttrSecond, time
 		default:
 			return nil, fmt.Errorf("pool: %s", err)
 		}
-		job = engine.NewJobWithID(namespace, queueName.Queue, body, ttl, tries, jobID)
+		job = engine.NewJobWithID(namespace, queueName.Queue, payload.Body, ttl, tries, jobID)
 		metrics.jobElapsedMS.WithLabelValues(e.redis.Name, namespace, queueName.Queue).Observe(float64(job.ElapsedMS()))
 		return job, nil
 	}
@@ -207,19 +207,19 @@ func (e *Engine) Peek(namespace, queue, optionalJobID string) (job engine.Job, e
 			return nil, fmt.Errorf("failed to peek queue: %s", err)
 		}
 	}
-	body, ttl, err := e.pool.Get(namespace, queue, jobID)
+	payload, ttl, err := e.pool.Get(namespace, queue, jobID)
 	// Tricky: we shouldn't return the not found error when the job was not found,
 	// since the job may expired(TTL was reached) and it would confuse the user, so
 	// we return the nil job instead of the not found error here. But if the `optionalJobID`
 	// was assigned we should return the not fond error.
-	if optionalJobID == "" && err == engine.ErrNotFound {
+	if optionalJobID == "" && errors.Is(err, engine.ErrNotFound) {
 		// return jobID with nil body if the job is expired
 		return engine.NewJobWithID(namespace, queue, nil, 0, 0, jobID), nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	return engine.NewJobWithID(namespace, queue, body, ttl, tries, jobID), err
+	return engine.NewJobWithID(namespace, queue, payload.Body, ttl, tries, jobID), err
 }
 
 func (e *Engine) Size(namespace, queue string) (size int64, err error) {

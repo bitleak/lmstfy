@@ -46,11 +46,11 @@ func TestPool_Get(t *testing.T) {
 	p := NewPool(R)
 	job := engine.NewJob("ns-pool", "q4", []byte("hello msg 4"), 50, 0, 1, "")
 	p.Add(job)
-	body, ttl, err := p.Get(job.Namespace(), job.Queue(), job.ID())
+	payload, ttl, err := p.Get(job.Namespace(), job.Queue(), job.ID())
 	if err != nil {
 		t.Fatalf("Failed to get job: %s", err)
 	}
-	if !bytes.Equal(body, []byte("hello msg 4")) {
+	if !bytes.Equal(payload.Body, []byte("hello msg 4")) {
 		t.Fatal("Mismatched job data")
 	}
 	if ttl > 50 || 50-ttl > 2 {
@@ -66,9 +66,9 @@ func TestPool_GetCompatibility(t *testing.T) {
 			jobID := uuid.GenJobIDWithVersion(i, 123)
 			job := engine.NewJob("ns-pool", "q5", []byte("hello msg 5"), 50, 0, 1, jobID)
 			p.Add(job)
-			body, ttl, err := p.Get(job.Namespace(), job.Queue(), job.ID())
+			payload, ttl, err := p.Get(job.Namespace(), job.Queue(), job.ID())
 			require.NoError(t, err)
-			require.Equal(t, []byte("hello msg 5"), body)
+			require.Equal(t, []byte("hello msg 5"), payload.Body)
 			require.InDelta(t, 50, ttl, 5)
 			require.Equal(t, i, uuid.ExtractJobIDVersion(job.ID()))
 		}

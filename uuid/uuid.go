@@ -38,14 +38,6 @@ func GenUniqueJobIDWithDelay(delaySecond uint32) string {
 	return id.String()
 }
 
-func UniqueIDToBinary(id string) [16]byte {
-	return ulid.MustParse(id)
-}
-
-func BinaryToUniqueID(bin [16]byte) string {
-	return ulid.ULID(bin).String()
-}
-
 func ElapsedMilliSecondFromUniqueID(s string) (int64, error) {
 	id, err := ulid.Parse(s)
 	if err != nil {

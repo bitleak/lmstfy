@@ -2,9 +2,7 @@ package engine
 
 import (
 	"encoding"
-	"encoding/binary"
 	"encoding/json"
-	"errors"
 
 	"github.com/bitleak/lmstfy/uuid"
 )
@@ -20,8 +18,6 @@ type Job interface {
 	ElapsedMS() int64
 	Attributes() map[string]string
 
-	encoding.BinaryMarshaler
-	encoding.BinaryUnmarshaler
 	encoding.TextMarshaler
 }
 
@@ -108,70 +104,6 @@ func (j *jobImpl) ElapsedMS() int64 {
 
 func (j *jobImpl) Attributes() map[string]string {
 	return j.attributes
-}
-
-// Marshal into binary of the format:
-// {total len: 4 bytes}{ns len: 1 byte}{ns}{queue len: 1 byte}{queue}{id: 16 bytes}{ttl: 4 bytes}{tries: 2 byte}{job data}
-func (j *jobImpl) MarshalBinary() (data []byte, err error) {
-	nsLen := len(j.namespace)
-	qLen := len(j.queue)
-	bodyLen := len(j.body)
-	totalSize := 1 + nsLen + 1 + qLen + 16 + 4 + 2 + bodyLen
-	buf := make([]byte, totalSize+4)
-	binary.LittleEndian.PutUint32(buf, uint32(totalSize))
-
-	nsOffset := 4 + 1
-	qOffset := nsOffset + nsLen + 1
-	idOffset := qOffset + qLen
-	ttlOffset := idOffset + 16
-	triesOffset := ttlOffset + 4
-	jobOffset := triesOffset + 2
-
-	buf[4] = uint8(nsLen)
-	copy(buf[nsOffset:], j.namespace)
-	buf[qOffset-1] = uint8(qLen)
-	copy(buf[qOffset:], j.queue)
-	binID := uuid.UniqueIDToBinary(j.id)
-	copy(buf[idOffset:], binID[:]) // binary ID is 16 byte-long
-	binary.LittleEndian.PutUint32(buf[ttlOffset:], j.ttl)
-	binary.LittleEndian.PutUint16(buf[triesOffset:], j.tries)
-	copy(buf[jobOffset:], j.body)
-	return buf, nil
-}
-
-func (j *jobImpl) UnmarshalBinary(data []byte) error {
-	if len(data) <= 4 {
-		return errors.New("data too small")
-	}
-	totalSize := binary.LittleEndian.Uint32(data[0:])
-	if len(data) != int(totalSize)+4 {
-		return errors.New("corrupted data")
-	}
-
-	nsLen := int(data[4])
-	nsOffset := 4 + 1
-	j.namespace = string(data[nsOffset : nsOffset+nsLen])
-	qOffset := nsOffset + nsLen + 1
-	qLen := int(data[qOffset-1])
-	j.queue = string(data[qOffset : qOffset+qLen])
-	idOffset := qOffset + qLen
-	var binaryID [16]byte
-	copy(binaryID[:], data[idOffset:idOffset+16])
-	j.id = uuid.BinaryToUniqueID(binaryID)
-	ttlOffset := idOffset + 16
-	j.ttl = binary.LittleEndian.Uint32(data[ttlOffset:])
-	triesOffset := ttlOffset + 4
-	j.tries = binary.LittleEndian.Uint16(data[triesOffset:])
-	jobOffset := triesOffset + 2
-	j.body = make([]byte, len(data)-jobOffset)
-	copy(j.body, data[jobOffset:])
-
-	delay, err := uuid.ExtractDelaySecondFromUniqueID(j.id)
-	if err != nil {
-		return err
-	}
-	j.delay = delay
-	return nil
 }
 
 func (j *jobImpl) MarshalText() (text []byte, err error) {

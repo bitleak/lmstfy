@@ -9,9 +9,9 @@ import (
 )
 
 func TestJobID(t *testing.T) {
-	jobID := GenUniqueJobIDWithDelay(10)
+	jobID := GenJobIDWithVersion(JobIDV1, 10)
 
-	id, version := ExtractJobID(jobID)
+	id, version := extractJobID(jobID)
 	require.Equal(t, 1, version)
 	require.Equal(t, ulid.EncodedSize, len(id))
 

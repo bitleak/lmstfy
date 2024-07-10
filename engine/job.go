@@ -39,7 +39,7 @@ type jobImpl struct {
 // a tombstone record in that AOF.
 func NewJob(namespace, queue string, body []byte, ttl, delay uint32, tries uint16, jobID string) Job {
 	if jobID == "" {
-		jobID = uuid.GenUniqueJobIDWithDelay(delay)
+		jobID = uuid.GenJobIDWithVersion(0, delay)
 	}
 	return &jobImpl{
 		namespace: namespace,

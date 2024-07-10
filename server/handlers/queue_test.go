@@ -12,9 +12,11 @@ import (
 	"time"
 
 	"github.com/magiconair/properties/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/bitleak/lmstfy/engine"
 	"github.com/bitleak/lmstfy/server/handlers"
+	"github.com/bitleak/lmstfy/uuid"
 )
 
 func TestPublish(t *testing.T) {
@@ -540,6 +542,41 @@ func TestPublishBulk(t *testing.T) {
 		if !bytes.Equal(body, jobData) {
 			t.Fatalf("Mismatched Job data")
 		}
+	}
+}
+
+func TestPublish_WithJobVersion(t *testing.T) {
+	for _, enable := range []string{"YES", "NO"} {
+		query := url.Values{}
+		query.Add("delay", "0")
+		query.Add("ttl", "10")
+		query.Add("tries", "1")
+		targetUrl := fmt.Sprintf("http://localhost/api/ns/q18?%s", query.Encode())
+		body := strings.NewReader("hello job version")
+		req, err := http.NewRequest("PUT", targetUrl, body)
+		req.Header.Add("Enable-Job-Version", enable)
+		require.NoError(t, err, "Failed to create request")
+
+		c, e, resp := ginTest(req)
+		e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
+		e.PUT("/api/:namespace/:queue", handlers.Publish)
+		e.HandleContext(c)
+
+		require.Equal(t, http.StatusCreated, resp.Code, "Failed to publish")
+		var payload struct {
+			JobID string `json:"job_id"`
+		}
+		require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &payload))
+		expectedVersion := 0
+		if enable == "YES" {
+			expectedVersion = uuid.JobIDV1
+		}
+		require.Equal(t, expectedVersion, uuid.ExtractJobIDVersion(payload.JobID))
+
+		// Consume should also return the correct version and job body
+		bytes, jobID := consumeTestJob("ns", "q18", 10, 3)
+		require.Equal(t, expectedVersion, uuid.ExtractJobIDVersion(jobID))
+		require.Equal(t, "hello job version", string(bytes))
 	}
 }
 

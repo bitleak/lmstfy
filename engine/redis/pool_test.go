@@ -6,8 +6,10 @@ import (
 	"time"
 
 	go_redis "github.com/go-redis/redis/v8"
+	"github.com/stretchr/testify/require"
 
 	"github.com/bitleak/lmstfy/engine"
+	"github.com/bitleak/lmstfy/uuid"
 )
 
 func TestPool_Add(t *testing.T) {
@@ -54,4 +56,21 @@ func TestPool_Get(t *testing.T) {
 	if ttl > 50 || 50-ttl > 2 {
 		t.Fatalf("Expected TTL is around 50 seconds")
 	}
+}
+
+func TestPool_GetCompatibility(t *testing.T) {
+	p := NewPool(R)
+
+	t.Run("test job with different versions should get correct body", func(t *testing.T) {
+		for i := 0; i <= uuid.JobIDV1; i++ {
+			jobID := uuid.GenJobIDWithVersion(i, 123)
+			job := engine.NewJob("ns-pool", "q5", []byte("hello msg 5"), 50, 0, 1, jobID)
+			p.Add(job)
+			body, ttl, err := p.Get(job.Namespace(), job.Queue(), job.ID())
+			require.NoError(t, err)
+			require.Equal(t, []byte("hello msg 5"), body)
+			require.InDelta(t, 50, ttl, 5)
+			require.Equal(t, i, uuid.ExtractJobIDVersion(job.ID()))
+		}
+	})
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/bitleak/lmstfy/engine"
+	"github.com/bitleak/lmstfy/uuid"
 )
 
 const (
@@ -30,6 +31,8 @@ func Publish(c *gin.Context) {
 	namespace := c.Param("namespace")
 	queue := c.Param("queue")
 	jobID := c.Param("job_id")
+
+	enabledJobVersion := strings.ToUpper(c.GetHeader("Enable-Job-Version")) == "YES"
 
 	if jobID != "" {
 		// delete job whatever other publish parameters
@@ -85,7 +88,14 @@ func Publish(c *gin.Context) {
 		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "body too large"})
 		return
 	}
-	job := engine.NewJob(namespace, queue, body, uint32(ttlSecond), uint32(delaySecond), uint16(tries), "")
+
+	if enabledJobVersion {
+		jobID = uuid.GenJobIDWithVersion(uuid.JobIDV1, uint32(delaySecond))
+	} else {
+		// use the legacy jobID if the version is not enabled
+		jobID = uuid.GenJobIDWithVersion(0, uint32(delaySecond))
+	}
+	job := engine.NewJob(namespace, queue, body, uint32(ttlSecond), uint32(delaySecond), uint16(tries), jobID)
 	jobID, err = e.Publish(job)
 	if err != nil {
 		logger.WithFields(logrus.Fields{
@@ -121,6 +131,8 @@ func PublishBulk(c *gin.Context) {
 	e := c.MustGet("engine").(engine.Engine)
 	namespace := c.Param("namespace")
 	queue := c.Param("queue")
+
+	enabledJobVersion := strings.ToUpper(c.GetHeader("Enable-Job-Version")) == "YES"
 
 	delaySecondStr := c.DefaultQuery("delay", DefaultDelay)
 	delaySecond, err := strconv.ParseUint(delaySecondStr, 10, 32)
@@ -180,7 +192,14 @@ func PublishBulk(c *gin.Context) {
 
 	jobIDs := make([]string, 0)
 	for _, job := range jobs {
-		j := engine.NewJob(namespace, queue, job, uint32(ttlSecond), uint32(delaySecond), uint16(tries), "")
+		var jobID string
+		if enabledJobVersion {
+			jobID = uuid.GenJobIDWithVersion(uuid.JobIDV1, uint32(delaySecond))
+		} else {
+			// use the legacy jobID if the version is not enabled
+			jobID = uuid.GenJobIDWithVersion(0, uint32(delaySecond))
+		}
+		j := engine.NewJob(namespace, queue, job, uint32(ttlSecond), uint32(delaySecond), uint16(tries), jobID)
 		jobID, err := e.Publish(j)
 		if err != nil {
 			logger.WithFields(logrus.Fields{

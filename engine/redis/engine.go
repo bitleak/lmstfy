@@ -177,7 +177,7 @@ func (e *Engine) consumeMulti(namespace string, queues []string, ttrSecond, time
 		default:
 			return nil, fmt.Errorf("pool: %s", err)
 		}
-		job = engine.NewJobWithID(namespace, queueName.Queue, payload.Body, ttl, tries, jobID)
+		job = engine.NewJobWithID(namespace, queueName.Queue, payload.Body, payload.Attributes, ttl, tries, jobID)
 		metrics.jobElapsedMS.WithLabelValues(e.redis.Name, namespace, queueName.Queue).Observe(float64(job.ElapsedMS()))
 		return job, nil
 	}
@@ -214,12 +214,12 @@ func (e *Engine) Peek(namespace, queue, optionalJobID string) (job engine.Job, e
 	// was assigned we should return the not fond error.
 	if optionalJobID == "" && errors.Is(err, engine.ErrNotFound) {
 		// return jobID with nil body if the job is expired
-		return engine.NewJobWithID(namespace, queue, nil, 0, 0, jobID), nil
+		return engine.NewJobWithID(namespace, queue, nil, nil, 0, 0, jobID), nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	return engine.NewJobWithID(namespace, queue, payload.Body, ttl, tries, jobID), err
+	return engine.NewJobWithID(namespace, queue, payload.Body, payload.Attributes, ttl, tries, jobID), err
 }
 
 func (e *Engine) Size(namespace, queue string) (size int64, err error) {

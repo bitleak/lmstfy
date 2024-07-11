@@ -12,7 +12,8 @@ import (
 )
 
 type JobPayload struct {
-	Body []byte `json:"body"`
+	Body       []byte            `json:"body"`
+	Attributes map[string]string `json:"attributes,omitempty"`
 }
 
 // Pool stores all the jobs' data. this is a global singleton per engine
@@ -46,7 +47,7 @@ func (p *Pool) Add(j engine.Job) (err error) {
 	// for the version 1 jobID, the payload is a JSON string contains the body.
 	payload := j.Body()
 	if uuid.ExtractJobIDVersion(j.ID()) != 0 {
-		payload, err = json.Marshal(JobPayload{Body: j.Body()})
+		payload, err = json.Marshal(JobPayload{Body: j.Body(), Attributes: j.Attributes()})
 		if err != nil {
 			return err
 		}

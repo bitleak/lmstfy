@@ -3,12 +3,12 @@ package helper
 import (
 	"context"
 	"errors"
-	"strconv"
 	"strings"
+
+	"github.com/go-redis/redis/v8"
 
 	"github.com/bitleak/lmstfy/config"
 	"github.com/bitleak/lmstfy/engine/redis/hooks"
-	"github.com/go-redis/redis/v8"
 )
 
 // NewRedisClient wrap the standalone and sentinel client
@@ -47,7 +47,6 @@ func validateRedisPersistConfig(ctx context.Context, cli *redis.Client, conf *co
 		return err
 	}
 	isNoEvictionPolicy, isAppendOnlyEnabled := false, false
-	var maxMem int64
 	lines := strings.Split(infoStr, "\r\n")
 	for _, line := range lines {
 		fields := strings.Split(line, ":")
@@ -59,8 +58,6 @@ func validateRedisPersistConfig(ctx context.Context, cli *redis.Client, conf *co
 			isNoEvictionPolicy = fields[1] == "noeviction"
 		case "aof_enabled":
 			isAppendOnlyEnabled = fields[1] == "1"
-		case "maxmemory":
-			maxMem, _ = strconv.ParseInt(fields[1], 10, 64)
 		}
 	}
 	if !isNoEvictionPolicy {
@@ -68,9 +65,6 @@ func validateRedisPersistConfig(ctx context.Context, cli *redis.Client, conf *co
 	}
 	if !isAppendOnlyEnabled {
 		return errors.New("redis appendonly MUST be 'yes' to prevent data loss")
-	}
-	if maxMem == 0 {
-		return errors.New("redis maxmemory MUST be assigned when secondary storage is enabled")
 	}
 	return nil
 }

@@ -14,11 +14,38 @@ import (
 )
 
 const (
-	maxBatchConsumeSize      = 100
-	maxBulkPublishSize       = 64
-	maxJobSize               = 1024 * 1024
-	jobAttributeHeaderPrefix = "lmstfy-attribute-"
+	maxBatchConsumeSize = 100
+	maxBulkPublishSize  = 64
+	maxJobSize          = 1024 * 1024
+
+	maxAttributeCount       = 16
+	maxAttributeKeyLength   = 32
+	maxAttributeValueLength = 128
+	jobAttributePrefix      = "Job-Attr-"
 )
+
+// collectJobAttributes collects job attributes from HTTP headers,
+// and it will be truncated if the length of key/value is longer than 256.
+func collectJobAttributes(c *gin.Context) map[string]string {
+	attrs := make(map[string]string)
+	for k, v := range c.Request.Header {
+		if !strings.HasPrefix(k, jobAttributePrefix) || len(v) == 0 || len(v[0]) == 0 {
+			continue
+		}
+		k = strings.TrimPrefix(k, jobAttributePrefix)
+		if len(k) > maxAttributeKeyLength {
+			k = k[:maxAttributeKeyLength]
+		}
+		if len(v[0]) > maxAttributeValueLength {
+			v[0] = v[0][:maxAttributeValueLength]
+		}
+		attrs[strings.ToLower(k)] = v[0]
+	}
+	if len(attrs) == 0 {
+		return nil
+	}
+	return attrs
+}
 
 // PUT /:namespace/:queue
 // @query:
@@ -89,13 +116,19 @@ func Publish(c *gin.Context) {
 		return
 	}
 
+	var attributes map[string]string
 	if enabledJobVersion {
 		jobID = uuid.GenJobIDWithVersion(uuid.JobIDV1, uint32(delaySecond))
+		attributes = collectJobAttributes(c)
 	} else {
 		// use the legacy jobID if the version is not enabled
 		jobID = uuid.GenJobIDWithVersion(0, uint32(delaySecond))
 	}
-	job := engine.NewJob(namespace, queue, body, uint32(ttlSecond), uint32(delaySecond), uint16(tries), jobID)
+	if len(attributes) > maxAttributeCount {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "too many attributes, cannot exceed 16"})
+		return
+	}
+	job := engine.NewJob(namespace, queue, body, attributes, uint32(ttlSecond), uint32(delaySecond), uint16(tries), jobID)
 	jobID, err = e.Publish(job)
 	if err != nil {
 		logger.WithFields(logrus.Fields{
@@ -189,6 +222,14 @@ func PublishBulk(c *gin.Context) {
 			return
 		}
 	}
+	var attributes map[string]string
+	if enabledJobVersion {
+		attributes = collectJobAttributes(c)
+	}
+	if len(attributes) > maxAttributeCount {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "too many attributes, cannot exceed 16"})
+		return
+	}
 
 	jobIDs := make([]string, 0)
 	for _, job := range jobs {
@@ -199,7 +240,7 @@ func PublishBulk(c *gin.Context) {
 			// use the legacy jobID if the version is not enabled
 			jobID = uuid.GenJobIDWithVersion(0, uint32(delaySecond))
 		}
-		j := engine.NewJob(namespace, queue, job, uint32(ttlSecond), uint32(delaySecond), uint16(tries), jobID)
+		j := engine.NewJob(namespace, queue, job, attributes, uint32(ttlSecond), uint32(delaySecond), uint16(tries), jobID)
 		jobID, err := e.Publish(j)
 		if err != nil {
 			logger.WithFields(logrus.Fields{

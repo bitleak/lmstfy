@@ -546,38 +546,79 @@ func TestPublishBulk(t *testing.T) {
 }
 
 func TestPublish_WithJobVersion(t *testing.T) {
-	for _, enable := range []string{"YES", "NO"} {
+	t.Run("Run with enable/disable job version", func(t *testing.T) {
+		for _, enable := range []string{"YES", "NO"} {
+			query := url.Values{}
+			query.Add("delay", "0")
+			query.Add("ttl", "10")
+			query.Add("tries", "1")
+			targetUrl := fmt.Sprintf("http://localhost/api/ns/q18?%s", query.Encode())
+			body := strings.NewReader("hello job version")
+
+			req, err := http.NewRequest("PUT", targetUrl, body)
+			req.Header.Add("Enable-Job-Version", enable)
+			req.Header.Add("Job-Attr-Hello", "world")
+			req.Header.Add("Job-Attr-Foo", "bar")
+			req.Header.Add(fmt.Sprintf("Job-Attr-%s", strings.Repeat("k", 300)), strings.Repeat("v", 300))
+			require.NoError(t, err, "Failed to create request")
+
+			c, e, resp := ginTest(req)
+			e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
+			e.PUT("/api/:namespace/:queue", handlers.Publish)
+			e.HandleContext(c)
+
+			require.Equal(t, http.StatusCreated, resp.Code, "Failed to publish")
+			var payload struct {
+				JobID string `json:"job_id"`
+			}
+			require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &payload))
+			expectedVersion := 0
+			if enable == "YES" {
+				expectedVersion = uuid.JobIDV1
+			}
+			require.Equal(t, expectedVersion, uuid.ExtractJobIDVersion(payload.JobID))
+
+			{
+				// Consume should also return the correct version and job body
+				e := engine.GetEngine("")
+				job, err := e.Consume("ns", []string{"q18"}, 10, 3)
+				require.NoError(t, err)
+				require.Equal(t, expectedVersion, uuid.ExtractJobIDVersion(job.ID()))
+				require.Equal(t, "hello job version", string(job.Body()))
+				if enable == "YES" {
+					require.Equal(t, "world", job.Attributes()["hello"])
+					require.Equal(t, "bar", job.Attributes()["foo"])
+					require.Equal(t, strings.Repeat("v", 128),
+						job.Attributes()[strings.Repeat("k", 32)])
+				} else {
+					// No attributes should be returned if job version is not enabled
+					require.Nil(t, job.Attributes())
+				}
+			}
+		}
+	})
+
+	t.Run("Run with too many attributes", func(t *testing.T) {
 		query := url.Values{}
 		query.Add("delay", "0")
 		query.Add("ttl", "10")
 		query.Add("tries", "1")
-		targetUrl := fmt.Sprintf("http://localhost/api/ns/q18?%s", query.Encode())
+		targetUrl := fmt.Sprintf("http://localhost/api/ns/q19?%s", query.Encode())
 		body := strings.NewReader("hello job version")
+
 		req, err := http.NewRequest("PUT", targetUrl, body)
-		req.Header.Add("Enable-Job-Version", enable)
+		req.Header.Add("Enable-Job-Version", "YES")
+		for i := 0; i < 17; i++ {
+			req.Header.Add(fmt.Sprintf("Job-Attr-%d", i), "hello")
+		}
 		require.NoError(t, err, "Failed to create request")
 
 		c, e, resp := ginTest(req)
 		e.Use(handlers.ValidateParams, handlers.SetupQueueEngine)
 		e.PUT("/api/:namespace/:queue", handlers.Publish)
 		e.HandleContext(c)
-
-		require.Equal(t, http.StatusCreated, resp.Code, "Failed to publish")
-		var payload struct {
-			JobID string `json:"job_id"`
-		}
-		require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &payload))
-		expectedVersion := 0
-		if enable == "YES" {
-			expectedVersion = uuid.JobIDV1
-		}
-		require.Equal(t, expectedVersion, uuid.ExtractJobIDVersion(payload.JobID))
-
-		// Consume should also return the correct version and job body
-		bytes, jobID := consumeTestJob("ns", "q18", 10, 3)
-		require.Equal(t, expectedVersion, uuid.ExtractJobIDVersion(jobID))
-		require.Equal(t, "hello job version", string(bytes))
-	}
+		require.Equal(t, http.StatusBadRequest, resp.Code)
+	})
 }
 
 func publishTestJob(ns, q string, delay, ttl uint32) (body []byte, jobID string) {
@@ -586,7 +627,7 @@ func publishTestJob(ns, q string, delay, ttl uint32) (body []byte, jobID string)
 	if _, err := rand.Read(body); err != nil {
 		panic(err)
 	}
-	j := engine.NewJob(ns, q, body, ttl, delay, 1, "")
+	j := engine.NewJob(ns, q, body, nil, ttl, delay, 1, "")
 	jobID, _ = e.Publish(j)
 	return body, jobID
 }

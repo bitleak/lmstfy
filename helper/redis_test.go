@@ -21,11 +21,8 @@ func TestValidateRedisConfig(t *testing.T) {
 	require.Nil(t, err)
 	assert.NotNil(t, ValidateRedisConfig(ctx, &defaultPool))
 	_, err = redisCli.ConfigSet(ctx, "maxmemory-policy", "noeviction").Result()
-	assert.NotNil(t, ValidateRedisConfig(ctx, &defaultPool))
-	_, err = redisCli.ConfigSet(ctx, "maxmemory", "10000000").Result()
-	require.Nil(t, err)
-
+	require.NoError(t, ValidateRedisConfig(ctx, &defaultPool))
 	for _, poolConf := range CONF.Pool {
-		assert.Nil(t, ValidateRedisConfig(ctx, &poolConf))
+		assert.NoError(t, ValidateRedisConfig(ctx, &poolConf))
 	}
 }

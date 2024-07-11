@@ -37,31 +37,33 @@ type jobImpl struct {
 // NOTE: there is a trick in this factory, the delay is embedded in the jobID.
 // By doing this we can delete the job that's located in hourly AOF, by placing
 // a tombstone record in that AOF.
-func NewJob(namespace, queue string, body []byte, ttl, delay uint32, tries uint16, jobID string) Job {
+func NewJob(namespace, queue string, body []byte, attributes map[string]string, ttl, delay uint32, tries uint16, jobID string) Job {
 	if jobID == "" {
 		jobID = uuid.GenJobIDWithVersion(0, delay)
 	}
 	return &jobImpl{
-		namespace: namespace,
-		queue:     queue,
-		id:        jobID,
-		body:      body,
-		ttl:       ttl,
-		delay:     delay,
-		tries:     tries,
+		namespace:  namespace,
+		queue:      queue,
+		id:         jobID,
+		body:       body,
+		ttl:        ttl,
+		delay:      delay,
+		tries:      tries,
+		attributes: attributes,
 	}
 }
 
-func NewJobWithID(namespace, queue string, body []byte, ttl uint32, tries uint16, jobID string) Job {
+func NewJobWithID(namespace, queue string, body []byte, attributes map[string]string, ttl uint32, tries uint16, jobID string) Job {
 	delay, _ := uuid.ExtractDelaySecondFromUniqueID(jobID)
 	return &jobImpl{
-		namespace: namespace,
-		queue:     queue,
-		id:        jobID,
-		body:      body,
-		ttl:       ttl,
-		delay:     delay,
-		tries:     tries,
+		namespace:  namespace,
+		queue:      queue,
+		id:         jobID,
+		body:       body,
+		ttl:        ttl,
+		delay:      delay,
+		tries:      tries,
+		attributes: attributes,
 	}
 }
 
@@ -108,12 +110,13 @@ func (j *jobImpl) Attributes() map[string]string {
 
 func (j *jobImpl) MarshalText() (text []byte, err error) {
 	var job struct {
-		Namespace string `json:"namespace"`
-		Queue     string `json:"queue"`
-		ID        string `json:"id"`
-		TTL       uint32 `json:"ttl"`
-		ElapsedMS int64  `json:"elapsed_ms"`
-		Body      []byte `json:"body"`
+		Namespace  string            `json:"namespace"`
+		Queue      string            `json:"queue"`
+		ID         string            `json:"id"`
+		TTL        uint32            `json:"ttl"`
+		ElapsedMS  int64             `json:"elapsed_ms"`
+		Body       []byte            `json:"body"`
+		Attributes map[string]string `json:"attributes,omitempty"`
 	}
 	job.Namespace = j.namespace
 	job.Queue = j.queue
@@ -121,6 +124,7 @@ func (j *jobImpl) MarshalText() (text []byte, err error) {
 	job.TTL = j.ttl
 	job.ElapsedMS = j._elapsedMS
 	job.Body = j.body
+	job.Attributes = j.attributes
 	return json.Marshal(job)
 }
 

@@ -12,7 +12,8 @@ import (
 )
 
 type JobPayload struct {
-	Body []byte `json:"body"`
+	Body       []byte            `json:"body"`
+	Attributes map[string]string `json:"attributes,omitempty"`
 }
 
 // Pool stores all the jobs' data. this is a global singleton per engine
@@ -46,7 +47,7 @@ func (p *Pool) Add(j engine.Job) (err error) {
 	// for the version 1 jobID, the payload is a JSON string contains the body.
 	payload := j.Body()
 	if uuid.ExtractJobIDVersion(j.ID()) != 0 {
-		payload, err = json.Marshal(JobPayload{Body: j.Body()})
+		payload, err = json.Marshal(JobPayload{Body: j.Body(), Attributes: j.Attributes()})
 		if err != nil {
 			return err
 		}
@@ -67,12 +68,12 @@ func (p *Pool) Add(j engine.Job) (err error) {
 	return err
 }
 
-func (p *Pool) Get(namespace, queue, jobID string) (body []byte, ttlSecond uint32, err error) {
+func (p *Pool) Get(namespace, queue, jobID string) (*JobPayload, uint32, error) {
 	pipeline := p.redis.Conn.Pipeline()
 	jobKey := join(PoolPrefix, namespace, queue, jobID)
 	getCmd := pipeline.Get(dummyCtx, jobKey)
 	ttlCmd := pipeline.TTL(dummyCtx, jobKey)
-	_, err = pipeline.Exec(dummyCtx)
+	_, err := pipeline.Exec(dummyCtx)
 	if err != nil {
 		if errors.Is(err, go_redis.Nil) {
 			return nil, 0, engine.ErrNotFound
@@ -90,18 +91,20 @@ func (p *Pool) Get(namespace, queue, jobID string) (body []byte, ttlSecond uint3
 		ttl = 0
 	}
 	metrics.poolGetJobs.WithLabelValues(p.redis.Name).Inc()
+
 	if uuid.ExtractJobIDVersion(jobID) == 0 {
 		// For the version 0(legacy) jobID, the val only contains the body,
 		// so we need to return the val as body directly.
-		return val, uint32(ttl), nil
+		return &JobPayload{Body: val}, uint32(ttl), nil
 	}
+
 	// For the version 1 jobID, the value is encoded as a JSON string,
 	// need to unmarshal it before return.
 	var payload JobPayload
 	if err := json.Unmarshal(val, &payload); err != nil {
 		return nil, 0, err
 	}
-	return payload.Body, uint32(ttl), nil
+	return &payload, uint32(ttl), nil
 }
 
 func (p *Pool) Delete(namespace, queue, jobID string) error {

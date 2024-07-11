@@ -19,7 +19,8 @@ const (
 	maxJobSize          = 1024 * 1024
 
 	maxAttributeCount       = 16
-	maxAttributeKeyValueLen = 256
+	maxAttributeKeyLength   = 32
+	maxAttributeValueLength = 128
 	jobAttributePrefix      = "Job-Attr-"
 )
 
@@ -32,27 +33,18 @@ func collectJobAttributes(c *gin.Context) map[string]string {
 			continue
 		}
 		k = strings.TrimPrefix(k, jobAttributePrefix)
-		if len(k) > maxAttributeKeyValueLen {
-			k = k[:maxAttributeKeyValueLen]
+		if len(k) > maxAttributeKeyLength {
+			k = k[:maxAttributeKeyLength]
 		}
-		if len(v[0]) > maxAttributeKeyValueLen {
-			v[0] = v[0][:maxAttributeKeyValueLen]
+		if len(v[0]) > maxAttributeValueLength {
+			v[0] = v[0][:maxAttributeValueLength]
 		}
-		attrs[k] = v[0]
+		attrs[strings.ToLower(k)] = v[0]
 	}
 	if len(attrs) == 0 {
 		return nil
 	}
 	return attrs
-}
-
-func appendJobAttributes(c *gin.Context, job engine.Job) {
-	if job == nil || len(job.Attributes()) == 0 {
-		return
-	}
-	for k, v := range job.Attributes() {
-		c.Header(jobAttributePrefix+k, v)
-	}
 }
 
 // PUT /:namespace/:queue

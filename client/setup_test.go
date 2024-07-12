@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"testing"
@@ -53,7 +53,7 @@ func setup(CONF *config.Config) {
 	if resp.StatusCode != http.StatusCreated {
 		panic("Failed to create testing token")
 	}
-	respBytes, err := ioutil.ReadAll(resp.Body)
+	respBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		panic("Failed to create testing token")
 	}

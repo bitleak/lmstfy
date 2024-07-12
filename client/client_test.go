@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestParseSchemeFromURL(t *testing.T) {
@@ -119,6 +121,29 @@ func TestLmstfyClient_Consume(t *testing.T) {
 	if jobID != job.ID || string(job.Data) != "hello" {
 		t.Fatal("Mismatched data")
 	}
+}
+
+func TestLmstfyClient_PublishWithAttributes(t *testing.T) {
+	cli := NewLmstfyClient(Host, Port, Namespace, Token)
+	jobID, _ := cli.PublishJob(&JobRequest{
+		Queue: "test-publish-attributes",
+		Data:  []byte("hello"),
+		TTL:   10,
+		Tries: 10,
+		Delay: 0,
+		Attributes: map[string]string{
+			"hello": "world",
+			"foo":   "bar",
+		},
+	})
+	job, err := cli.Consume("test-publish-attributes", 10, 3)
+	require.NoError(t, err)
+	require.NotNil(t, job)
+	require.Equal(t, jobID, job.ID)
+	require.Equal(t, "hello", string(job.Data))
+	require.Len(t, job.Attributes, 2)
+	require.Equal(t, "world", job.Attributes["hello"])
+	require.Equal(t, "bar", job.Attributes["foo"])
 }
 
 func TestLmstfyClient_BatchConsume(t *testing.T) {

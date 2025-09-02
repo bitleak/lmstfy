@@ -99,40 +99,41 @@ func (c *LmstfyClient) ConfigRetry(retryCount int, backOffMillisecond int) {
 	c.backOff = backOffMillisecond
 }
 
-// getHTTPTimeout returns the HTTP client timeout duration
 // validateConsumeTimeout validates that the consume timeout is less than HTTP client timeout
 func (c *LmstfyClient) validateConsumeTimeout(timeoutSecond uint32) *APIError {
 	if timeoutSecond == 0 {
 		return nil
 	}
-	
+
 	httpTimeout := c.getHTTPTimeout()
 	if httpTimeout <= time.Duration(timeoutSecond)*time.Second {
 		return &APIError{
-			Type:   RequestErr,
-			Reason: fmt.Sprintf("consume timeout (%d seconds) must be less than HTTP client timeout (%d seconds)", timeoutSecond, int(httpTimeout.Seconds())),
+			Type: RequestErr,
+			Reason: fmt.Sprintf("consume timeout (%d seconds) must be less than HTTP client timeout (%d seconds)",
+				timeoutSecond, int(httpTimeout.Seconds())),
 		}
 	}
 	return nil
 }
 
+// getHTTPTimeout returns the HTTP client timeout duration
 func (c *LmstfyClient) getHTTPTimeout() time.Duration {
 	if c.httpCli == nil {
 		return maxReadTimeout * time.Second
 	}
-	
+
 	// Try to get the timeout from the transport and client
 	if transport, ok := c.httpCli.Transport.(*http.Transport); ok {
 		if transport.ResponseHeaderTimeout > 0 {
 			return transport.ResponseHeaderTimeout
 		}
 	}
-	
+
 	// Check the client timeout
 	if c.httpCli.Timeout > 0 {
 		return c.httpCli.Timeout
 	}
-	
+
 	// Default to maxReadTimeout
 	return maxReadTimeout * time.Second
 }
@@ -280,7 +281,9 @@ RETRY:
 //   - ttlSecond is the time-to-live of the job. If it's zero, job won't expire; if it's positive, the value is the TTL.
 //   - tries is the maximum times the job can be fetched.
 //   - delaySecond is the duration before the job is released for consuming. When it's zero, no delay is applied.
-func (c *LmstfyClient) BatchPublish(queue string, jobs []interface{}, ttlSecond uint32, tries uint16, delaySecond uint32) (jobIDs []string, e error) {
+func (c *LmstfyClient) BatchPublish(queue string, jobs []interface{}, ttlSecond uint32,
+	tries uint16, delaySecond uint32,
+) (jobIDs []string, e error) {
 	query := url.Values{}
 	query.Add("ttl", strconv.FormatUint(uint64(ttlSecond), 10))
 	query.Add("tries", strconv.FormatUint(uint64(tries), 10))
@@ -401,7 +404,7 @@ func (c *LmstfyClient) consume(queue string, ttrSecond, timeoutSecond uint32, fr
 			Reason: fmt.Sprintf("timeout should be < %d", maxReadTimeout),
 		}
 	}
-	
+
 	// Check if HTTP client timeout is larger than consume timeout
 	if err := c.validateConsumeTimeout(timeoutSecond); err != nil {
 		return nil, err
@@ -479,7 +482,9 @@ func (c *LmstfyClient) BatchConsume(queues []string, count, ttrSecond, timeoutSe
 //     these job will be released for consuming again if the `(tries - 1) > 0`.
 //   - count is the job count of this consume. If it's zero or over 100, this method will return an error.
 //     If it's positive, this method would return some jobs, and it's count is between 0 and count.
-func (c *LmstfyClient) BatchConsumeWithFreezeTries(queues []string, count, ttrSecond, timeoutSecond uint32) (jobs []*Job, e error) {
+func (c *LmstfyClient) BatchConsumeWithFreezeTries(queues []string,
+	count, ttrSecond, timeoutSecond uint32,
+) (jobs []*Job, e error) {
 	return c.batchConsume(queues, count, ttrSecond, timeoutSecond, true)
 }
 
@@ -515,7 +520,7 @@ func (c *LmstfyClient) batchConsume(queues []string, count, ttrSecond, timeoutSe
 			Reason: fmt.Sprintf("timeout should be < %d", maxReadTimeout),
 		}
 	}
-	
+
 	// Check if HTTP client timeout is larger than consume timeout
 	if err := c.validateConsumeTimeout(timeoutSecond); err != nil {
 		return nil, err
@@ -617,7 +622,7 @@ func (c *LmstfyClient) consumeFromQueues(ttrSecond, timeoutSecond uint32, freeze
 			Reason: fmt.Sprintf("timeout must be < %d when fetch from multiple queues", maxReadTimeout),
 		}
 	}
-	
+
 	// Check if HTTP client timeout is larger than consume timeout
 	if err := c.validateConsumeTimeout(timeoutSecond); err != nil {
 		return nil, err

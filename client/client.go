@@ -99,6 +99,44 @@ func (c *LmstfyClient) ConfigRetry(retryCount int, backOffMillisecond int) {
 	c.backOff = backOffMillisecond
 }
 
+// getHTTPTimeout returns the HTTP client timeout duration
+// validateConsumeTimeout validates that the consume timeout is less than HTTP client timeout
+func (c *LmstfyClient) validateConsumeTimeout(timeoutSecond uint32) *APIError {
+	if timeoutSecond == 0 {
+		return nil
+	}
+	
+	httpTimeout := c.getHTTPTimeout()
+	if httpTimeout <= time.Duration(timeoutSecond)*time.Second {
+		return &APIError{
+			Type:   RequestErr,
+			Reason: fmt.Sprintf("consume timeout (%d seconds) must be less than HTTP client timeout (%d seconds)", timeoutSecond, int(httpTimeout.Seconds())),
+		}
+	}
+	return nil
+}
+
+func (c *LmstfyClient) getHTTPTimeout() time.Duration {
+	if c.httpCli == nil {
+		return maxReadTimeout * time.Second
+	}
+	
+	// Try to get the timeout from the transport and client
+	if transport, ok := c.httpCli.Transport.(*http.Transport); ok {
+		if transport.ResponseHeaderTimeout > 0 {
+			return transport.ResponseHeaderTimeout
+		}
+	}
+	
+	// Check the client timeout
+	if c.httpCli.Timeout > 0 {
+		return c.httpCli.Timeout
+	}
+	
+	// Default to maxReadTimeout
+	return maxReadTimeout * time.Second
+}
+
 func (c *LmstfyClient) getReq(method, relativePath string, query url.Values, body []byte) (req *http.Request, err error) {
 	targetUrl := url.URL{
 		Scheme:   c.scheme,
@@ -363,6 +401,11 @@ func (c *LmstfyClient) consume(queue string, ttrSecond, timeoutSecond uint32, fr
 			Reason: fmt.Sprintf("timeout should be < %d", maxReadTimeout),
 		}
 	}
+	
+	// Check if HTTP client timeout is larger than consume timeout
+	if err := c.validateConsumeTimeout(timeoutSecond); err != nil {
+		return nil, err
+	}
 	query := url.Values{}
 	query.Add("ttr", strconv.FormatUint(uint64(ttrSecond), 10))
 	query.Add("timeout", strconv.FormatUint(uint64(timeoutSecond), 10))
@@ -472,6 +515,11 @@ func (c *LmstfyClient) batchConsume(queues []string, count, ttrSecond, timeoutSe
 			Reason: fmt.Sprintf("timeout should be < %d", maxReadTimeout),
 		}
 	}
+	
+	// Check if HTTP client timeout is larger than consume timeout
+	if err := c.validateConsumeTimeout(timeoutSecond); err != nil {
+		return nil, err
+	}
 
 	query := url.Values{}
 	query.Add("ttr", strconv.FormatUint(uint64(ttrSecond), 10))
@@ -568,6 +616,11 @@ func (c *LmstfyClient) consumeFromQueues(ttrSecond, timeoutSecond uint32, freeze
 			Type:   RequestErr,
 			Reason: fmt.Sprintf("timeout must be < %d when fetch from multiple queues", maxReadTimeout),
 		}
+	}
+	
+	// Check if HTTP client timeout is larger than consume timeout
+	if err := c.validateConsumeTimeout(timeoutSecond); err != nil {
+		return nil, err
 	}
 	query := url.Values{}
 	query.Add("ttr", strconv.FormatUint(uint64(ttrSecond), 10))

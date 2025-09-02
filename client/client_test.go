@@ -3,6 +3,8 @@ package client
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"net/http"
 	"testing"
 	"time"
 
@@ -305,5 +307,140 @@ func TestLmstfyClient_DeleteDeadLetter(t *testing.T) {
 	job, err := cli.PeekJob("test-delete-deadletter", jobID)
 	if err != nil || (job != nil && job.Data != nil) {
 		t.Fatal("delete deadletter failed")
+	}
+}
+
+func TestLmstfyClient_ValidateConsumeTimeout(t *testing.T) {
+	// Test with default HTTP client (600 seconds timeout)
+	cli := NewLmstfyClient(Host, Port, Namespace, Token)
+	
+	// Test valid timeout (should return nil)
+	err := cli.validateConsumeTimeout(300)
+	if err != nil {
+		t.Fatalf("Expected nil for valid timeout, got: %v", err)
+	}
+	
+	// Test zero timeout (should return nil)
+	err = cli.validateConsumeTimeout(0)
+	if err != nil {
+		t.Fatalf("Expected nil for zero timeout, got: %v", err)
+	}
+	
+	// Test invalid timeout (should return error)
+	err = cli.validateConsumeTimeout(600)
+	if err == nil {
+		t.Fatal("Expected error for timeout >= HTTP timeout")
+	}
+	expectedMsg := "consume timeout (600 seconds) must be less than HTTP client timeout (600 seconds)"
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || apiErr.Reason != expectedMsg {
+		t.Fatalf("Expected error message '%s', got '%v'", expectedMsg, err)
+	}
+}
+
+func TestLmstfyClient_ConsumeWithTimeoutValidation(t *testing.T) {
+	// Test with custom HTTP client with short timeout
+	shortHTTPClient := &http.Client{
+		Timeout: 5 * time.Second,
+	}
+	cli := NewLmstfyWithClient(shortHTTPClient, Host, Port, Namespace, Token)
+	
+	// Test consume with valid timeout
+	job, err := cli.Consume("test-timeout-validation", 10, 3)
+	if err != nil {
+		t.Fatalf("Consume should succeed with valid timeout: %v", err)
+	}
+	if job != nil {
+		cli.Ack("test-timeout-validation", job.ID)
+	}
+	
+	// Test consume with invalid timeout (should fail)
+	_, err = cli.Consume("test-timeout-validation", 10, 6)
+	if err == nil {
+		t.Fatal("Consume should fail with timeout >= HTTP timeout")
+	}
+	expectedMsg := "consume timeout (6 seconds) must be less than HTTP client timeout (5 seconds)"
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || apiErr.Reason != expectedMsg {
+		t.Fatalf("Expected error message '%s', got '%v'", expectedMsg, err)
+	}
+}
+
+func TestLmstfyClient_BatchConsumeWithTimeoutValidation(t *testing.T) {
+	// Test with custom HTTP client with short timeout
+	shortHTTPClient := &http.Client{
+		Timeout: 5 * time.Second,
+	}
+	cli := NewLmstfyWithClient(shortHTTPClient, Host, Port, Namespace, Token)
+	
+	// Test batch consume with valid timeout
+	queues := []string{"test-batch-timeout-validation"}
+	jobs, err := cli.BatchConsume(queues, 3, 10, 3)
+	if err != nil {
+		t.Fatalf("BatchConsume should succeed with valid timeout: %v", err)
+	}
+	
+	// Ack any jobs that were returned
+	for _, job := range jobs {
+		cli.Ack("test-batch-timeout-validation", job.ID)
+	}
+	
+	// Test batch consume with invalid timeout (should fail)
+	_, err = cli.BatchConsume(queues, 3, 10, 6)
+	if err == nil {
+		t.Fatal("BatchConsume should fail with timeout >= HTTP timeout")
+	}
+	expectedMsg := "consume timeout (6 seconds) must be less than HTTP client timeout (5 seconds)"
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || apiErr.Reason != expectedMsg {
+		t.Fatalf("Expected error message '%s', got '%v'", expectedMsg, err)
+	}
+}
+
+func TestLmstfyClient_ConsumeFromQueuesWithTimeoutValidation(t *testing.T) {
+	// Test with custom HTTP client with short timeout
+	shortHTTPClient := &http.Client{
+		Timeout: 5 * time.Second,
+	}
+	cli := NewLmstfyWithClient(shortHTTPClient, Host, Port, Namespace, Token)
+	
+	// Test consume from queues with valid timeout
+	job, err := cli.ConsumeFromQueues(10, 3, "test-multi-queue-timeout-validation")
+	if err != nil {
+		t.Fatalf("ConsumeFromQueues should succeed with valid timeout: %v", err)
+	}
+	if job != nil {
+		cli.Ack("test-multi-queue-timeout-validation", job.ID)
+	}
+	
+	// Test consume from queues with invalid timeout (should fail)
+	_, err = cli.ConsumeFromQueues(10, 6, "test-multi-queue-timeout-validation")
+	if err == nil {
+		t.Fatal("ConsumeFromQueues should fail with timeout >= HTTP timeout")
+	}
+	expectedMsg := "consume timeout (6 seconds) must be less than HTTP client timeout (5 seconds)"
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || apiErr.Reason != expectedMsg {
+		t.Fatalf("Expected error message '%s', got '%v'", expectedMsg, err)
+	}
+}
+
+func TestLmstfyClient_GetHTTPTimeout(t *testing.T) {
+	// Test with default HTTP client
+	cli := NewLmstfyClient(Host, Port, Namespace, Token)
+	timeout := cli.getHTTPTimeout()
+	if timeout != 600*time.Second {
+		t.Fatalf("Expected 600 seconds timeout for default client, got %v", timeout)
+	}
+	
+	// Test with custom HTTP client
+	customTimeout := 30 * time.Second
+	customClient := &http.Client{
+		Timeout: customTimeout,
+	}
+	cli2 := NewLmstfyWithClient(customClient, Host, Port, Namespace, Token)
+	timeout = cli2.getHTTPTimeout()
+	if timeout != customTimeout {
+		t.Fatalf("Expected %v timeout for custom client, got %v", customTimeout, timeout)
 	}
 }

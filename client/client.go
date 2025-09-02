@@ -122,16 +122,16 @@ func (c *LmstfyClient) getHTTPTimeout() time.Duration {
 		return maxReadTimeout * time.Second
 	}
 
+	// Check the client timeout
+	if c.httpCli.Timeout > 0 {
+		return c.httpCli.Timeout
+	}
+
 	// Try to get the timeout from the transport and client
 	if transport, ok := c.httpCli.Transport.(*http.Transport); ok {
 		if transport.ResponseHeaderTimeout > 0 {
 			return transport.ResponseHeaderTimeout
 		}
-	}
-
-	// Check the client timeout
-	if c.httpCli.Timeout > 0 {
-		return c.httpCli.Timeout
 	}
 
 	// Default to maxReadTimeout

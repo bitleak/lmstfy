@@ -115,7 +115,9 @@ func (q *Queue) Destroy() (count int64, err error) {
 	poolPrefix := PoolJobKeyPrefix(q.name.Namespace, q.name.Queue)
 	var batchSize int64 = 100
 	for {
-		val, err := q.redis.Conn.EvalSha(dummyCtx, q.destroySHA, []string{q.Name(), poolPrefix}, batchSize).Result()
+		val, err := q.redis.Conn.EvalSha(dummyCtx, q.destroySHA, []string{
+			q.Name(), poolPrefix,
+		}, batchSize).Result()
 		if err != nil {
 			if isLuaScriptGone(err) {
 				if err := PreloadDeadLetterLuaScript(q.redis); err != nil {
@@ -174,7 +176,9 @@ func popMultiQueues(redis *RedisInstance, queueNames []string) (string, string, 
 }
 
 // Poll from multiple queues using blocking method; OR pop a job from one queue using non-blocking method
-func PollQueues(redis *RedisInstance, timer *Timer, queueNames []QueueName, timeoutSecond, ttrSecond uint32) (queueName *QueueName, jobID string, retries uint16, err error) {
+func PollQueues(redis *RedisInstance, timer *Timer, queueNames []QueueName,
+	timeoutSecond, ttrSecond uint32,
+) (queueName *QueueName, jobID string, retries uint16, err error) {
 	defer func() {
 		if jobID != "" {
 			metrics.queuePopJobs.WithLabelValues(redis.Name).Inc()
@@ -236,7 +240,8 @@ func PollQueues(redis *RedisInstance, timer *Timer, queueNames []QueueName, time
 }
 
 // Pack (tries, jobID) into lua struct pack of format "HHHc0", in lua this can be done:
-//   ```local data = struct.pack("HHc0", tries, #job_id, job_id)```
+//
+//	```local data = struct.pack("HHc0", tries, #job_id, job_id)```
 func structPack(tries uint16, jobID string) (data string) {
 	buf := make([]byte, 2+2+len(jobID))
 	binary.LittleEndian.PutUint16(buf[0:], tries)
@@ -246,7 +251,8 @@ func structPack(tries uint16, jobID string) (data string) {
 }
 
 // Unpack the "HHc0" lua struct format, in lua this can be done:
-//   ```local tries, job_id = struct.unpack("HHc0", data)```
+//
+//	```local tries, job_id = struct.unpack("HHc0", data)```
 func structUnpack(data string) (tries uint16, jobID string, err error) {
 	buf := []byte(data)
 	h1 := binary.LittleEndian.Uint16(buf[0:])

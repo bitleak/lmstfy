@@ -313,19 +313,19 @@ func TestLmstfyClient_DeleteDeadLetter(t *testing.T) {
 func TestLmstfyClient_ValidateConsumeTimeout(t *testing.T) {
 	// Test with default HTTP client (600 seconds timeout)
 	cli := NewLmstfyClient(Host, Port, Namespace, Token)
-	
+
 	// Test valid timeout (should return nil)
 	err := cli.validateConsumeTimeout(300)
 	if err != nil {
 		t.Fatalf("Expected nil for valid timeout, got: %v", err)
 	}
-	
+
 	// Test zero timeout (should return nil)
 	err = cli.validateConsumeTimeout(0)
 	if err != nil {
 		t.Fatalf("Expected nil for zero timeout, got: %v", err)
 	}
-	
+
 	// Test invalid timeout (should return error)
 	err = cli.validateConsumeTimeout(600)
 	if err == nil {
@@ -344,7 +344,7 @@ func TestLmstfyClient_ConsumeWithTimeoutValidation(t *testing.T) {
 		Timeout: 5 * time.Second,
 	}
 	cli := NewLmstfyWithClient(shortHTTPClient, Host, Port, Namespace, Token)
-	
+
 	// Test consume with valid timeout
 	job, err := cli.Consume("test-timeout-validation", 10, 3)
 	if err != nil {
@@ -353,7 +353,7 @@ func TestLmstfyClient_ConsumeWithTimeoutValidation(t *testing.T) {
 	if job != nil {
 		cli.Ack("test-timeout-validation", job.ID)
 	}
-	
+
 	// Test consume with invalid timeout (should fail)
 	_, err = cli.Consume("test-timeout-validation", 10, 6)
 	if err == nil {
@@ -372,19 +372,19 @@ func TestLmstfyClient_BatchConsumeWithTimeoutValidation(t *testing.T) {
 		Timeout: 5 * time.Second,
 	}
 	cli := NewLmstfyWithClient(shortHTTPClient, Host, Port, Namespace, Token)
-	
+
 	// Test batch consume with valid timeout
 	queues := []string{"test-batch-timeout-validation"}
 	jobs, err := cli.BatchConsume(queues, 3, 10, 3)
 	if err != nil {
 		t.Fatalf("BatchConsume should succeed with valid timeout: %v", err)
 	}
-	
+
 	// Ack any jobs that were returned
 	for _, job := range jobs {
 		cli.Ack("test-batch-timeout-validation", job.ID)
 	}
-	
+
 	// Test batch consume with invalid timeout (should fail)
 	_, err = cli.BatchConsume(queues, 3, 10, 6)
 	if err == nil {
@@ -403,7 +403,7 @@ func TestLmstfyClient_ConsumeFromQueuesWithTimeoutValidation(t *testing.T) {
 		Timeout: 5 * time.Second,
 	}
 	cli := NewLmstfyWithClient(shortHTTPClient, Host, Port, Namespace, Token)
-	
+
 	// Test consume from queues with valid timeout
 	job, err := cli.ConsumeFromQueues(10, 3, "test-multi-queue-timeout-validation")
 	if err != nil {
@@ -412,7 +412,7 @@ func TestLmstfyClient_ConsumeFromQueuesWithTimeoutValidation(t *testing.T) {
 	if job != nil {
 		cli.Ack("test-multi-queue-timeout-validation", job.ID)
 	}
-	
+
 	// Test consume from queues with invalid timeout (should fail)
 	_, err = cli.ConsumeFromQueues(10, 6, "test-multi-queue-timeout-validation")
 	if err == nil {
@@ -432,7 +432,7 @@ func TestLmstfyClient_GetHTTPTimeout(t *testing.T) {
 	if timeout != 600*time.Second {
 		t.Fatalf("Expected 600 seconds timeout for default client, got %v", timeout)
 	}
-	
+
 	// Test with custom HTTP client
 	customTimeout := 30 * time.Second
 	customClient := &http.Client{

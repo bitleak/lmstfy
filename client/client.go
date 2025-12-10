@@ -2,6 +2,7 @@ package client
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -138,22 +139,22 @@ func (c *LmstfyClient) getHTTPTimeout() time.Duration {
 	return maxReadTimeout * time.Second
 }
 
-func (c *LmstfyClient) getReq(method, relativePath string, query url.Values, body []byte) (req *http.Request, err error) {
+func (c *LmstfyClient) getReq(ctx context.Context, method, relativePath string, query url.Values, body []byte) (req *http.Request, err error) {
 	targetUrl := url.URL{
 		Scheme:   c.scheme,
 		Host:     fmt.Sprintf("%s:%d", c.Host, c.Port),
 		Path:     path.Join("/api", c.Namespace, relativePath),
 		RawQuery: query.Encode(),
 	}
-	if body == nil {
-		req, err = http.NewRequest(method, targetUrl.String(), nil)
-		if err != nil {
-			return
-		}
-		req.Header.Add("X-Token", c.Token)
-		return
+	var reader io.Reader
+	if body != nil {
+		reader = bytes.NewReader(body)
 	}
-	req, err = http.NewRequest(method, targetUrl.String(), bytes.NewReader(body))
+	if ctx != nil {
+		req, err = http.NewRequestWithContext(ctx, method, targetUrl.String(), reader)
+	} else {
+		req, err = http.NewRequest(method, targetUrl.String(), reader)
+	}
 	if err != nil {
 		return
 	}
@@ -209,7 +210,7 @@ func (c *LmstfyClient) publish(
 		relativePath = path.Join(relativePath, "job", ackJobID)
 	}
 RETRY:
-	req, err := c.getReq(http.MethodPut, relativePath, query, data)
+	req, err := c.getReq(nil, http.MethodPut, relativePath, query, data)
 	if err != nil {
 		return "", &APIError{
 			Type:   RequestErr,
@@ -298,7 +299,7 @@ func (c *LmstfyClient) BatchPublish(queue string, jobs []interface{}, ttlSecond 
 		}
 	}
 RETRY:
-	req, err := c.getReq(http.MethodPut, relativePath, query, data)
+	req, err := c.getReq(nil, http.MethodPut, relativePath, query, data)
 	if err != nil {
 		return nil, &APIError{
 			Type:   RequestErr,
@@ -366,7 +367,7 @@ RETRY:
 //   - timeoutSecond is the long-polling wait time. If it's zero, this method will return immediately
 //     with or without a job; if it's positive, this method would polling for new job until timeout.
 func (c *LmstfyClient) Consume(queue string, ttrSecond, timeoutSecond uint32) (job *Job, e error) {
-	return c.consume(queue, ttrSecond, timeoutSecond, false)
+	return c.consume(nil, queue, ttrSecond, timeoutSecond, false)
 }
 
 // ConsumeWithFreezeTries a job. Consuming with retries will not decrease the job's tries.
@@ -375,7 +376,7 @@ func (c *LmstfyClient) Consume(queue string, ttrSecond, timeoutSecond uint32) (j
 //   - timeoutSecond is the long-polling wait time. If it's zero, this method will return immediately
 //     with or without a job; if it's positive, this method would polling for new job until timeout.
 func (c *LmstfyClient) ConsumeWithFreezeTries(queue string, ttrSecond, timeoutSecond uint32) (job *Job, e error) {
-	return c.consume(queue, ttrSecond, timeoutSecond, true)
+	return c.consume(nil, queue, ttrSecond, timeoutSecond, true)
 }
 
 // consume a job. Consuming will decrease the job's tries by 1 first.
@@ -385,7 +386,8 @@ func (c *LmstfyClient) ConsumeWithFreezeTries(queue string, ttrSecond, timeoutSe
 //     with or without a job; if it's positive, this method would polling for new job until timeout.
 //   - free_tries was used to determine whether to decrease the tries or not when consuming, if the tries
 //     decreases to 0, the job would move into dead letter. Default was false.
-func (c *LmstfyClient) consume(queue string, ttrSecond, timeoutSecond uint32, freezeTries bool) (job *Job, e error) {
+func (c *LmstfyClient) consume(ctx context.Context, queue string, ttrSecond, timeoutSecond uint32, freezeTries bool) (
+	job *Job, e error) {
 	if strings.TrimSpace(queue) == "" {
 		return nil, &APIError{
 			Type:   RequestErr,
@@ -413,7 +415,7 @@ func (c *LmstfyClient) consume(queue string, ttrSecond, timeoutSecond uint32, fr
 	query.Add("ttr", strconv.FormatUint(uint64(ttrSecond), 10))
 	query.Add("timeout", strconv.FormatUint(uint64(timeoutSecond), 10))
 	query.Add("freeze_tries", strconv.FormatBool(freezeTries))
-	req, err := c.getReq(http.MethodGet, queue, query, nil)
+	req, err := c.getReq(ctx, http.MethodGet, queue, query, nil)
 	if err != nil {
 		return nil, &APIError{
 			Type:   RequestErr,
@@ -474,7 +476,7 @@ func (c *LmstfyClient) consume(queue string, ttrSecond, timeoutSecond uint32, fr
 //   - count is the job count of this consume. If it's zero or over 100, this method will return an error.
 //     If it's positive, this method would return some jobs, and it's count is between 0 and count.
 func (c *LmstfyClient) BatchConsume(queues []string, count, ttrSecond, timeoutSecond uint32) (jobs []*Job, e error) {
-	return c.batchConsume(queues, count, ttrSecond, timeoutSecond, false)
+	return c.batchConsume(nil, queues, count, ttrSecond, timeoutSecond, false)
 }
 
 // BatchConsume consume some jobs. Consuming with freeze tries will not decrease these jobs tries.
@@ -485,7 +487,7 @@ func (c *LmstfyClient) BatchConsume(queues []string, count, ttrSecond, timeoutSe
 func (c *LmstfyClient) BatchConsumeWithFreezeTries(queues []string,
 	count, ttrSecond, timeoutSecond uint32,
 ) (jobs []*Job, e error) {
-	return c.batchConsume(queues, count, ttrSecond, timeoutSecond, true)
+	return c.batchConsume(nil, queues, count, ttrSecond, timeoutSecond, true)
 }
 
 // batchConsume consume some jobs. Consuming will decrease these jobs tries by 1 first.
@@ -494,8 +496,8 @@ func (c *LmstfyClient) BatchConsumeWithFreezeTries(queues []string,
 //   - count is the job count of this consume. If it's zero or over 100, this method will return an error.
 //     If it's positive, this method would return some jobs, and it's count is between 0 and count.
 //   - free_tries was used to determine whether to decrease the tries or not when consuming, if the tries
-//     decreases to 0, the job would move into dead letter. Default was false.
-func (c *LmstfyClient) batchConsume(queues []string, count, ttrSecond, timeoutSecond uint32, freezeTries bool) (jobs []*Job, e error) {
+//     decreases to 0, the job would move into dead letter. Default was false
+func (c *LmstfyClient) batchConsume(ctx context.Context, queues []string, count, ttrSecond, timeoutSecond uint32, freezeTries bool) (jobs []*Job, e error) {
 	if len(queues) == 0 {
 		return nil, &APIError{
 			Type:   RequestErr,
@@ -531,7 +533,7 @@ func (c *LmstfyClient) batchConsume(queues []string, count, ttrSecond, timeoutSe
 	query.Add("count", strconv.FormatUint(uint64(count), 10))
 	query.Add("timeout", strconv.FormatUint(uint64(timeoutSecond), 10))
 	query.Add("freeze_tries", strconv.FormatBool(freezeTries))
-	req, err := c.getReq(http.MethodGet, strings.Join(queues, ","), query, nil)
+	req, err := c.getReq(ctx, http.MethodGet, strings.Join(queues, ","), query, nil)
 	if err != nil {
 		return nil, &APIError{
 			Type:   RequestErr,
@@ -596,14 +598,14 @@ func (c *LmstfyClient) batchConsume(queues []string, count, ttrSecond, timeoutSe
 // ConsumeFromQueues(120, 5, "queue-a", "queue-b", "queue-c")
 // if all the queues have jobs to be fetched, the job in `queue-a` will be return.
 func (c *LmstfyClient) ConsumeFromQueues(ttrSecond, timeoutSecond uint32, queues ...string) (job *Job, e error) {
-	return c.consumeFromQueues(ttrSecond, timeoutSecond, false, queues...)
+	return c.consumeFromQueues(nil, ttrSecond, timeoutSecond, false, queues...)
 }
 
 func (c *LmstfyClient) ConsumeFromQueuesWithFreezeTries(ttrSecond, timeoutSecond uint32, queues ...string) (job *Job, e error) {
-	return c.consumeFromQueues(ttrSecond, timeoutSecond, true, queues...)
+	return c.consumeFromQueues(nil, ttrSecond, timeoutSecond, true, queues...)
 }
 
-func (c *LmstfyClient) consumeFromQueues(ttrSecond, timeoutSecond uint32, freezeTries bool, queues ...string) (job *Job, e error) {
+func (c *LmstfyClient) consumeFromQueues(ctx context.Context, ttrSecond, timeoutSecond uint32, freezeTries bool, queues ...string) (job *Job, e error) {
 	if len(queues) == 0 {
 		return nil, &APIError{
 			Type:   RequestErr,
@@ -631,7 +633,7 @@ func (c *LmstfyClient) consumeFromQueues(ttrSecond, timeoutSecond uint32, freeze
 	query.Add("ttr", strconv.FormatUint(uint64(ttrSecond), 10))
 	query.Add("timeout", strconv.FormatUint(uint64(timeoutSecond), 10))
 	query.Add("freeze_tries", strconv.FormatBool(freezeTries))
-	req, err := c.getReq(http.MethodGet, strings.Join(queues, ","), query, nil)
+	req, err := c.getReq(ctx, http.MethodGet, strings.Join(queues, ","), query, nil)
 	if err != nil {
 		return nil, &APIError{
 			Type:   RequestErr,
@@ -681,7 +683,7 @@ func (c *LmstfyClient) consumeFromQueues(ttrSecond, timeoutSecond uint32, freeze
 
 // Mark a job as finished, so it won't be retried by others.
 func (c *LmstfyClient) Ack(queue, jobID string) *APIError {
-	req, err := c.getReq(http.MethodDelete, path.Join(queue, "job", jobID), nil, nil)
+	req, err := c.getReq(nil, http.MethodDelete, path.Join(queue, "job", jobID), nil, nil)
 	if err != nil {
 		return &APIError{
 			Type:   RequestErr,
@@ -708,7 +710,7 @@ func (c *LmstfyClient) Ack(queue, jobID string) *APIError {
 
 // Get queue size. how many jobs are ready for consuming
 func (c *LmstfyClient) QueueSize(queue string) (int, *APIError) {
-	req, err := c.getReq(http.MethodGet, path.Join(queue, "size"), nil, nil)
+	req, err := c.getReq(nil, http.MethodGet, path.Join(queue, "size"), nil, nil)
 	if err != nil {
 		return 0, &APIError{
 			Type:   RequestErr,
@@ -756,7 +758,7 @@ func (c *LmstfyClient) QueueSize(queue string) (int, *APIError) {
 
 // Peek the job in the head of the queue
 func (c *LmstfyClient) PeekQueue(queue string) (job *Job, e *APIError) {
-	req, err := c.getReq(http.MethodGet, path.Join(queue, "peek"), nil, nil)
+	req, err := c.getReq(nil, http.MethodGet, path.Join(queue, "peek"), nil, nil)
 	if err != nil {
 		return nil, &APIError{
 			Type:   RequestErr,
@@ -806,7 +808,7 @@ func (c *LmstfyClient) PeekQueue(queue string) (job *Job, e *APIError) {
 
 // Peek a specific job data
 func (c *LmstfyClient) PeekJob(queue, jobID string) (job *Job, e *APIError) {
-	req, err := c.getReq(http.MethodGet, path.Join(queue, "job", jobID), nil, nil)
+	req, err := c.getReq(nil, http.MethodGet, path.Join(queue, "job", jobID), nil, nil)
 	if err != nil {
 		return nil, &APIError{
 			Type:   RequestErr,
@@ -856,7 +858,7 @@ func (c *LmstfyClient) PeekJob(queue, jobID string) (job *Job, e *APIError) {
 
 // Peek the deadletter of the queue
 func (c *LmstfyClient) PeekDeadLetter(queue string) (deadLetterSize int, deadLetterHead string, e *APIError) {
-	req, err := c.getReq(http.MethodGet, path.Join(queue, "deadletter"), nil, nil)
+	req, err := c.getReq(nil, http.MethodGet, path.Join(queue, "deadletter"), nil, nil)
 	if err != nil {
 		return 0, "", &APIError{
 			Type:   RequestErr,
@@ -919,7 +921,7 @@ func (c *LmstfyClient) RespawnDeadLetter(queue string, limit, ttlSecond int64) (
 	query := url.Values{}
 	query.Add("limit", strconv.FormatInt(limit, 10))
 	query.Add("ttl", strconv.FormatInt(ttlSecond, 10))
-	req, err := c.getReq(http.MethodPut, path.Join(queue, "deadletter"), query, nil)
+	req, err := c.getReq(nil, http.MethodPut, path.Join(queue, "deadletter"), query, nil)
 	if err != nil {
 		return 0, &APIError{
 			Type:   RequestErr,
@@ -972,7 +974,7 @@ func (c *LmstfyClient) DeleteDeadLetter(queue string, limit int64) *APIError {
 	}
 	query := url.Values{}
 	query.Add("limit", strconv.FormatInt(limit, 10))
-	req, err := c.getReq(http.MethodDelete, path.Join(queue, "deadletter"), query, nil)
+	req, err := c.getReq(nil, http.MethodDelete, path.Join(queue, "deadletter"), query, nil)
 	if err != nil {
 		return &APIError{
 			Type:   RequestErr,
@@ -995,6 +997,39 @@ func (c *LmstfyClient) DeleteDeadLetter(queue string, limit int64) *APIError {
 		}
 	}
 	return nil
+}
+
+// ConsumeWithContext a context version of Consume
+func (c *LmstfyClient) ConsumeWithContext(ctx context.Context, queue string, ttrSecond, timeoutSecond uint32) (*Job, error) {
+	return c.consume(ctx, queue, ttrSecond, timeoutSecond, false)
+}
+
+// ConsumeWithFreezeTriesWithContext a context version of ConsumeWithFreezeTries
+func (c *LmstfyClient) ConsumeWithFreezeTriesWithContext(ctx context.Context, queue string, ttrSecond, timeoutSecond uint32) (*Job, error) {
+	return c.consume(ctx, queue, ttrSecond, timeoutSecond, true)
+}
+
+// BatchConsumeWithContext a context version of BatchConsume
+func (c *LmstfyClient) BatchConsumeWithContext(ctx context.Context, queues []string, count, ttrSecond, timeoutSecond uint32) ([]*Job, error) {
+	return c.batchConsume(ctx, queues, count, ttrSecond, timeoutSecond, false)
+}
+
+// BatchConsumeWithFreezeTriesWithContext a context version of BatchConsumeWithFreezeTries
+func (c *LmstfyClient) BatchConsumeWithFreezeTriesWithContext(ctx context.Context, queues []string,
+	count, ttrSecond, timeoutSecond uint32) ([]*Job, error) {
+	return c.batchConsume(ctx, queues, count, ttrSecond, timeoutSecond, true)
+}
+
+// ConsumeFromQueuesWithContext a context version of ConsumeFromQueues
+func (c *LmstfyClient) ConsumeFromQueuesWithContext(ctx context.Context, ttrSecond, timeoutSecond uint32,
+	queues ...string) (*Job, error) {
+	return c.consumeFromQueues(ctx, ttrSecond, timeoutSecond, false, queues...)
+}
+
+// ConsumeFromQueuesWithFreezeTriesWithContext a context version of ConsumeFromQueuesWithFreezeTries
+func (c *LmstfyClient) ConsumeFromQueuesWithFreezeTriesWithContext(ctx context.Context, ttrSecond, timeoutSecond uint32,
+	queues ...string) (*Job, error) {
+	return c.consumeFromQueues(ctx, ttrSecond, timeoutSecond, true, queues...)
 }
 
 func discardResponseBody(resp io.ReadCloser) {

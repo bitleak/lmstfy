@@ -2,6 +2,7 @@ package client
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -442,5 +443,161 @@ func TestLmstfyClient_GetHTTPTimeout(t *testing.T) {
 	timeout = cli2.getHTTPTimeout()
 	if timeout != customTimeout {
 		t.Fatalf("Expected %v timeout for custom client, got %v", customTimeout, timeout)
+	}
+}
+
+func TestLmstfyClient_PublishWithContext(t *testing.T) {
+	cli := NewLmstfyClient(Host, Port, Namespace, Token)
+	cli.ConfigRetry(3, 5000)
+	jobID, err := cli.PublishWithContext(context.Background(), "test-publish-ctx", []byte("hello"), 0, 1, 0)
+	if err != nil {
+		t.Fatalf("Failed to send job: %s", err)
+	}
+	if jobID == "" {
+		t.Fatal("Expected jobID")
+	}
+}
+
+func TestLmstfyClient_PublishWithContext_Cancelled(t *testing.T) {
+	cli := NewLmstfyClient(Host, Port, Namespace, Token)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel before call
+
+	start := time.Now()
+	_, err := cli.PublishWithContext(ctx, "test-publish-ctx-cancelled", []byte("hello"), 0, 1, 0)
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("Expected error from cancelled context")
+	}
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || apiErr.Type != RequestErr {
+		t.Fatalf("Expected RequestErr APIError, got %v", err)
+	}
+	if elapsed > time.Second {
+		t.Fatalf("Expected immediate return, took %v", elapsed)
+	}
+}
+
+func TestLmstfyClient_PublishWithContext_DeadlineExceeded(t *testing.T) {
+	// Point at an unreachable port so the HTTP dial hangs until ctx deadline.
+	cli := NewLmstfyClient("127.0.0.1", 1, Namespace, Token)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+
+	start := time.Now()
+	_, err := cli.PublishWithContext(ctx, "test-publish-ctx-deadline", []byte("hello"), 0, 1, 0)
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("Expected error from deadline-exceeded context")
+	}
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || apiErr.Type != RequestErr {
+		t.Fatalf("Expected RequestErr APIError, got %v", err)
+	}
+	// Should return well before the 600s maxReadTimeout.
+	if elapsed > 5*time.Second {
+		t.Fatalf("Expected fast return on deadline, took %v", elapsed)
+	}
+}
+
+func TestLmstfyClient_PublishJobWithContext(t *testing.T) {
+	cli := NewLmstfyClient(Host, Port, Namespace, Token)
+	cli.ConfigRetry(3, 5000)
+	jobID, err := cli.PublishJobWithContext(context.Background(), &JobRequest{
+		Queue: "test-publishjob-ctx",
+		Data:  []byte("hello"),
+		TTL:   0,
+		Tries: 1,
+		Delay: 0,
+	})
+	if err != nil {
+		t.Fatalf("Failed to send job: %s", err)
+	}
+	if jobID == "" {
+		t.Fatal("Expected jobID")
+	}
+}
+
+func TestLmstfyClient_RePublishWithContext(t *testing.T) {
+	cli := NewLmstfyClient(Host, Port, Namespace, Token)
+	cli.ConfigRetry(3, 5000)
+	jobID, err := cli.PublishWithContext(context.Background(), "test-republish-ctx", []byte("hello"), 0, 1, 0)
+	if err != nil {
+		t.Fatalf("Failed to send job: %s", err)
+	}
+	job, err := cli.Consume("test-republish-ctx", 5, 1)
+	if err != nil {
+		t.Fatalf("Failed to consume job: %s", err)
+	}
+	if jobID != job.ID {
+		t.Fatal("Mismatched jobID")
+	}
+	newJobID, err := cli.RePublishWithContext(context.Background(), job, 10, 1, 0)
+	if err != nil {
+		t.Fatalf("Failed to re-send job: %s", err)
+	}
+	if newJobID == "" {
+		t.Fatal("Expected a new jobID")
+	}
+}
+
+func TestLmstfyClient_RePublishJobWithContext(t *testing.T) {
+	cli := NewLmstfyClient(Host, Port, Namespace, Token)
+	cli.ConfigRetry(3, 5000)
+	// Seed a job first.
+	jobID, err := cli.PublishWithContext(context.Background(), "test-republishjob-ctx", []byte("hello"), 0, 1, 0)
+	if err != nil {
+		t.Fatalf("Failed to seed job: %s", err)
+	}
+	job, err := cli.Consume("test-republishjob-ctx", 5, 1)
+	if err != nil {
+		t.Fatalf("Failed to consume seed job: %s", err)
+	}
+	if jobID != job.ID {
+		t.Fatal("Mismatched jobID")
+	}
+	newJobID, err := cli.RePublishJobWithContext(context.Background(), &JobRequest{
+		Queue: job.Queue,
+		ID:    job.ID,
+		Data:  job.Data,
+		TTL:   10,
+		Tries: 1,
+		Delay: 0,
+	})
+	if err != nil {
+		t.Fatalf("Failed to re-publish job: %s", err)
+	}
+	if newJobID == "" {
+		t.Fatal("Expected a new jobID")
+	}
+}
+
+func TestLmstfyClient_BatchPublishWithContext(t *testing.T) {
+	cli := NewLmstfyClient(Host, Port, Namespace, Token)
+	cli.ConfigRetry(3, 5000)
+	jobsData := []interface{}{"a", "b", "c"}
+	jobIDs, err := cli.BatchPublishWithContext(context.Background(), "test-batchpublish-ctx", jobsData, 10, 1, 0)
+	if err != nil {
+		t.Fatalf("Failed to batch publish: %s", err)
+	}
+	if len(jobIDs) != len(jobsData) {
+		t.Fatalf("Mismatched jobIDs count: got %d, want %d", len(jobIDs), len(jobsData))
+	}
+}
+
+func TestLmstfyClient_BatchPublishWithContext_Cancelled(t *testing.T) {
+	cli := NewLmstfyClient(Host, Port, Namespace, Token)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := cli.BatchPublishWithContext(ctx, "test-batchpublish-ctx-cancelled", []interface{}{"a"}, 10, 1, 0)
+	if err == nil {
+		t.Fatal("Expected error from cancelled context")
+	}
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || apiErr.Type != RequestErr {
+		t.Fatalf("Expected RequestErr APIError, got %v", err)
 	}
 }

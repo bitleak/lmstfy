@@ -19,6 +19,23 @@ c.ConfigRetry(3, 50) // optional, config the client to retry when some errors ha
 jobID, err := c.Publish("q1", []byte("hello"), 0, 3, 5)
 ```
 
+### Producer with context
+
+Use the `*WithContext` variants to propagate cancellation or deadlines into the
+HTTP request. If the context is cancelled or its deadline is exceeded, the
+underlying `http.Client.Do` returns promptly and the call surfaces an `*APIError`
+of type `RequestErr` — without waiting for the HTTP client's own timeout.
+
+```
+ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+defer cancel()
+
+jobID, err := c.PublishWithContext(ctx, "q1", []byte("hello"), 0, 3, 5)
+```
+
+Same pattern applies for `PublishJobWithContext`, `RePublishWithContext`,
+`RePublishJobWithContext`, and `BatchPublishWithContext`.
+
 ### Consumer example
 
 ```

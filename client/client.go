@@ -169,11 +169,11 @@ func (c *LmstfyClient) getReq(ctx context.Context, method, relativePath string, 
 //   - tries is the maximum times the job can be fetched.
 //   - delaySecond is the duration before the job is released for consuming. When it's zero, no delay is applied.
 func (c *LmstfyClient) Publish(queue string, data []byte, ttlSecond uint32, tries uint16, delaySecond uint32) (jobID string, e error) {
-	return c.publish(queue, "", data, nil, ttlSecond, tries, delaySecond)
+	return c.publish(nil, queue, "", data, nil, ttlSecond, tries, delaySecond)
 }
 
 func (c *LmstfyClient) PublishJob(job *JobRequest) (jobID string, e error) {
-	return c.publish(job.Queue, "", job.Data, job.Attributes, job.TTL, job.Tries, job.Delay)
+	return c.publish(nil, job.Queue, "", job.Data, job.Attributes, job.TTL, job.Tries, job.Delay)
 }
 
 // Deprecated: Use RePublishJob instead
@@ -183,14 +183,35 @@ func (c *LmstfyClient) PublishJob(job *JobRequest) (jobID string, e error) {
 //   - tries is the maximum times the job can be fetched.
 //   - delaySecond is the duration before the job is released for consuming. When it's zero, no delay is applied.
 func (c *LmstfyClient) RePublish(job *Job, ttlSecond uint32, tries uint16, delaySecond uint32) (jobID string, e error) {
-	return c.publish(job.Queue, job.ID, job.Data, nil, ttlSecond, tries, delaySecond)
+	return c.publish(nil, job.Queue, job.ID, job.Data, nil, ttlSecond, tries, delaySecond)
 }
 
 func (c *LmstfyClient) RePublishJob(job *JobRequest) (jobID string, e error) {
-	return c.publish(job.Queue, jobID, job.Data, job.Attributes, job.TTL, job.Tries, job.Delay)
+	return c.publish(nil, job.Queue, job.ID, job.Data, job.Attributes, job.TTL, job.Tries, job.Delay)
+}
+
+// PublishWithContext a context version of Publish
+func (c *LmstfyClient) PublishWithContext(ctx context.Context, queue string, data []byte, ttlSecond uint32, tries uint16, delaySecond uint32) (string, error) {
+	return c.publish(ctx, queue, "", data, nil, ttlSecond, tries, delaySecond)
+}
+
+// PublishJobWithContext a context version of PublishJob
+func (c *LmstfyClient) PublishJobWithContext(ctx context.Context, job *JobRequest) (string, error) {
+	return c.publish(ctx, job.Queue, "", job.Data, job.Attributes, job.TTL, job.Tries, job.Delay)
+}
+
+// RePublishWithContext a context version of RePublish
+func (c *LmstfyClient) RePublishWithContext(ctx context.Context, job *Job, ttlSecond uint32, tries uint16, delaySecond uint32) (string, error) {
+	return c.publish(ctx, job.Queue, job.ID, job.Data, nil, ttlSecond, tries, delaySecond)
+}
+
+// RePublishJobWithContext a context version of RePublishJob
+func (c *LmstfyClient) RePublishJobWithContext(ctx context.Context, job *JobRequest) (string, error) {
+	return c.publish(ctx, job.Queue, job.ID, job.Data, job.Attributes, job.TTL, job.Tries, job.Delay)
 }
 
 func (c *LmstfyClient) publish(
+	ctx context.Context,
 	queue,
 	ackJobID string,
 	data []byte,
@@ -210,7 +231,7 @@ func (c *LmstfyClient) publish(
 		relativePath = path.Join(relativePath, "job", ackJobID)
 	}
 RETRY:
-	req, err := c.getReq(nil, http.MethodPut, relativePath, query, data)
+	req, err := c.getReq(ctx, http.MethodPut, relativePath, query, data)
 	if err != nil {
 		return "", &APIError{
 			Type:   RequestErr,
@@ -285,6 +306,15 @@ RETRY:
 func (c *LmstfyClient) BatchPublish(queue string, jobs []interface{}, ttlSecond uint32,
 	tries uint16, delaySecond uint32,
 ) (jobIDs []string, e error) {
+	return c.batchPublish(nil, queue, jobs, ttlSecond, tries, delaySecond)
+}
+
+// BatchPublishWithContext a context version of BatchPublish
+func (c *LmstfyClient) BatchPublishWithContext(ctx context.Context, queue string, jobs []interface{}, ttlSecond uint32, tries uint16, delaySecond uint32) ([]string, error) {
+	return c.batchPublish(ctx, queue, jobs, ttlSecond, tries, delaySecond)
+}
+
+func (c *LmstfyClient) batchPublish(ctx context.Context, queue string, jobs []interface{}, ttlSecond uint32, tries uint16, delaySecond uint32) (jobIDs []string, e error) {
 	query := url.Values{}
 	query.Add("ttl", strconv.FormatUint(uint64(ttlSecond), 10))
 	query.Add("tries", strconv.FormatUint(uint64(tries), 10))
@@ -299,7 +329,7 @@ func (c *LmstfyClient) BatchPublish(queue string, jobs []interface{}, ttlSecond 
 		}
 	}
 RETRY:
-	req, err := c.getReq(nil, http.MethodPut, relativePath, query, data)
+	req, err := c.getReq(ctx, http.MethodPut, relativePath, query, data)
 	if err != nil {
 		return nil, &APIError{
 			Type:   RequestErr,
